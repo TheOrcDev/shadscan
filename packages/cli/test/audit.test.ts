@@ -85,6 +85,10 @@ describe("runAudit", () => {
     expect(report.score).toBe(100);
     expect(report.grade).toBe("A");
     expect(report.framework.adapter).toBe("generic-react");
+    expect(report.agentHandoff.actionables).toEqual([]);
+    expect(report.agentHandoff.goal).toContain(
+      "Keep audit-fixture's Shadscan score at 100/100"
+    );
   });
 
   it("weights category scores and normalizes active categories to 100", async () => {
@@ -118,6 +122,31 @@ describe("runAudit", () => {
     ]);
     expect(report.score).toBe(67);
     expect(report.grade).toBe("D");
+    expect(report.agentHandoff.suggestedSkills).toEqual([
+      "shadscan",
+      "diagnose",
+    ]);
+    expect(
+      report.agentHandoff.actionables.map((actionable) => ({
+        findingId: actionable.findingId,
+        priority: actionable.priority,
+        scoreImpact: actionable.scoreImpact,
+        status: actionable.status,
+      }))
+    ).toEqual([
+      {
+        findingId: "interaction-fail",
+        priority: "P1",
+        scoreImpact: 10,
+        status: "fail",
+      },
+      {
+        findingId: "states-advisory",
+        priority: "P2",
+        scoreImpact: 0,
+        status: "advisory",
+      },
+    ]);
   });
 
   it("does not let low-confidence failures reduce the main score", async () => {

@@ -22,6 +22,9 @@ Machine-readable output:
 pnpm dlx shadscan --json
 ```
 
+Both human and JSON output include an `agentHandoff` section with suggested
+skills, context, and prioritized actionables for another agent to pick up.
+
 ## Current Checks
 
 - shadcn `components.json`

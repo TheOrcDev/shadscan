@@ -37,6 +37,44 @@ const getActionableFindings = (report: AuditReport): AuditFinding[] =>
     (finding) => finding.status === "fail" || finding.status === "advisory"
   );
 
+const renderAgentHandoff = (report: AuditReport): string[] => {
+  const lines = [
+    "",
+    "Agent handoff:",
+    `  Goal: ${report.agentHandoff.goal}`,
+    `  Suggested skills: ${report.agentHandoff.suggestedSkills.join(", ")}`,
+    "  Context:",
+    ...report.agentHandoff.context.map((context) => `    - ${context}`),
+    "  Actionables:",
+  ];
+
+  if (report.agentHandoff.actionables.length === 0) {
+    lines.push("    - None. Keep the existing fundamentals intact.");
+
+    return lines;
+  }
+
+  for (const [index, actionable] of report.agentHandoff.actionables.entries()) {
+    lines.push(
+      `    ${index + 1}. [${actionable.priority}] ${actionable.title}`,
+      `       Finding: ${actionable.findingId} (${actionable.status}, ${actionable.confidence} confidence, ${actionable.category})`,
+      `       Summary: ${actionable.summary}`
+    );
+
+    if (actionable.scoreImpact > 0) {
+      lines.push(`       Score impact: ${actionable.scoreImpact} raw points`);
+    }
+
+    if (actionable.suggestedFix) {
+      lines.push(`       Fix: ${actionable.suggestedFix}`);
+    }
+
+    lines.push(`       Acceptance: ${actionable.acceptanceCriteria.join(" ")}`);
+  }
+
+  return lines;
+};
+
 const stripRoasts = (report: AuditReport): AuditReport => ({
   ...report,
   findings: report.findings.map((finding) => ({
@@ -94,6 +132,8 @@ const renderHumanReport = (
       }
     }
   }
+
+  lines.push(...renderAgentHandoff(report));
 
   if (report.warnings.length > 0) {
     lines.push("");

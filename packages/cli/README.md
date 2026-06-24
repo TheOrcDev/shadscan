@@ -14,4 +14,7 @@ Useful flags:
 - `--no-roast` keeps human output neutral.
 - `--roast` includes roast copy in JSON or CI output.
 
+Every report includes an agent handoff with suggested skills, context, and
+prioritized actionables. JSON consumers can read this from `agentHandoff`.
+
 The first release is read-only. It does not edit project files.

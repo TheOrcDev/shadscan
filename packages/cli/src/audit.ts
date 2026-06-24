@@ -44,9 +44,11 @@ const CATEGORY_DETAILS = {
 } as const satisfies Record<AuditCategory, { title: string; weight: number }>;
 
 const AuditCategorySchema = z.enum(AUDIT_CATEGORIES);
+const ActionablePrioritySchema = z.enum(["P0", "P1", "P2"]);
 const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 const RuleStatusSchema = z.enum(["advisory", "fail", "not-applicable", "pass"]);
 const SeveritySchema = z.enum(["error", "info", "warning"]);
+type ActionablePriority = z.infer<typeof ActionablePrioritySchema>;
 type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 type AuditRuleAdapter = "core" | FrameworkAdapter;
 type AuditRuleStatus = z.infer<typeof RuleStatusSchema>;
@@ -109,7 +111,30 @@ interface AuditCategoryScore {
   weight: number;
 }
 
+interface AgentActionable {
+  acceptanceCriteria: string[];
+  category: AuditCategory;
+  confidence: Confidence;
+  evidence: AuditEvidence[];
+  findingId: string;
+  priority: ActionablePriority;
+  scoreImpact: number;
+  severity: AuditSeverity;
+  status: Extract<AuditRuleStatus, "advisory" | "fail">;
+  suggestedFix: string | null;
+  summary: string;
+  title: string;
+}
+
+interface AgentHandoff {
+  actionables: AgentActionable[];
+  context: string[];
+  goal: string;
+  suggestedSkills: string[];
+}
+
 interface AuditReport {
+  agentHandoff: AgentHandoff;
   categories: AuditCategoryScore[];
   durationMs: number;
   findings: AuditFinding[];
@@ -154,7 +179,30 @@ const AuditFindingSchema = z.object({
   title: z.string(),
 });
 
+const AgentActionableSchema = z.object({
+  acceptanceCriteria: z.array(z.string()),
+  category: AuditCategorySchema,
+  confidence: ConfidenceSchema,
+  evidence: z.array(AuditEvidenceSchema),
+  findingId: z.string(),
+  priority: ActionablePrioritySchema,
+  scoreImpact: z.number(),
+  severity: SeveritySchema,
+  status: z.enum(["advisory", "fail"]),
+  suggestedFix: z.string().nullable(),
+  summary: z.string(),
+  title: z.string(),
+});
+
+const AgentHandoffSchema = z.object({
+  actionables: z.array(AgentActionableSchema),
+  context: z.array(z.string()),
+  goal: z.string(),
+  suggestedSkills: z.array(z.string()),
+});
+
 const AuditReportSchema = z.object({
+  agentHandoff: AgentHandoffSchema,
   categories: z.array(
     z.object({
       applicable: z.boolean(),
@@ -315,6 +363,145 @@ const getTotalScore = (categories: AuditCategoryScore[]): number => {
   return Math.round((weightedScore / activeWeight) * 100);
 };
 
+const getActionablePriority = (finding: AuditFinding): ActionablePriority => {
+  if (finding.severity === "error" && finding.status === "fail") {
+    return "P0";
+  }
+
+  if (finding.status === "fail" && finding.confidence === "high") {
+    return "P1";
+  }
+
+  return "P2";
+};
+
+const getActionableSummary = (finding: AuditFinding): string => {
+  if (finding.status === "advisory") {
+    return `Verify ${finding.title}; Shadscan has low-confidence evidence and did not reduce the score.`;
+  }
+
+  return `Fix ${finding.title}; Shadscan marked this as a ${finding.confidence}-confidence missing UI fundamental.`;
+};
+
+const getActionableAcceptanceCriteria = (finding: AuditFinding): string[] => {
+  const criteria = [
+    `The Shadscan finding \`${finding.id}\` reports pass or no longer appears as ${finding.status}.`,
+  ];
+
+  if (finding.remediation) {
+    criteria.push(
+      `The implementation matches this remediation: ${finding.remediation}`
+    );
+  }
+
+  criteria.push(
+    "The target app's own lint, typecheck, test, or build gate still passes."
+  );
+
+  return criteria;
+};
+
+const getSuggestedSkills = ({
+  actionables,
+  warnings,
+}: {
+  actionables: AgentActionable[];
+  warnings: string[];
+}): string[] => {
+  const skills = new Set<string>(["shadscan"]);
+  const needsDiagnosis =
+    warnings.length > 0 ||
+    actionables.some((actionable) => actionable.status === "advisory");
+  const needsRegressionThinking = actionables.some(
+    (actionable) =>
+      actionable.category === "accessibility" || actionable.category === "forms"
+  );
+
+  if (needsDiagnosis) {
+    skills.add("diagnose");
+  }
+
+  if (needsRegressionThinking) {
+    skills.add("tdd");
+  }
+
+  return [...skills];
+};
+
+const createAgentHandoff = ({
+  findings,
+  grade,
+  project,
+  score,
+}: {
+  findings: AuditFinding[];
+  grade: AuditGrade;
+  project: ProjectDiscovery;
+  score: number;
+}): AgentHandoff => {
+  const packageName = project.packageName ?? "the target app";
+  const actionables = findings
+    .filter(
+      (
+        finding
+      ): finding is AuditFinding & {
+        status: Extract<AuditRuleStatus, "advisory" | "fail">;
+      } => finding.status === "fail" || finding.status === "advisory"
+    )
+    .map((finding) => ({
+      acceptanceCriteria: getActionableAcceptanceCriteria(finding),
+      category: finding.category,
+      confidence: finding.confidence,
+      evidence: finding.evidence,
+      findingId: finding.id,
+      priority: getActionablePriority(finding),
+      scoreImpact: finding.impactsScore ? finding.maxScore - finding.score : 0,
+      severity: finding.severity,
+      status: finding.status,
+      suggestedFix: finding.remediation,
+      summary: getActionableSummary(finding),
+      title:
+        finding.status === "advisory"
+          ? `Verify ${finding.title}`
+          : `Fix ${finding.title}`,
+    }))
+    .sort((left, right) => {
+      const priorityOrder: Record<ActionablePriority, number> = {
+        P0: 0,
+        P1: 1,
+        P2: 2,
+      };
+
+      return (
+        priorityOrder[left.priority] - priorityOrder[right.priority] ||
+        right.scoreImpact - left.scoreImpact ||
+        left.findingId.localeCompare(right.findingId)
+      );
+    });
+  const goal =
+    actionables.length === 0
+      ? `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}); no missing fundamentals were found.`
+      : `Raise ${packageName}'s Shadscan score from ${score}/100 (${grade}) by addressing agent-ready UI audit findings.`;
+  const configPath = project.shadcn.configPath ?? "not found";
+  const warnings =
+    project.warnings.length === 0 ? "none" : project.warnings.join("; ");
+
+  return {
+    actionables,
+    context: [
+      `Adapter: ${project.framework.adapter}`,
+      `Package manager: ${project.packageManager}`,
+      `shadcn confidence: ${project.shadcn.confidence}; config: ${configPath}`,
+      `Warnings: ${warnings}`,
+    ],
+    goal,
+    suggestedSkills: getSuggestedSkills({
+      actionables,
+      warnings: project.warnings,
+    }),
+  };
+};
+
 const createAuditReport = ({
   durationMs,
   findings,
@@ -326,12 +513,19 @@ const createAuditReport = ({
 }): AuditReport => {
   const categories = getCategoryScores(findings);
   const score = getTotalScore(categories);
+  const grade = getGrade(score);
   const report: AuditReport = {
+    agentHandoff: createAgentHandoff({
+      findings,
+      grade,
+      project,
+      score,
+    }),
     categories,
     durationMs,
     findings,
     framework: project.framework,
-    grade: getGrade(score),
+    grade,
     maxScore: 100,
     packageManager: project.packageManager,
     packageName: project.packageName,
@@ -374,6 +568,9 @@ const runAudit = async (
 };
 
 export type {
+  ActionablePriority,
+  AgentActionable,
+  AgentHandoff,
   AuditCategory,
   AuditContext,
   AuditEvidence,

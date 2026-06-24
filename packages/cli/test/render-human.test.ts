@@ -3,6 +3,41 @@ import type { AuditReport } from "../src/audit";
 import { renderHumanReport, stripRoasts } from "../src/render-human";
 
 const createReport = (): AuditReport => ({
+  agentHandoff: {
+    actionables: [
+      {
+        acceptanceCriteria: [
+          "The Shadscan finding `metadata-configured` reports pass.",
+        ],
+        category: "foundation",
+        confidence: "high",
+        evidence: [
+          {
+            filePath: "/tmp/app/layout.tsx",
+            line: 3,
+            message: "No metadata export was found.",
+          },
+        ],
+        findingId: "metadata-configured",
+        priority: "P1",
+        scoreImpact: 3,
+        severity: "warning",
+        status: "fail",
+        suggestedFix: "Export metadata.",
+        summary:
+          "Fix metadata configured; Shadscan marked this as a high-confidence missing UI fundamental.",
+        title: "Fix metadata configured",
+      },
+    ],
+    context: [
+      "Adapter: next-app-router",
+      "Package manager: pnpm",
+      "shadcn confidence: high; config: /tmp/components.json",
+      "Warnings: none",
+    ],
+    goal: "Raise demo's Shadscan score from 50/100 (F) by addressing agent-ready UI audit findings.",
+    suggestedSkills: ["shadscan"],
+  },
   categories: [
     {
       applicable: true,
@@ -76,6 +111,9 @@ describe("renderHumanReport", () => {
     expect(output).toContain("Your Shadscan score: 50/100");
     expect(output).toContain("Foundation: [########--------] 10/20 (50%)");
     expect(output).toContain("Missing: metadata configured");
+    expect(output).toContain("Agent handoff:");
+    expect(output).toContain("Suggested skills: shadscan");
+    expect(output).toContain("1. [P1] Fix metadata configured");
     expect(output).toContain(
       "Evidence: No metadata export was found. (/tmp/app/layout.tsx:3)"
     );
