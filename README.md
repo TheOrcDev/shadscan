@@ -1,21 +1,66 @@
-# Next.js template
+# Headless Shadcn
 
-This is a Next.js template with shadcn/ui.
+The CLI that inspects a React shadcn app and tells you what your UI is missing.
 
-## Adding components
+If the command menu, theme toggle, keyboard shortcuts, empty states, loading states, error boundaries, toast setup, labels, metadata, and route states are missing, Headless Shadcn scores the app and shows the receipts.
 
-To add components to your app, run the following command:
+## Usage
 
 ```bash
-npx shadcn@latest add button
+pnpm dlx headless-shadcn
 ```
 
-This will place the ui components in the `components` directory.
+CI gate:
 
-## Using components
-
-To use the components in your app, import them as follows:
-
-```tsx
-import { Button } from "@/components/ui/button";
+```bash
+pnpm dlx headless-shadcn --fail-under 80
 ```
+
+Machine-readable output:
+
+```bash
+pnpm dlx headless-shadcn --json
+```
+
+## Current Checks
+
+- shadcn `components.json`
+- theme provider
+- dark-mode keyboard shortcut
+- metadata/head basics
+- favicon/app icon
+- Next `not-found.tsx`
+- app error boundary
+- toast setup
+- icon-only button labels
+- non-semantic click targets
+- form labels
+- dialog/sheet titles
+
+## Local Development
+
+```bash
+pnpm install
+pnpm cli:test
+pnpm cli:build
+pnpm audit:self
+pnpm check
+pnpm typecheck
+pnpm build
+```
+
+The Next app in this repo is the product site and dogfood target. The CLI package lives in `packages/cli`.
+
+## Release Checklist
+
+```bash
+pnpm check
+pnpm typecheck
+pnpm build
+pnpm cli:test
+pnpm cli:build
+pnpm audit:self
+pnpm --filter headless-shadcn pack --dry-run
+```
+
+The package is not published yet. Choose and add a real license before publishing publicly.
