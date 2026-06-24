@@ -1,5 +1,6 @@
 import { Command, InvalidArgumentError } from "commander";
 import { AUDIT_CATEGORIES, type RunAuditOptions, runAudit } from "./audit";
+import { renderHumanReport, stripRoasts } from "./render-human";
 import { defaultRules } from "./rules/default-rules";
 
 const VERSION = "0.0.1";
@@ -54,19 +55,22 @@ const createProgram = (): Command => {
       parseCategory
     )
     .option("--no-roast", "Use neutral human output.")
+    .option("--roast", "Force roast copy in CI and JSON output.")
     .action(async (options: CliOptions) => {
+      const explicitNoRoast = process.argv.includes("--no-roast");
+      const explicitRoast = process.argv.includes("--roast");
+      const includeRoast =
+        explicitRoast || !(options.json || explicitNoRoast || process.env.CI);
       const report = await runAudit(process.cwd(), {
         category: options.category,
         rules: defaultRules,
       });
+      const outputReport = includeRoast ? report : stripRoasts(report);
 
       if (options.json) {
-        process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+        process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
       } else {
-        process.stdout.write(`Your Shadcn app score: ${report.score}/100\n`);
-        process.stdout.write(`Grade: ${report.grade}\n`);
-
-        process.stdout.write(`${report.findings.length} findings checked.\n`);
+        process.stdout.write(renderHumanReport(outputReport, { includeRoast }));
       }
 
       if (options.failUnder !== undefined && report.score < options.failUnder) {
