@@ -1,0 +1,36 @@
+{
+  "name": "headless-shadcn",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "headless-shadcn": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "commander": "14.0.2",
+    "jsonc-parser": "3.3.1",
+    "picocolors": "1.1.1",
+    "tinyglobby": "0.2.15",
+    "typescript": "5.9.3",
+    "zod": "4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.25",
+    "execa": "9.6.1",
+    "tsup": "8.5.1",
+    "tsx": "4.21.0",
+    "ultracite": "7.8.3",
+    "vitest": "3.2.4"
+  }
+}

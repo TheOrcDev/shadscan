@@ -22,14 +22,18 @@
     "typescript": "^5",
     "ultracite": "7.8.3"
   },
-  "name": "headless-shadcn",
+  "name": "headless-shadcn-site",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "cli:dev": "pnpm --filter headless-shadcn dev",
+    "cli:build": "pnpm --filter headless-shadcn build",
+    "cli:test": "pnpm --filter headless-shadcn test",
+    "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js"
   },
   "type": "module",
   "version": "0.0.1",
