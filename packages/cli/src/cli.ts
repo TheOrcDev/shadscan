@@ -1,5 +1,6 @@
 import { Command, InvalidArgumentError } from "commander";
 import { AUDIT_CATEGORIES, type RunAuditOptions, runAudit } from "./audit";
+import { defaultRules } from "./rules/default-rules";
 
 const VERSION = "0.0.1";
 
@@ -56,6 +57,7 @@ const createProgram = (): Command => {
     .action(async (options: CliOptions) => {
       const report = await runAudit(process.cwd(), {
         category: options.category,
+        rules: defaultRules,
       });
 
       if (options.json) {
@@ -64,9 +66,7 @@ const createProgram = (): Command => {
         process.stdout.write(`Your Shadcn app score: ${report.score}/100\n`);
         process.stdout.write(`Grade: ${report.grade}\n`);
 
-        if (report.findings.length === 0) {
-          process.stdout.write("No audit rules are registered yet.\n");
-        }
+        process.stdout.write(`${report.findings.length} findings checked.\n`);
       }
 
       if (options.failUnder !== undefined && report.score < options.failUnder) {

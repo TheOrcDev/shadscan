@@ -1,0 +1,275 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { runAudit } from "../src/audit";
+import { highConfidenceRules } from "../src/rules/high-confidence";
+
+const tempDirs: string[] = [];
+
+const createFixture = async (): Promise<string> => {
+  const fixtureDir = await mkdtemp(
+    path.join(tmpdir(), "headless-shadcn-rules-")
+  );
+  tempDirs.push(fixtureDir);
+
+  return fixtureDir;
+};
+
+const writeFixtureFile = async (
+  rootDir: string,
+  filePath: string,
+  content: string
+): Promise<void> => {
+  const absolutePath = path.join(rootDir, filePath);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content);
+};
+
+const writeNextPackage = async (
+  rootDir: string,
+  options: { includeToastDependency?: boolean } = {}
+): Promise<void> => {
+  const dependencies = {
+    next: "16.2.6",
+    "next-themes": "0.4.6",
+    react: "19.2.4",
+    ...(options.includeToastDependency ? { sonner: "2.0.0" } : {}),
+  };
+
+  await writeFixtureFile(
+    rootDir,
+    "package.json",
+    `${JSON.stringify(
+      {
+        dependencies,
+        name: "rules-fixture",
+      },
+      null,
+      2
+    )}\n`
+  );
+};
+
+const writeComponentsJson = async (rootDir: string): Promise<void> => {
+  await writeFixtureFile(
+    rootDir,
+    "components.json",
+    `${JSON.stringify(
+      {
+        aliases: {
+          components: "@/components",
+          ui: "@/components/ui",
+        },
+        style: "new-york",
+        tailwind: {
+          css: "app/globals.css",
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+};
+
+const writePassingNextApp = async (rootDir: string): Promise<void> => {
+  await writeNextPackage(rootDir, { includeToastDependency: true });
+  await writeComponentsJson(rootDir);
+  await writeFixtureFile(rootDir, "app/favicon.ico", "");
+  await writeFixtureFile(
+    rootDir,
+    "app/layout.tsx",
+    `
+      import type { Metadata } from "next";
+      import { ThemeProvider } from "@/components/theme-provider";
+      import { Toaster } from "sonner";
+
+      export const metadata: Metadata = {
+        title: "Passing app",
+        description: "A good app",
+      };
+
+      export default function Layout({ children }: { children: React.ReactNode }) {
+        return (
+          <html lang="en">
+            <body>
+              <ThemeProvider>
+                {children}
+                <Toaster />
+              </ThemeProvider>
+            </body>
+          </html>
+        );
+      }
+    `
+  );
+  await writeFixtureFile(
+    rootDir,
+    "app/not-found.tsx",
+    "export default function NotFound() { return null; }\n"
+  );
+  await writeFixtureFile(
+    rootDir,
+    "app/error.tsx",
+    "'use client'; export default function Error() { return null; }\n"
+  );
+  await writeFixtureFile(
+    rootDir,
+    "components/theme-provider.tsx",
+    `
+      "use client";
+      import { useEffect } from "react";
+      import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
+
+      export function ThemeProvider({ children }: { children: React.ReactNode }) {
+        return <NextThemesProvider attribute="class">{children}<ThemeHotkey /></NextThemesProvider>;
+      }
+
+      function ThemeHotkey() {
+        const { setTheme } = useTheme();
+        useEffect(() => {
+          function onKeyDown(event: KeyboardEvent) {
+            const target = event.target;
+            if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) {
+              return;
+            }
+            if (event.key.toLowerCase() !== "d") {
+              return;
+            }
+            setTheme("dark");
+          }
+          window.addEventListener("keydown", onKeyDown);
+          return () => window.removeEventListener("keydown", onKeyDown);
+        }, [setTheme]);
+        return null;
+      }
+    `
+  );
+};
+
+afterEach(async () => {
+  for (const tempDir of tempDirs.splice(0)) {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+});
+
+describe("high confidence rules", () => {
+  it("passes a Next app with the first expected UI fundamentals", async () => {
+    const rootDir = await createFixture();
+    await writePassingNextApp(rootDir);
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(report.score).toBe(100);
+    expect(report.findings.every((finding) => finding.status === "pass")).toBe(
+      true
+    );
+  });
+
+  it("reports missing Next fundamentals with evidence and remediation", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir);
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "app/favicon.ico", "");
+    await writeFixtureFile(
+      rootDir,
+      "app/layout.tsx",
+      `
+        import { ThemeProvider } from "@/components/theme-provider";
+        export default function Layout({ children }: { children: React.ReactNode }) {
+          return <html lang="en"><body><ThemeProvider>{children}</ThemeProvider></body></html>;
+        }
+      `
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/theme-provider.tsx",
+      `
+        "use client";
+        import { useEffect } from "react";
+        import { useTheme } from "next-themes";
+        export function ThemeProvider({ children }: { children: React.ReactNode }) {
+          const { setTheme } = useTheme();
+          useEffect(() => {
+            function onKeyDown(event: KeyboardEvent) {
+              if (event.target instanceof HTMLElement && event.target.tagName === "INPUT") return;
+              if (event.key.toLowerCase() !== "d") return;
+              setTheme("dark");
+            }
+            window.addEventListener("keydown", onKeyDown);
+          }, [setTheme]);
+          return children;
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+    const failingIds = report.findings
+      .filter((finding) => finding.status === "fail")
+      .map((finding) => finding.id);
+
+    expect(failingIds).toEqual([
+      "metadata-configured",
+      "not-found-route-present",
+      "error-boundary-present",
+      "toast-provider-present",
+    ]);
+    expect(
+      report.findings.find((finding) => finding.id === "theme-hotkey-present")
+        ?.status
+    ).toBe("pass");
+    expect(report.score).toBeLessThan(100);
+  });
+
+  it("supports Vite metadata and favicon detection", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "package.json",
+      `${JSON.stringify(
+        {
+          dependencies: {
+            react: "19.2.4",
+            vite: "7.2.0",
+          },
+        },
+        null,
+        2
+      )}\n`
+    );
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "index.html",
+      `
+        <html>
+          <head>
+            <title>Vite app</title>
+            <meta name="description" content="Vite description" />
+            <link rel="icon" href="/favicon.ico" />
+          </head>
+          <body><div id="root"></div></body>
+        </html>
+      `
+    );
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css';\n");
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(report.framework.adapter).toBe("vite-react");
+    expect(
+      report.findings.find((finding) => finding.id === "metadata-configured")
+        ?.status
+    ).toBe("pass");
+    expect(
+      report.findings.find((finding) => finding.id === "favicon-present")
+        ?.status
+    ).toBe("pass");
+  });
+});
