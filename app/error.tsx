@@ -1,0 +1,28 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+
+export default function ErrorBoundary({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <main className="grid min-h-svh place-items-center px-5">
+      <div className="w-full max-w-md border bg-card p-6">
+        <p className="font-mono text-destructive text-sm">Error</p>
+        <h1 className="mt-3 font-heading font-medium text-3xl">
+          Audit interrupted
+        </h1>
+        <p className="mt-3 text-muted-foreground leading-7">
+          {error.message || "The app hit an unexpected state."}
+        </p>
+        <Button className="mt-5" onClick={reset} type="button">
+          Try again
+        </Button>
+      </div>
+    </main>
+  );
+}
