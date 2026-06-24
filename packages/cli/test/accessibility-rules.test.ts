@@ -8,9 +8,7 @@ import { accessibilityRules } from "../src/rules/accessibility";
 const tempDirs: string[] = [];
 
 const createFixture = async (): Promise<string> => {
-  const fixtureDir = await mkdtemp(
-    path.join(tmpdir(), "headless-shadcn-a11y-")
-  );
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), "shadscan-a11y-"));
   tempDirs.push(fixtureDir);
   await writeFixtureFile(
     fixtureDir,

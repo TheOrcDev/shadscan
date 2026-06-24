@@ -40,7 +40,7 @@ const createProgram = (): Command => {
   const program = new Command();
 
   program
-    .name("headless-shadcn")
+    .name("shadscan")
     .description("Audit a React shadcn app for missing UI fundamentals.")
     .version(VERSION)
     .option("--json", "Print a machine-readable JSON report.")

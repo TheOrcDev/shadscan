@@ -50,9 +50,9 @@ const renderHumanReport = (
   options: RenderHumanReportOptions
 ): string => {
   const lines: string[] = [
-    `Your Shadcn app score: ${report.score}/100`,
+    `Your Shadscan score: ${report.score}/100`,
     `Grade: ${report.grade}`,
-    "Headless Shadcn has entered the chat.",
+    "Shadscan has entered the chat.",
     "",
     `Adapter: ${report.framework.adapter}`,
     `Package: ${report.packageName ?? "unknown"}`,

@@ -4,7 +4,7 @@ function Toaster() {
       aria-atomic="true"
       aria-live="polite"
       className="sr-only"
-      data-headless-shadcn-toaster
+      data-shadscan-toaster
     />
   );
 }

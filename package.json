@@ -22,7 +22,7 @@
     "typescript": "^5",
     "ultracite": "7.8.3"
   },
-  "name": "headless-shadcn-site",
+  "name": "shadscan-site",
   "packageManager": "pnpm@10.16.0",
   "scripts": {
     "dev": "next dev",
@@ -31,9 +31,9 @@
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",
-    "cli:dev": "pnpm --filter headless-shadcn dev",
-    "cli:build": "pnpm --filter headless-shadcn build",
-    "cli:test": "pnpm --filter headless-shadcn test",
+    "cli:dev": "pnpm --filter shadscan dev",
+    "cli:build": "pnpm --filter shadscan build",
+    "cli:test": "pnpm --filter shadscan test",
     "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js"
   },
   "type": "module",

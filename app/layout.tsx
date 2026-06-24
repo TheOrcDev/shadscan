@@ -22,7 +22,7 @@ const fontMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Headless Shadcn",
+  title: "Shadscan",
   description: "The CLI that audits a shadcn app for missing UI fundamentals.",
 };
 

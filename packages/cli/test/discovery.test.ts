@@ -7,7 +7,7 @@ import { discoverProject } from "../src/discovery";
 const tempDirs: string[] = [];
 
 const createFixture = async (): Promise<string> => {
-  const fixtureDir = await mkdtemp(path.join(tmpdir(), "headless-shadcn-"));
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), "shadscan-"));
   tempDirs.push(fixtureDir);
 
   return fixtureDir;

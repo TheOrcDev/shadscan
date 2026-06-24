@@ -1,9 +1,9 @@
-# Headless Shadcn CLI
+# Shadscan CLI
 
 Audit a React shadcn app for missing UI fundamentals.
 
 ```bash
-pnpm dlx headless-shadcn
+pnpm dlx shadscan
 ```
 
 Useful flags:

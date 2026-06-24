@@ -13,9 +13,7 @@ import type { ProjectDiscovery } from "../src/discovery";
 const tempDirs: string[] = [];
 
 const createFixture = async (): Promise<string> => {
-  const fixtureDir = await mkdtemp(
-    path.join(tmpdir(), "headless-shadcn-audit-")
-  );
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), "shadscan-audit-"));
   tempDirs.push(fixtureDir);
 
   return fixtureDir;

@@ -73,7 +73,7 @@ describe("renderHumanReport", () => {
   it("renders score, category bars, evidence, and fixes", () => {
     const output = renderHumanReport(createReport(), { includeRoast: false });
 
-    expect(output).toContain("Your Shadcn app score: 50/100");
+    expect(output).toContain("Your Shadscan score: 50/100");
     expect(output).toContain("Foundation: [########--------] 10/20 (50%)");
     expect(output).toContain("Missing: metadata configured");
     expect(output).toContain(

@@ -61,7 +61,7 @@ export default function Page() {
               <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <TerminalWindow weight="bold" />
               </span>
-              Headless Shadcn
+              Shadscan
             </div>
             <div className="hidden items-center gap-2 text-muted-foreground text-xs sm:flex">
               <kbd className="rounded-sm border bg-background px-1.5 py-0.5 font-mono">
@@ -78,7 +78,7 @@ export default function Page() {
                 UI audit CLI for shadcn apps
               </p>
               <h1 className="max-w-4xl text-balance font-heading font-medium text-5xl tracking-normal sm:text-6xl lg:text-7xl">
-                Headless Shadcn has entered the chat.
+                Shadscan has entered the chat.
               </h1>
               <p className="mt-5 max-w-2xl text-lg text-muted-foreground leading-8">
                 Run it in a React shadcn app and get a score for the product
@@ -89,7 +89,7 @@ export default function Page() {
 
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
               <section
-                aria-label="Sample Headless Shadcn audit report"
+                aria-label="Sample Shadscan audit report"
                 className="overflow-hidden border bg-card shadow-sm"
               >
                 <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
@@ -99,15 +99,13 @@ export default function Page() {
                     <span className="size-2 rounded-full bg-[oklch(0.72_0.18_150)]" />
                   </div>
                   <div className="font-mono text-muted-foreground text-xs">
-                    pnpm dlx headless-shadcn
+                    pnpm dlx shadscan
                   </div>
                 </div>
 
                 <div className="space-y-5 p-4 font-mono text-sm sm:p-5">
                   <div>
-                    <p className="text-muted-foreground">
-                      Your Shadcn app score
-                    </p>
+                    <p className="text-muted-foreground">Your Shadscan score</p>
                     <div className="mt-2 flex flex-wrap items-end gap-3">
                       <span className="font-heading text-6xl text-primary">
                         64
@@ -191,7 +189,7 @@ export default function Page() {
                     Install
                   </div>
                   <pre className="overflow-x-auto bg-foreground p-4 text-background text-sm">
-                    <code>pnpm dlx headless-shadcn --fail-under 80</code>
+                    <code>pnpm dlx shadscan --fail-under 80</code>
                   </pre>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button asChild>
@@ -201,9 +199,7 @@ export default function Page() {
                       </a>
                     </Button>
                     <Button asChild variant="outline">
-                      <a href="https://github.com/TheOrcDev/headless-shadcn">
-                        GitHub
-                      </a>
+                      <a href="https://github.com/TheOrcDev/shadscan">GitHub</a>
                     </Button>
                   </div>
                 </div>

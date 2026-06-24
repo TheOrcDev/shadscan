@@ -8,9 +8,7 @@ import { highConfidenceRules } from "../src/rules/high-confidence";
 const tempDirs: string[] = [];
 
 const createFixture = async (): Promise<string> => {
-  const fixtureDir = await mkdtemp(
-    path.join(tmpdir(), "headless-shadcn-rules-")
-  );
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), "shadscan-rules-"));
   tempDirs.push(fixtureDir);
 
   return fixtureDir;

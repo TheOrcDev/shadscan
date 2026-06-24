@@ -1,25 +1,25 @@
-# Headless Shadcn
+# Shadscan
 
 The CLI that inspects a React shadcn app and tells you what your UI is missing.
 
-If the command menu, theme toggle, keyboard shortcuts, empty states, loading states, error boundaries, toast setup, labels, metadata, and route states are missing, Headless Shadcn scores the app and shows the receipts.
+If the command menu, theme toggle, keyboard shortcuts, empty states, loading states, error boundaries, toast setup, labels, metadata, and route states are missing, Shadscan scores the app and shows the receipts.
 
 ## Usage
 
 ```bash
-pnpm dlx headless-shadcn
+pnpm dlx shadscan
 ```
 
 CI gate:
 
 ```bash
-pnpm dlx headless-shadcn --fail-under 80
+pnpm dlx shadscan --fail-under 80
 ```
 
 Machine-readable output:
 
 ```bash
-pnpm dlx headless-shadcn --json
+pnpm dlx shadscan --json
 ```
 
 ## Current Checks
@@ -60,7 +60,7 @@ pnpm build
 pnpm cli:test
 pnpm cli:build
 pnpm audit:self
-pnpm --filter headless-shadcn pack --dry-run
+pnpm --filter shadscan pack --dry-run
 ```
 
 The package is not published yet. Choose and add a real license before publishing publicly.
