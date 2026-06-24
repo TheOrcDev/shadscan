@@ -1,9 +1,10 @@
 import { Command, InvalidArgumentError } from "commander";
+import { AUDIT_CATEGORIES, type RunAuditOptions, runAudit } from "./audit";
 
 const VERSION = "0.0.1";
 
 interface CliOptions {
-  category?: string;
+  category?: RunAuditOptions["category"];
   failUnder?: number;
   json?: boolean;
   roast?: boolean;
@@ -19,6 +20,20 @@ const parseScore = (value: string): number => {
   return score;
 };
 
+const parseCategory = (value: string): RunAuditOptions["category"] => {
+  const category = AUDIT_CATEGORIES.find(
+    (auditCategory) => auditCategory === value
+  );
+
+  if (!category) {
+    throw new InvalidArgumentError(
+      `Expected one of: ${AUDIT_CATEGORIES.join(", ")}.`
+    );
+  }
+
+  return category;
+};
+
 const createProgram = (): Command => {
   const program = new Command();
 
@@ -32,24 +47,31 @@ const createProgram = (): Command => {
       "Exit non-zero when the score is below this number.",
       parseScore
     )
-    .option("--category <category>", "Run only one audit category.")
+    .option(
+      "--category <category>",
+      "Run only one audit category.",
+      parseCategory
+    )
     .option("--no-roast", "Use neutral human output.")
-    .action((options: CliOptions) => {
-      const report = {
-        durationMs: 0,
-        findings: [],
-        maxScore: 100,
-        message: "Audit engine scaffold is ready.",
-        score: 0,
-      };
+    .action(async (options: CliOptions) => {
+      const report = await runAudit(process.cwd(), {
+        category: options.category,
+      });
 
       if (options.json) {
         process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-        return;
+      } else {
+        process.stdout.write(`Your Shadcn app score: ${report.score}/100\n`);
+        process.stdout.write(`Grade: ${report.grade}\n`);
+
+        if (report.findings.length === 0) {
+          process.stdout.write("No audit rules are registered yet.\n");
+        }
       }
 
-      process.stdout.write("Headless Shadcn CLI scaffold ready.\n");
-      process.stdout.write("Audit engine lands in the next slice.\n");
+      if (options.failUnder !== undefined && report.score < options.failUnder) {
+        process.exitCode = 1;
+      }
     });
 
   return program;

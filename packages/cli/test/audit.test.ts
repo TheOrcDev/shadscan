@@ -1,0 +1,237 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  AuditReportSchema,
+  type AuditRule,
+  createAuditReport,
+  runAudit,
+} from "../src/audit";
+import type { ProjectDiscovery } from "../src/discovery";
+
+const tempDirs: string[] = [];
+
+const createFixture = async (): Promise<string> => {
+  const fixtureDir = await mkdtemp(
+    path.join(tmpdir(), "headless-shadcn-audit-")
+  );
+  tempDirs.push(fixtureDir);
+
+  return fixtureDir;
+};
+
+const writeFixtureFile = async (
+  rootDir: string,
+  filePath: string,
+  content: string
+): Promise<void> => {
+  const absolutePath = path.join(rootDir, filePath);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content);
+};
+
+const createReactFixture = async (): Promise<string> => {
+  const rootDir = await createFixture();
+  await writeFixtureFile(
+    rootDir,
+    "package.json",
+    `${JSON.stringify(
+      {
+        dependencies: {
+          react: "19.2.4",
+        },
+        name: "audit-fixture",
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  return rootDir;
+};
+
+const createRule = (overrides: Partial<AuditRule>): AuditRule => ({
+  adapters: ["core"],
+  category: "foundation",
+  confidence: "high",
+  description: "Test rule.",
+  id: "test-rule",
+  maxScore: 10,
+  run: () => ({ status: "pass" }),
+  severity: "warning",
+  title: "Test rule",
+  ...overrides,
+});
+
+afterEach(async () => {
+  for (const tempDir of tempDirs.splice(0)) {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+});
+
+describe("runAudit", () => {
+  it("validates the JSON report contract", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          id: "passing-rule",
+          run: () => ({ status: "pass" }),
+        }),
+      ],
+    });
+
+    expect(() => AuditReportSchema.parse(report)).not.toThrow();
+    expect(report.score).toBe(100);
+    expect(report.grade).toBe("A");
+    expect(report.framework.adapter).toBe("generic-react");
+  });
+
+  it("weights category scores and normalizes active categories to 100", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          category: "foundation",
+          id: "foundation-pass",
+          run: () => ({ status: "pass" }),
+        }),
+        createRule({
+          category: "interaction",
+          id: "interaction-fail",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "states",
+          confidence: "low",
+          id: "states-advisory",
+          run: () => ({ confidence: "low", status: "fail" }),
+        }),
+      ],
+    });
+
+    expect(report.findings.map((finding) => finding.status)).toEqual([
+      "pass",
+      "fail",
+      "advisory",
+    ]);
+    expect(report.score).toBe(67);
+    expect(report.grade).toBe("D");
+  });
+
+  it("does not let low-confidence failures reduce the main score", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          confidence: "low",
+          id: "low-confidence-fail",
+          run: () => ({ confidence: "low", status: "fail" }),
+        }),
+      ],
+    });
+
+    expect(report.findings[0]?.status).toBe("advisory");
+    expect(report.findings[0]?.impactsScore).toBe(false);
+    expect(report.score).toBe(100);
+  });
+
+  it("filters rules by adapter", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          adapters: ["next-app-router"],
+          id: "next-only",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          adapters: ["generic-react"],
+          id: "generic-only",
+          run: () => ({ status: "pass" }),
+        }),
+      ],
+    });
+
+    expect(report.findings.map((finding) => finding.id)).toEqual([
+      "generic-only",
+    ]);
+    expect(report.score).toBe(100);
+  });
+
+  it("filters rules by category", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      category: "accessibility",
+      rules: [
+        createRule({
+          category: "foundation",
+          id: "foundation-rule",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "accessibility",
+          id: "accessibility-rule",
+          run: () => ({ status: "pass" }),
+        }),
+      ],
+    });
+
+    expect(report.findings.map((finding) => finding.id)).toEqual([
+      "accessibility-rule",
+    ]);
+    expect(report.score).toBe(100);
+  });
+});
+
+describe("createAuditReport", () => {
+  it("returns full credit when no rules apply", () => {
+    const project: ProjectDiscovery = {
+      dependencies: {},
+      framework: {
+        adapter: "generic-react",
+        evidence: [],
+      },
+      packageManager: "unknown",
+      packageName: null,
+      paths: {
+        appDir: null,
+        packageJson: "/tmp/package.json",
+        srcDir: null,
+        tailwindCss: null,
+        tsconfig: null,
+        viteEntry: null,
+      },
+      rootDir: "/tmp",
+      shadcn: {
+        aliases: {},
+        configPath: null,
+        confidence: "low",
+        style: null,
+      },
+      versions: {
+        next: null,
+        react: null,
+        vite: null,
+      },
+      warnings: [],
+    };
+
+    const report = createAuditReport({
+      durationMs: 0,
+      findings: [],
+      project,
+    });
+
+    expect(report.score).toBe(100);
+    expect(report.categories.every((category) => !category.applicable)).toBe(
+      true
+    );
+  });
+});
