@@ -35,6 +35,29 @@ repository-relative evidence without roast copy or machine-local paths.
 Both human and JSON output include an `agentHandoff` section with suggested
 skills, context, and prioritized actionables for another agent to pick up.
 
+## Hosted API
+
+An agent can scan without installing or running the CLI in the target project.
+Give the agent a `SHADSCAN_API_KEY` environment variable, then send it this
+prompt:
+
+```text
+Read https://shadscan.dev/agent.md and follow it. Scan this repository,
+inspect every cited finding, fix the verified P0 and P1 issues, run the
+project's checks, then rescan and summarize the before/after result. Never put
+the API key or repository secrets in a prompt, log, archive, or committed file.
+```
+
+The hosted API supports public GitHub repositories and sanitized gzip tar
+snapshots of the current working tree. A successful JSON response contains the
+versioned report and `handoff.promptMarkdown`; request `text/markdown` to receive
+only the paste-ready remediation prompt.
+
+- Agent instructions: <https://shadscan.dev/agent.md>
+- OpenAPI 3.1 contract: <https://shadscan.dev/openapi.json>
+- Scan endpoint: `POST https://shadscan.dev/v1/scans`
+- Self-hosting and key setup: [docs/hosted-api.md](docs/hosted-api.md)
+
 ## Current Checks
 
 - shadcn `components.json`
@@ -56,6 +79,7 @@ skills, context, and prioritized actionables for another agent to pick up.
 pnpm install
 pnpm cli:test
 pnpm cli:build
+pnpm test:api
 pnpm audit:self
 pnpm check
 pnpm typecheck
@@ -72,6 +96,7 @@ pnpm typecheck
 pnpm build
 pnpm cli:test
 pnpm cli:build
+pnpm test:api
 pnpm audit:self
 pnpm --filter shadscan pack --dry-run
 ```
