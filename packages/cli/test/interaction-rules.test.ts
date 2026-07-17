@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { commandMenuHotkeyPresentRule } from "../src/rules/command-menu-hotkey-present";
 import { commandMenuPresentRule } from "../src/rules/command-menu-present";
+import { focusVisibleNotSuppressedRule } from "../src/rules/focus-visible-not-suppressed";
 import { globalHotkeysAreSafeRule } from "../src/rules/global-hotkeys-are-safe";
 import { mobileNavPresentRule } from "../src/rules/mobile-nav-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -138,6 +139,30 @@ describe("interaction rules", () => {
       expect(
         (await runRule(fixture.rootDir, mobileNavPresentRule)).status
       ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects outline suppression without a visible replacement", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/button.tsx",
+        'export function Button() { return <button className="outline-none px-2">Save</button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, focusVisibleNotSuppressedRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/button.tsx",
+        'export function Button() { return <button className="outline-none focus-visible:ring-2 px-2">Save</button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, focusVisibleNotSuppressedRule)).status
+      ).toBe("pass");
     } finally {
       await fixture.cleanup();
     }
