@@ -3,6 +3,7 @@ import { componentsAliasesResolveRule } from "./components-aliases-resolve";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
+import { socialPreviewPresentRule } from "./social-preview-present";
 import { themeHydrationSafeRule } from "./theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "./theme-provider-mounted-in-shell";
 
@@ -13,6 +14,7 @@ const defaultRules = [
   themeHydrationSafeRule,
   htmlLangPresentRule,
   metadataTitleDescriptionCompleteRule,
+  socialPreviewPresentRule,
   ...accessibilityRules,
 ];
 

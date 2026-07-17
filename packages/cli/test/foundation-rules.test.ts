@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { componentsAliasesResolveRule } from "../src/rules/components-aliases-resolve";
 import { metadataTitleDescriptionCompleteRule } from "../src/rules/metadata-title-description-complete";
+import { socialPreviewPresentRule } from "../src/rules/social-preview-present";
 import { themeHydrationSafeRule } from "../src/rules/theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "../src/rules/theme-provider-mounted-in-shell";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -139,6 +140,33 @@ describe("foundation rules", () => {
       expect(
         (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
           .status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("detects image-backed social previews", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        'export const metadata = { openGraph: { images: ["/share.png"] } }; export default function Layout() { return <html />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, socialPreviewPresentRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/layout.tsx",
+        'export const metadata = { title: "No image" }; export default function Layout() { return <html />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, socialPreviewPresentRule)).status
       ).toBe("fail");
     } finally {
       await fixture.cleanup();
