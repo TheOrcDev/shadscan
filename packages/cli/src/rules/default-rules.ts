@@ -9,6 +9,7 @@ import { htmlLangPresentRule } from "./html-lang-present";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
 import { noStarterCopyRule } from "./no-starter-copy";
+import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
 import { socialPreviewPresentRule } from "./social-preview-present";
 import { themeHydrationSafeRule } from "./theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "./theme-provider-mounted-in-shell";
@@ -27,6 +28,7 @@ const defaultRules = [
   globalHotkeysAreSafeRule,
   mobileNavPresentRule,
   focusVisibleNotSuppressedRule,
+  routeLoadingBoundaryPresentRule,
   ...accessibilityRules,
 ];
 
