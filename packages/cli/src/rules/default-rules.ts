@@ -10,6 +10,7 @@ import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { imagesHaveAltRule } from "./images-have-alt";
+import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
 import { noStarterCopyRule } from "./no-starter-copy";
@@ -43,6 +44,7 @@ const defaultRules = [
   asyncActionPendingStateRule,
   toastProviderMountedRule,
   imagesHaveAltRule,
+  linksHaveAccessibleNamesRule,
   ...accessibilityRules,
 ];
 
