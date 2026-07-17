@@ -13,6 +13,7 @@ import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { iframesHaveTitleRule } from "./iframes-have-title";
 import { imagesHaveAltRule } from "./images-have-alt";
+import { invalidFieldsAssociatedWithErrorsRule } from "./invalid-fields-associated-with-errors";
 import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
@@ -61,6 +62,7 @@ const defaultRules = [
   statusMessagesAnnouncedRule,
   validationWiredToFormRule,
   fieldErrorsRenderedRule,
+  invalidFieldsAssociatedWithErrorsRule,
   ...accessibilityRules,
 ];
 
