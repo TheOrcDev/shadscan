@@ -5,6 +5,7 @@ import { destructiveActionsConfirmedRule } from "../src/rules/destructive-action
 import { dialogFocusTrapWorksRule } from "../src/rules/dialog-focus-trap-works";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
 import { keyboardNavigationWorksRule } from "../src/rules/keyboard-navigation-works";
+import { mobileOverflowAbsentRule } from "../src/rules/mobile-overflow-absent";
 import { pointerTargetSizePassesRule } from "../src/rules/pointer-target-size-passes";
 import { publicAppSeoFilesPresentRule } from "../src/rules/public-app-seo-files-present";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
@@ -215,6 +216,22 @@ describe("browser-sensitive advisory rules", () => {
       );
       expect(finding.status).toBe("advisory");
       expect(finding.evidence[0]?.message).toContain("below the 24px");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("calls out obvious mobile overflow risks for browser verification", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/dashboard.tsx",
+        'export function Dashboard() { return <main className="w-screen">Content</main>; }'
+      );
+      const finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.status).toBe("advisory");
+      expect(finding.evidence[0]?.message).toContain("overflow-prone");
     } finally {
       await fixture.cleanup();
     }

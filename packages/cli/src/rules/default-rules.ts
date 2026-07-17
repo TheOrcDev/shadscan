@@ -25,6 +25,7 @@ import { keyboardNavigationWorksRule } from "./keyboard-navigation-works";
 import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
+import { mobileOverflowAbsentRule } from "./mobile-overflow-absent";
 import { navLandmarksHaveNamesRule } from "./nav-landmarks-have-names";
 import { noNestedInteractiveControlsRule } from "./no-nested-interactive-controls";
 import { noPositiveTabindexRule } from "./no-positive-tabindex";
@@ -87,6 +88,7 @@ const defaultRules = [
   keyboardNavigationWorksRule,
   colorContrastPassesRule,
   pointerTargetSizePassesRule,
+  mobileOverflowAbsentRule,
   ...accessibilityRules,
 ];
 
