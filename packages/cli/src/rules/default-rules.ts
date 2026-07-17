@@ -1,4 +1,5 @@
 import { accessibilityRules } from "./accessibility";
+import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
 import { highConfidenceRules } from "./high-confidence";
@@ -19,6 +20,7 @@ const defaultRules = [
   socialPreviewPresentRule,
   noStarterCopyRule,
   commandMenuPresentRule,
+  commandMenuHotkeyPresentRule,
   ...accessibilityRules,
 ];
 
