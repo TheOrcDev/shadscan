@@ -32,10 +32,11 @@ pnpm audit:dependencies
 pnpm audit:self
 pnpm build
 pnpm cli:smoke
-pnpm cli:release:check -- --tag next
+pnpm cli:release:check -- --tag next --git-tag v0.1.0-rc.1
 ```
 
-For a stable release, replace `next` with `latest`. The release check rejects
+For a stable release, replace `next` with `latest` and supply the matching
+stable Git tag. The release check rejects
 an unlicensed package, a mismatched stable/prerelease version, install-time
 scripts, workspace dependencies, incomplete package files, and malformed
 registry metadata.

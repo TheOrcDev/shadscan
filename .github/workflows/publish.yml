@@ -1,0 +1,69 @@
+name: Publish Shadscan
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-shadscan-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  stage-package:
+    name: Verify and stage npm package
+    environment: npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NPM_DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.0
+          run_install: false
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - name: Install staged-publishing npm CLI
+        run: npm install --global npm@11.18.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify release metadata
+        run: pnpm cli:release:check -- --tag "$NPM_DIST_TAG" --git-tag "$RELEASE_TAG"
+      - name: Check formatting and lint
+        run: pnpm check
+      - name: Check generated rule catalog
+        run: pnpm docs:check
+      - name: Typecheck CLI
+        run: pnpm --filter shadscan typecheck
+      - name: Typecheck site and API
+        run: pnpm typecheck
+      - name: Test CLI
+        run: pnpm cli:test
+      - name: Test hosted API
+        run: pnpm test:api
+      - name: Audit production dependencies
+        run: pnpm audit:dependencies
+      - name: Enforce the dogfood score
+        run: pnpm audit:self
+      - name: Build production site
+        run: pnpm build
+      - name: Smoke test packed npx command
+        run: pnpm cli:smoke
+      - name: Stage package for npm approval
+        working-directory: packages/cli
+        run: npm stage publish --tag "$NPM_DIST_TAG"

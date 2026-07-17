@@ -8,20 +8,32 @@ const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
 const REPOSITORY_URL = "git+https://github.com/TheOrcDev/headless-shadcn.git";
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const UNPUBLISHED_COPY_PATTERN = /not published yet/i;
 const FORBIDDEN_LIFECYCLE_SCRIPTS = ["install", "postinstall", "preinstall"];
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packageDirectory = path.resolve(scriptDirectory, "..");
 const manifestPath = path.join(packageDirectory, "package.json");
 
-const getReleaseTag = () => {
-  const tagIndex = process.argv.indexOf("--tag");
+const getOptionValue = (optionName) => {
+  const optionIndex = process.argv.indexOf(optionName);
 
-  if (tagIndex === -1) {
+  if (optionIndex === -1) {
     return null;
   }
 
-  const tag = process.argv[tagIndex + 1];
+  const value = process.argv[optionIndex + 1];
+  assert.ok(value, `Expected a value after ${optionName}.`);
+  return value;
+};
+
+const getReleaseTag = () => {
+  const tag = getOptionValue("--tag");
+
+  if (tag === null) {
+    return null;
+  }
+
   assert.ok(tag === "latest" || tag === "next", "Expected --tag latest|next.");
   return tag;
 };
@@ -29,6 +41,7 @@ const getReleaseTag = () => {
 const main = async () => {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   const releaseTag = getReleaseTag();
+  const gitTag = getOptionValue("--git-tag");
   const isPrerelease = manifest.version.includes("-");
 
   assert.equal(manifest.name, PACKAGE_NAME, "Unexpected npm package name.");
@@ -85,6 +98,33 @@ const main = async () => {
 
   if (releaseTag === "next") {
     assert.equal(isPrerelease, true, "next must publish a prerelease version.");
+  }
+
+  if (gitTag) {
+    assert.equal(
+      gitTag,
+      `v${manifest.version}`,
+      "The Git tag must match the package version."
+    );
+
+    const repositoryRoot = path.resolve(packageDirectory, "../..");
+    const changelog = await readFile(
+      path.join(repositoryRoot, "CHANGELOG.md"),
+      "utf8"
+    );
+    const packageReadme = await readFile(
+      path.join(packageDirectory, "README.md"),
+      "utf8"
+    );
+    assert.ok(
+      changelog.includes(`## ${manifest.version}`),
+      "The changelog must contain the release version."
+    );
+    assert.doesNotMatch(
+      packageReadme,
+      UNPUBLISHED_COPY_PATTERN,
+      "The published README cannot claim the package is unpublished."
+    );
   }
 
   await access(path.join(packageDirectory, "LICENSE"));
