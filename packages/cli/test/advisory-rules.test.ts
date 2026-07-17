@@ -5,6 +5,7 @@ import { destructiveActionsConfirmedRule } from "../src/rules/destructive-action
 import { dialogFocusTrapWorksRule } from "../src/rules/dialog-focus-trap-works";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
 import { keyboardNavigationWorksRule } from "../src/rules/keyboard-navigation-works";
+import { pointerTargetSizePassesRule } from "../src/rules/pointer-target-size-passes";
 import { publicAppSeoFilesPresentRule } from "../src/rules/public-app-seo-files-present";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -195,6 +196,25 @@ describe("browser-sensitive advisory rules", () => {
       const finding = await runRule(fixture.rootDir, colorContrastPassesRule);
       expect(finding.status).toBe("advisory");
       expect(finding.impactsScore).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("calls out obviously small pointer targets for browser verification", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/icon-button.tsx",
+        'export function IconButton() { return <button className="size-5" aria-label="Close" />; }'
+      );
+      const finding = await runRule(
+        fixture.rootDir,
+        pointerTargetSizePassesRule
+      );
+      expect(finding.status).toBe("advisory");
+      expect(finding.evidence[0]?.message).toContain("below the 24px");
     } finally {
       await fixture.cleanup();
     }

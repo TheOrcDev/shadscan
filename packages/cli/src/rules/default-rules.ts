@@ -31,6 +31,7 @@ import { noPositiveTabindexRule } from "./no-positive-tabindex";
 import { noStarterCopyRule } from "./no-starter-copy";
 import { notFoundRecoveryPresentRule } from "./not-found-recovery-present";
 import { personalDataAutocompletePresentRule } from "./personal-data-autocomplete-present";
+import { pointerTargetSizePassesRule } from "./pointer-target-size-passes";
 import { publicAppSeoFilesPresentRule } from "./public-app-seo-files-present";
 import { responsiveShellPresentRule } from "./responsive-shell-present";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
@@ -85,6 +86,7 @@ const defaultRules = [
   dialogFocusTrapWorksRule,
   keyboardNavigationWorksRule,
   colorContrastPassesRule,
+  pointerTargetSizePassesRule,
   ...accessibilityRules,
 ];
 
