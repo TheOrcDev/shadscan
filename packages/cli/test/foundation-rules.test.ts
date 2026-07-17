@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { componentsAliasesResolveRule } from "../src/rules/components-aliases-resolve";
 import { metadataTitleDescriptionCompleteRule } from "../src/rules/metadata-title-description-complete";
+import { noStarterCopyRule } from "../src/rules/no-starter-copy";
 import { socialPreviewPresentRule } from "../src/rules/social-preview-present";
 import { themeHydrationSafeRule } from "../src/rules/theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "../src/rules/theme-provider-mounted-in-shell";
@@ -168,6 +169,30 @@ describe("foundation rules", () => {
       expect(
         (await runRule(fixture.rootDir, socialPreviewPresentRule)).status
       ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("flags recognizable framework starter copy", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <h1>Welcome to Vite + React</h1>; }"
+      );
+      expect((await runRule(fixture.rootDir, noStarterCopyRule)).status).toBe(
+        "fail"
+      );
+
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <h1>Acme projects</h1>; }"
+      );
+      expect((await runRule(fixture.rootDir, noStarterCopyRule)).status).toBe(
+        "pass"
+      );
     } finally {
       await fixture.cleanup();
     }
