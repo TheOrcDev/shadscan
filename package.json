@@ -56,6 +56,7 @@
     "cli:test": "pnpm --filter shadscan test",
     "cli:pack:dry-run": "npm pack ./packages/cli --dry-run",
     "cli:smoke": "pnpm --filter shadscan smoke",
+    "cli:release:check": "pnpm --filter shadscan release:check",
     "docs:rules": "pnpm --filter shadscan docs:rules",
     "docs:check": "pnpm --filter shadscan docs:rules:check",
     "pretest:api": "pnpm cli:build",

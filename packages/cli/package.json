@@ -38,14 +38,20 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "LICENSE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "dev": "tsx src/bin.ts",
     "build": "tsup",
     "docs:rules": "node --import tsx scripts/generate-rule-catalog.ts",
     "docs:rules:check": "node --import tsx scripts/generate-rule-catalog.ts --check",
     "prepack": "pnpm build",
+    "release:check": "node scripts/check-release.mjs",
     "smoke": "node scripts/smoke-package.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
