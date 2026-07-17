@@ -1,6 +1,12 @@
-import { Command, InvalidArgumentError } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import packageJson from "../package.json";
 import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
+import {
+  type OutputFormat,
+  parseOutputFormat,
+  resolveOutputFormat,
+} from "./output-format";
+import { renderAgentPrompt } from "./render-agent-prompt";
 import { renderHumanReport, stripRoasts } from "./render-human";
 import { scanProject } from "./scan";
 
@@ -9,7 +15,9 @@ const VERSION = packageJson.version;
 interface CliOptions {
   category?: AuditCategory;
   failUnder?: number;
+  format?: OutputFormat;
   json?: boolean;
+  prompt?: boolean;
   roast?: boolean;
 }
 
@@ -44,7 +52,26 @@ const createProgram = (): Command => {
     .name("shadscan")
     .description("Audit a React shadcn app for missing UI fundamentals.")
     .version(VERSION)
-    .option("--json", "Print a machine-readable JSON report.")
+    .addOption(
+      new Option(
+        "--format <format>",
+        "Choose human, JSON, or paste-ready prompt output."
+      )
+        .argParser(parseOutputFormat)
+        .conflicts(["json", "prompt"])
+    )
+    .addOption(
+      new Option("--json", "Print a machine-readable JSON report.").conflicts([
+        "format",
+        "prompt",
+      ])
+    )
+    .addOption(
+      new Option(
+        "--prompt",
+        "Print only a paste-ready prompt for an AI agent."
+      ).conflicts(["format", "json"])
+    )
     .option(
       "--fail-under <score>",
       "Exit non-zero when the score is below this number.",
@@ -57,18 +84,23 @@ const createProgram = (): Command => {
     )
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
-    .action(async (options: CliOptions) => {
-      const explicitNoRoast = process.argv.includes("--no-roast");
-      const explicitRoast = process.argv.includes("--roast");
+    .action(async (options: CliOptions, command: Command) => {
+      const outputFormat = resolveOutputFormat(options);
+      const roastWasSpecified = command.getOptionValueSource("roast") === "cli";
       const includeRoast =
-        explicitRoast || !(options.json || explicitNoRoast || process.env.CI);
+        outputFormat !== "prompt" &&
+        (roastWasSpecified
+          ? options.roast !== false
+          : outputFormat === "human" && !process.env.CI);
       const report = await scanProject(process.cwd(), {
         category: options.category,
       });
       const outputReport = includeRoast ? report : stripRoasts(report);
 
-      if (options.json) {
+      if (outputFormat === "json") {
         process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
+      } else if (outputFormat === "prompt") {
+        process.stdout.write(renderAgentPrompt(outputReport));
       } else {
         process.stdout.write(renderHumanReport(outputReport, { includeRoast }));
       }

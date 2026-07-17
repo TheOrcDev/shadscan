@@ -1,5 +1,6 @@
 import { runCli } from "./cli";
 import { normalizeCliFailure } from "./cli-error";
+import { wantsJsonOutput } from "./output-format";
 
 const ERROR_SCHEMA_VERSION = 1;
 
@@ -7,7 +8,7 @@ try {
   await runCli();
 } catch (error) {
   const failure = normalizeCliFailure(error);
-  const output = process.argv.includes("--json")
+  const output = wantsJsonOutput(process.argv)
     ? JSON.stringify(
         {
           error: failure,

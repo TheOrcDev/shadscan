@@ -22,6 +22,16 @@ Machine-readable output:
 pnpm dlx shadscan --json
 ```
 
+Paste-ready agent prompt:
+
+```bash
+pnpm dlx shadscan --prompt
+```
+
+For explicit output selection, use `--format human`, `--format json`, or
+`--format prompt`. Prompt output contains the prioritized handoff and
+repository-relative evidence without roast copy or machine-local paths.
+
 Both human and JSON output include an `agentHandoff` section with suggested
 skills, context, and prioritized actionables for another agent to pick up.
 
