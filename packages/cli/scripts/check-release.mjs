@@ -50,11 +50,7 @@ const main = async () => {
     SEMVER_PATTERN,
     "Version must be valid semver."
   );
-  assert.notEqual(
-    manifest.license,
-    "UNLICENSED",
-    "Choose a public package license before release."
-  );
+  assert.equal(manifest.license, "MIT", "The package license must remain MIT.");
   assert.equal(
     manifest.private,
     undefined,

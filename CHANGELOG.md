@@ -14,6 +14,7 @@ stable releases published under `latest`.
 - Evidence-backed scoring, confidence, remediation, and agent actionables.
 - Optional score thresholds for CI.
 - Hosted scan API with authenticated GitHub and sanitized snapshot sources.
+- MIT licensing for the publishable CLI package.
 
 ### Security
 

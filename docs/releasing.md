@@ -6,8 +6,8 @@ must never be published.
 
 ## Owner Prerequisites
 
-- Choose a public package license and commit `packages/cli/LICENSE` with the
-  matching `license` manifest value.
+- Keep `packages/cli/LICENSE` and the package manifest aligned on the MIT
+  license.
 - Use an npm user account with publishing two-factor authentication enabled.
 - Restore GitHub Actions runner access before enabling automated publishing.
 - Confirm `npm view shadscan` still returns `404` before the first publish.
