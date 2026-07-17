@@ -13,7 +13,7 @@ import { fail, notApplicable, pass } from "./rule-result";
 const INPUT_TAGS = new Set(["Input", "input"]);
 const PERSONAL_INPUT_TYPES = new Set(["email", "password", "tel"]);
 const PERSONAL_FIELD_PATTERN =
-  /(?:^|-)(?:address|bday|cc|country|credit-card|email|family-name|first-name|given-name|last-name|name|new-password|organization|phone|postal|street|tel|username|zip)(?:-|$)/;
+  /(?:^|-)(?:address|bday|cc|country|credit-card|current-password|email|family-name|first-name|given-name|last-name|name|new-password|organization|phone|postal|street|tel|username|zip)(?:-|$)/;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 
 const normalizeFieldName = (value: string): string =>

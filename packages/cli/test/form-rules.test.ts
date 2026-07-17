@@ -151,6 +151,24 @@ describe("form rules", () => {
         (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
           .status
       ).toBe("pass");
+
+      await fixture.write(
+        "src/profile.tsx",
+        'export function Profile() { return <Input name="currentPassword" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/profile.tsx",
+        'export function Profile() { return <Input name="currentPassword" autoComplete="current-password" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
+      ).toBe("pass");
     } finally {
       await fixture.cleanup();
     }
