@@ -3,6 +3,7 @@ import { asyncActionPendingStateRule } from "./async-action-pending-state";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
+import { customControlsHaveLabelsRule } from "./custom-controls-have-labels";
 import { emptyStatePresentRule } from "./empty-state-present";
 import { errorStateRetryPresentRule } from "./error-state-retry-present";
 import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
@@ -45,6 +46,7 @@ const defaultRules = [
   toastProviderMountedRule,
   imagesHaveAltRule,
   linksHaveAccessibleNamesRule,
+  customControlsHaveLabelsRule,
   ...accessibilityRules,
 ];
 
