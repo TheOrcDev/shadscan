@@ -3,6 +3,7 @@ import { customControlsHaveLabelsRule } from "../src/rules/custom-controls-have-
 import { htmlLangPresentRule } from "../src/rules/html-lang-present";
 import { imagesHaveAltRule } from "../src/rules/images-have-alt";
 import { linksHaveAccessibleNamesRule } from "../src/rules/links-have-accessible-names";
+import { noPositiveTabindexRule } from "../src/rules/no-positive-tabindex";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("expanded accessibility rules", () => {
@@ -99,6 +100,30 @@ describe("expanded accessibility rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, customControlsHaveLabelsRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects positive literal tabIndex values", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <button tabIndex={2}>Save</button>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, noPositiveTabindexRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <button tabIndex={0}>Save</button>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, noPositiveTabindexRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();

@@ -14,6 +14,7 @@ import { imagesHaveAltRule } from "./images-have-alt";
 import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
+import { noPositiveTabindexRule } from "./no-positive-tabindex";
 import { noStarterCopyRule } from "./no-starter-copy";
 import { notFoundRecoveryPresentRule } from "./not-found-recovery-present";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
@@ -47,6 +48,7 @@ const defaultRules = [
   imagesHaveAltRule,
   linksHaveAccessibleNamesRule,
   customControlsHaveLabelsRule,
+  noPositiveTabindexRule,
   ...accessibilityRules,
 ];
 
