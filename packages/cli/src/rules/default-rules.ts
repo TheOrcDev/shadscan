@@ -11,6 +11,7 @@ import { mobileNavPresentRule } from "./mobile-nav-present";
 import { noStarterCopyRule } from "./no-starter-copy";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
 import { socialPreviewPresentRule } from "./social-preview-present";
+import { suspenseFallbackUsefulRule } from "./suspense-fallback-useful";
 import { themeHydrationSafeRule } from "./theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "./theme-provider-mounted-in-shell";
 
@@ -29,6 +30,7 @@ const defaultRules = [
   mobileNavPresentRule,
   focusVisibleNotSuppressedRule,
   routeLoadingBoundaryPresentRule,
+  suspenseFallbackUsefulRule,
   ...accessibilityRules,
 ];
 

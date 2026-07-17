@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { routeLoadingBoundaryPresentRule } from "../src/rules/route-loading-boundary-present";
+import { suspenseFallbackUsefulRule } from "../src/rules/suspense-fallback-useful";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("state rules", () => {
@@ -24,6 +25,30 @@ describe("state rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects empty Suspense fallbacks", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <Suspense fallback={null}><Dashboard /></Suspense>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, suspenseFallbackUsefulRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <Suspense fallback={<Skeleton />}><Dashboard /></Suspense>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, suspenseFallbackUsefulRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
