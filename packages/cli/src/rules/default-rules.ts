@@ -11,6 +11,7 @@ import { htmlLangPresentRule } from "./html-lang-present";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
 import { noStarterCopyRule } from "./no-starter-copy";
+import { notFoundRecoveryPresentRule } from "./not-found-recovery-present";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
 import { socialPreviewPresentRule } from "./social-preview-present";
 import { suspenseFallbackUsefulRule } from "./suspense-fallback-useful";
@@ -35,6 +36,7 @@ const defaultRules = [
   suspenseFallbackUsefulRule,
   emptyStatePresentRule,
   errorStateRetryPresentRule,
+  notFoundRecoveryPresentRule,
   ...accessibilityRules,
 ];
 

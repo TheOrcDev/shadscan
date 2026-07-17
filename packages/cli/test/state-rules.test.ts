@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyStatePresentRule } from "../src/rules/empty-state-present";
 import { errorStateRetryPresentRule } from "../src/rules/error-state-retry-present";
+import { notFoundRecoveryPresentRule } from "../src/rules/not-found-recovery-present";
 import { routeLoadingBoundaryPresentRule } from "../src/rules/route-loading-boundary-present";
 import { suspenseFallbackUsefulRule } from "../src/rules/suspense-fallback-useful";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -102,6 +103,33 @@ describe("state rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, errorStateRetryPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires not-found states to expose a recovery path", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/not-found.tsx",
+        "export default function NotFound() { return <h1>Not found</h1>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/not-found.tsx",
+        'export default function NotFound() { return <><h1>Not found</h1><Link href="/">Go home</Link></>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
