@@ -1,5 +1,3 @@
-import { AUDIT_REPORT_SCHEMA_VERSION, type AuditCategory } from "shadscan";
-
 const HOSTED_AUDIT_CATEGORIES = [
   "foundation",
   "interaction",
@@ -7,7 +5,7 @@ const HOSTED_AUDIT_CATEGORIES = [
   "accessibility",
   "forms",
   "production-polish",
-] as const satisfies readonly AuditCategory[];
+] as const;
 
 const HOSTED_SCAN_SCHEMA_VERSION = 1 as const;
 const SNAPSHOT_MEDIA_TYPE = "application/vnd.shadscan.snapshot+tar+gzip";
@@ -16,7 +14,7 @@ const JSON_MEDIA_TYPE = "application/json";
 
 const PUBLIC_CONTRACT_VERSIONS = {
   prompt: 1,
-  report: AUDIT_REPORT_SCHEMA_VERSION,
+  report: 2,
   scan: HOSTED_SCAN_SCHEMA_VERSION,
 } as const;
 

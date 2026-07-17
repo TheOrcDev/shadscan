@@ -27,27 +27,153 @@ export const maxDuration = 30;
 
 type ResponseFormat = "json" | "markdown";
 
+interface AcceptedMediaRange {
+  index: number;
+  quality: number;
+  subtype: string;
+  type: string;
+}
+
+interface FormatPreference {
+  format: ResponseFormat;
+  index: number;
+  quality: number;
+  specificity: number;
+}
+
+interface SupportedResponseMediaType {
+  format: ResponseFormat;
+  subtype: string;
+  type: string;
+}
+
 const BASE_RESPONSE_HEADERS = {
   "Cache-Control": "private, no-store",
   Vary: "Accept",
   "X-Content-Type-Options": "nosniff",
 } as const;
+const ACCEPT_QUALITY_PATTERN = /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/;
+const SUPPORTED_RESPONSE_MEDIA_TYPES = [
+  { format: "json", subtype: "json", type: "application" },
+  { format: "markdown", subtype: "markdown", type: "text" },
+] as const satisfies readonly SupportedResponseMediaType[];
 
 const getMediaType = (headerValue: string | null): string =>
   headerValue?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
 
+const parseAcceptedMediaRange = (
+  rawRange: string,
+  index: number
+): AcceptedMediaRange | null => {
+  const [rawMediaType, ...rawParameters] = rawRange.toLowerCase().split(";");
+  const [type, subtype, ...extraParts] = rawMediaType.trim().split("/");
+  if (
+    extraParts.length > 0 ||
+    !type ||
+    !subtype ||
+    (type === "*" && subtype !== "*")
+  ) {
+    return null;
+  }
+
+  let quality = 1;
+  for (const rawParameter of rawParameters) {
+    const [rawName, rawValue, ...extraValues] = rawParameter.split("=");
+    if (rawName.trim() !== "q") {
+      continue;
+    }
+
+    const value = rawValue?.trim() ?? "";
+    if (extraValues.length > 0 || !ACCEPT_QUALITY_PATTERN.test(value)) {
+      return null;
+    }
+    quality = Number(value);
+  }
+
+  return { index, quality, subtype, type };
+};
+
+const getMediaRangeSpecificity = (
+  range: AcceptedMediaRange,
+  supported: SupportedResponseMediaType
+): number | null => {
+  if (range.type === "*" && range.subtype === "*") {
+    return 0;
+  }
+  if (range.type === supported.type && range.subtype === "*") {
+    return 1;
+  }
+  if (range.type === supported.type && range.subtype === supported.subtype) {
+    return 2;
+  }
+  return null;
+};
+
+const getFormatPreference = (
+  supported: SupportedResponseMediaType,
+  ranges: AcceptedMediaRange[]
+): FormatPreference | null => {
+  let preference: FormatPreference | null = null;
+
+  for (const range of ranges) {
+    const specificity = getMediaRangeSpecificity(range, supported);
+    if (specificity === null) {
+      continue;
+    }
+
+    if (
+      preference === null ||
+      specificity > preference.specificity ||
+      (specificity === preference.specificity && range.index < preference.index)
+    ) {
+      preference = {
+        format: supported.format,
+        index: range.index,
+        quality: range.quality,
+        specificity,
+      };
+    }
+  }
+
+  return preference;
+};
+
+const isPreferredFormat = (
+  candidate: FormatPreference,
+  selected: FormatPreference | null
+): boolean =>
+  selected === null ||
+  candidate.quality > selected.quality ||
+  (candidate.quality === selected.quality &&
+    candidate.specificity > selected.specificity) ||
+  (candidate.quality === selected.quality &&
+    candidate.specificity === selected.specificity &&
+    candidate.index < selected.index);
+
 const getResponseFormat = (request: Request): ResponseFormat => {
-  const accept = request.headers.get("accept")?.toLowerCase();
-  if (!(accept && accept !== "*/*")) {
+  const accept = request.headers.get("accept");
+  if (!accept?.trim()) {
     return "json";
   }
 
-  if (accept.includes(MARKDOWN_MEDIA_TYPE)) {
-    return "markdown";
+  const ranges = accept
+    .split(",")
+    .map(parseAcceptedMediaRange)
+    .filter((range): range is AcceptedMediaRange => range !== null);
+  let selected: FormatPreference | null = null;
+  for (const supported of SUPPORTED_RESPONSE_MEDIA_TYPES) {
+    const candidate = getFormatPreference(supported, ranges);
+    if (
+      candidate &&
+      candidate.quality > 0 &&
+      isPreferredFormat(candidate, selected)
+    ) {
+      selected = candidate;
+    }
   }
 
-  if (accept.includes(JSON_MEDIA_TYPE) || accept.includes("*/*")) {
-    return "json";
+  if (selected) {
+    return selected.format;
   }
 
   throw new HostedScanError(

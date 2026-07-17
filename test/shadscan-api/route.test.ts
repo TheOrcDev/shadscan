@@ -6,12 +6,13 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { AuditReport } from "shadscan";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "../../app/v1/scans/route";
+import { maxDuration, POST } from "../../app/v1/scans/route";
 import { hashApiKey } from "../../lib/shadscan-api/auth";
 import type {
   HostedScanErrorBody,
   HostedScanResponse,
 } from "../../lib/shadscan-api/contracts";
+import { GITHUB_SOURCE_TIMEOUT_MS } from "../../lib/shadscan-api/github-source";
 import {
   JSON_MEDIA_TYPE,
   MARKDOWN_MEDIA_TYPE,
@@ -172,6 +173,10 @@ afterEach(() => {
 });
 
 describe("POST /v1/scans", () => {
+  it("reserves route time for extraction and scanning after GitHub fetches", () => {
+    expect(GITHUB_SOURCE_TIMEOUT_MS).toBeLessThan(maxDuration * 1000);
+  });
+
   it("returns a completed JSON scan for an authenticated snapshot", async () => {
     const archive = await createMinimalReactSnapshot();
 
@@ -224,6 +229,45 @@ describe("POST /v1/scans", () => {
     expect(prompt).toContain("You are improving a React shadcn application");
     expect(prompt).toContain("<shadscan-data");
     expect(prompt).toContain('"kind": "snapshot"');
+  });
+
+  it.each([
+    {
+      accept: "text/markdown;q=0, application/json;q=1",
+      expectedMediaType: JSON_MEDIA_TYPE,
+    },
+    { accept: "application/*", expectedMediaType: JSON_MEDIA_TYPE },
+    { accept: "text/*", expectedMediaType: MARKDOWN_MEDIA_TYPE },
+    {
+      accept: "text/markdown, application/json",
+      expectedMediaType: MARKDOWN_MEDIA_TYPE,
+    },
+    {
+      accept: "text/markdown;q=0, */*;q=0.5",
+      expectedMediaType: JSON_MEDIA_TYPE,
+    },
+    { accept: "text/markdownish", expectedMediaType: null },
+    { accept: "*/*;q=0", expectedMediaType: null },
+  ])("negotiates an exact supported response for Accept: $accept", async ({
+    accept,
+    expectedMediaType,
+  }) => {
+    const archive = await createMinimalReactSnapshot();
+    const request = createSnapshotRequest(archive, { accept });
+    const response = await POST(request);
+
+    if (expectedMediaType === null) {
+      const result = (await response.json()) as HostedScanErrorBody;
+      expect(response.status).toBe(406);
+      expect(request.bodyUsed).toBe(false);
+      expect(result.error.code).toBe("NOT_ACCEPTABLE");
+      return;
+    }
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      `${expectedMediaType}; charset=utf-8`
+    );
   });
 
   it("keeps the hosted report in parity with the CLI for the same source", async () => {
@@ -350,6 +394,54 @@ describe("POST /v1/scans", () => {
     });
   });
 
+  it("returns a stable error envelope for invalid package metadata", async () => {
+    const archive = await createTarGzip([
+      {
+        contents: "{ invalid JSON",
+        header: { name: "package.json", type: "file" },
+      },
+    ]);
+
+    const response = await POST(createSnapshotRequest(archive));
+    const result = (await response.json()) as HostedScanErrorBody;
+
+    expect(response.status).toBe(422);
+    expect(result).toEqual({
+      error: {
+        code: "INVALID_PACKAGE_JSON",
+        message:
+          "The selected source root must contain a valid package.json object.",
+        retryable: false,
+      },
+      schemaVersion: 1,
+    });
+  });
+
+  it("classifies a GitHub response-body timeout as a retryable timeout", async () => {
+    const responseBody = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        controller.error(new DOMException("Timed out", "TimeoutError"));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Response(responseBody, { status: 200 }))
+    );
+
+    const response = await POST(createGitHubRequest());
+    const result = (await response.json()) as HostedScanErrorBody;
+
+    expect(response.status).toBe(504);
+    expect(result).toEqual({
+      error: {
+        code: "GITHUB_TIMEOUT",
+        message: "GitHub did not respond before the source timeout.",
+        retryable: true,
+      },
+      schemaVersion: 1,
+    });
+  });
+
   it("returns a stable error envelope before reading an oversized snapshot", async () => {
     const request = createSnapshotRequest(Buffer.from("x"), {
       "content-length": (MAX_SNAPSHOT_BYTES + 1).toString(),
@@ -450,12 +542,18 @@ describe("POST /v1/scans", () => {
       },
     ]);
     const archiveUrl = `https://codeload.github.com/acme/widget/legacy.tar.gz/${IMMUTABLE_COMMIT_SHA}`;
+    let sharedSourceSignal: AbortSignal | null | undefined;
     const fetchMock = vi.fn(
       (
         input: Parameters<typeof fetch>[0],
         init?: Parameters<typeof fetch>[1]
       ): Response => {
         const url = getFetchUrl(input);
+        if (sharedSourceSignal === undefined) {
+          sharedSourceSignal = init?.signal;
+        } else {
+          expect(init?.signal).toBe(sharedSourceSignal);
+        }
         if (url === "https://api.github.com/repos/acme/widget") {
           expect(new Headers(init?.headers).get("authorization")).toBe(
             "Bearer server-side-github-token"

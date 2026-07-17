@@ -12,11 +12,15 @@ import {
   createMaterializationDirectory,
   resolveProjectRoot,
 } from "./materialized-project";
-import { readRequestBytes, readResponseBytes } from "./request-bytes";
+import {
+  type ReadBytesOptions,
+  readRequestBytes,
+  readResponseBytes,
+} from "./request-bytes";
 
 const MAX_GITHUB_REQUEST_BYTES = 16 * 1024;
 const MAX_GITHUB_METADATA_BYTES = 64 * 1024;
-const GITHUB_TIMEOUT_MS = 8000;
+const GITHUB_SOURCE_TIMEOUT_MS = 12_000;
 const GITHUB_API_ORIGIN = "https://api.github.com";
 const GITHUB_ARCHIVE_HOSTS = new Set(["codeload.github.com"]);
 const GITHUB_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -43,31 +47,57 @@ const getGitHubHeaders = (includeAuthorization = true): Headers => {
   return headers;
 };
 
+const throwGitHubRequestError = (
+  error: unknown,
+  sourceSignal: AbortSignal
+): never => {
+  const errorName = error instanceof Error ? error.name : "";
+  const isTimeout =
+    sourceSignal.aborted ||
+    errorName === "AbortError" ||
+    errorName === "TimeoutError";
+  throw new HostedScanError(
+    isTimeout
+      ? "GitHub did not respond before the source timeout."
+      : "GitHub could not be reached.",
+    {
+      cause: error,
+      code: isTimeout ? "GITHUB_TIMEOUT" : "GITHUB_UNAVAILABLE",
+      retryable: true,
+      status: isTimeout ? 504 : 502,
+    }
+  );
+};
+
 const fetchGitHub = async (
   url: string,
   init: RequestInit,
-  fetchImplementation: FetchImplementation
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
 ): Promise<Response> => {
   try {
     return await fetchImplementation(url, {
       ...init,
-      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+      signal: sourceSignal,
     });
   } catch (error) {
-    const errorName = error instanceof Error ? error.name : "";
-    const isTimeout =
-      errorName === "AbortError" || errorName === "TimeoutError";
-    throw new HostedScanError(
-      isTimeout
-        ? "GitHub did not respond before the source timeout."
-        : "GitHub could not be reached.",
-      {
-        cause: error,
-        code: isTimeout ? "GITHUB_TIMEOUT" : "GITHUB_UNAVAILABLE",
-        retryable: true,
-        status: isTimeout ? 504 : 502,
-      }
-    );
+    return throwGitHubRequestError(error, sourceSignal);
+  }
+};
+
+const readGitHubResponseBytes = async (
+  response: Response,
+  options: ReadBytesOptions,
+  sourceSignal: AbortSignal
+): Promise<Buffer> => {
+  try {
+    return await readResponseBytes(response, options);
+  } catch (error) {
+    if (error instanceof HostedScanError) {
+      throw error;
+    }
+
+    return throwGitHubRequestError(error, sourceSignal);
   }
 };
 
@@ -102,19 +132,24 @@ const throwGitHubResponseError = (
 
 const readGitHubJson = async (
   response: Response,
-  notFoundMessage: string
+  notFoundMessage: string,
+  sourceSignal: AbortSignal
 ): Promise<unknown> => {
   if (!response.ok) {
     throwGitHubResponseError(response, notFoundMessage);
   }
 
-  const responseBuffer = await readResponseBytes(response, {
-    emptyCode: "GITHUB_INVALID_RESPONSE",
-    emptyMessage: "GitHub returned an empty metadata response.",
-    maxBytes: MAX_GITHUB_METADATA_BYTES,
-    tooLargeCode: "GITHUB_INVALID_RESPONSE",
-    tooLargeMessage: "GitHub returned an oversized metadata response.",
-  });
+  const responseBuffer = await readGitHubResponseBytes(
+    response,
+    {
+      emptyCode: "GITHUB_INVALID_RESPONSE",
+      emptyMessage: "GitHub returned an empty metadata response.",
+      maxBytes: MAX_GITHUB_METADATA_BYTES,
+      tooLargeCode: "GITHUB_INVALID_RESPONSE",
+      tooLargeMessage: "GitHub returned an oversized metadata response.",
+    },
+    sourceSignal
+  );
   try {
     return JSON.parse(responseBuffer.toString("utf8"));
   } catch (error) {
@@ -129,17 +164,20 @@ const readGitHubJson = async (
 
 const assertPublicGitHubRepository = async (
   repository: string,
-  fetchImplementation: FetchImplementation
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
 ): Promise<void> => {
   const response = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}`,
     { headers: getGitHubHeaders(), redirect: "error" },
-    fetchImplementation
+    fetchImplementation,
+    sourceSignal
   );
   const metadata = GitHubRepositoryMetadataSchema.safeParse(
     await readGitHubJson(
       response,
-      "The public GitHub repository was not found."
+      "The public GitHub repository was not found.",
+      sourceSignal
     )
   );
   if (!metadata.success) {
@@ -165,17 +203,20 @@ const assertPublicGitHubRepository = async (
 const resolveGitHubRevision = async (
   repository: string,
   revision: string,
-  fetchImplementation: FetchImplementation
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
 ): Promise<string> => {
   const response = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/commits/${encodeURIComponent(revision)}`,
     { headers: getGitHubHeaders(), redirect: "error" },
-    fetchImplementation
+    fetchImplementation,
+    sourceSignal
   );
   const commit = GitHubCommitSchema.safeParse(
     await readGitHubJson(
       response,
-      "The requested GitHub revision was not found."
+      "The requested GitHub revision was not found.",
+      sourceSignal
     )
   );
   if (!commit.success) {
@@ -232,19 +273,22 @@ const getAllowedRedirectUrl = (response: Response): string => {
 const downloadGitHubArchive = async (
   repository: string,
   commitSha: string,
-  fetchImplementation: FetchImplementation
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
 ): Promise<Buffer> => {
   const initialResponse = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/tarball/${commitSha}`,
     { headers: getGitHubHeaders(), redirect: "manual" },
-    fetchImplementation
+    fetchImplementation,
+    sourceSignal
   );
   const archiveResponse = initialResponse.ok
     ? initialResponse
     : await fetchGitHub(
         getAllowedRedirectUrl(initialResponse),
         { headers: getGitHubHeaders(false), redirect: "error" },
-        fetchImplementation
+        fetchImplementation,
+        sourceSignal
       );
 
   if (!archiveResponse.ok) {
@@ -254,13 +298,17 @@ const downloadGitHubArchive = async (
     );
   }
 
-  return readResponseBytes(archiveResponse, {
-    emptyCode: "GITHUB_EMPTY_ARCHIVE",
-    emptyMessage: "GitHub returned an empty source archive.",
-    maxBytes: DEFAULT_ARCHIVE_LIMITS.maxCompressedBytes,
-    tooLargeCode: "GITHUB_ARCHIVE_TOO_LARGE",
-    tooLargeMessage: "The GitHub archive exceeds the compressed size limit.",
-  });
+  return readGitHubResponseBytes(
+    archiveResponse,
+    {
+      emptyCode: "GITHUB_EMPTY_ARCHIVE",
+      emptyMessage: "GitHub returned an empty source archive.",
+      maxBytes: DEFAULT_ARCHIVE_LIMITS.maxCompressedBytes,
+      tooLargeCode: "GITHUB_ARCHIVE_TOO_LARGE",
+      tooLargeMessage: "The GitHub archive exceeds the compressed size limit.",
+    },
+    sourceSignal
+  );
 };
 
 const parseGitHubScanRequest = async (
@@ -300,16 +348,23 @@ const materializeGitHubSource = async (
   fetchImplementation: FetchImplementation = fetch
 ): Promise<MaterializedScanSource> => {
   const { repository, revision, subdirectory } = requestData.source;
-  await assertPublicGitHubRepository(repository, fetchImplementation);
+  const sourceSignal = AbortSignal.timeout(GITHUB_SOURCE_TIMEOUT_MS);
+  await assertPublicGitHubRepository(
+    repository,
+    fetchImplementation,
+    sourceSignal
+  );
   const commitSha = await resolveGitHubRevision(
     repository,
     revision,
-    fetchImplementation
+    fetchImplementation,
+    sourceSignal
   );
   const archiveBuffer = await downloadGitHubArchive(
     repository,
     commitSha,
-    fetchImplementation
+    fetchImplementation,
+    sourceSignal
   );
   const sourceDigest = `sha256:${createHash("sha256")
     .update(archiveBuffer)
@@ -341,6 +396,7 @@ const materializeGitHubSource = async (
 export type { FetchImplementation, GitHubScanRequest };
 export {
   downloadGitHubArchive,
+  GITHUB_SOURCE_TIMEOUT_MS,
   materializeGitHubSource,
   parseGitHubScanRequest,
   resolveGitHubRevision,

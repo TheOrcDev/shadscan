@@ -9,21 +9,32 @@ import {
   hashApiKey,
 } from "../../lib/shadscan-api/auth";
 import {
+  CompletedHostedScanSchema,
   GitHubScanRequestSchema,
   GitHubSourceSchema,
   PortableSubdirectorySchema,
   SnapshotScanQuerySchema,
 } from "../../lib/shadscan-api/contracts";
+import { OPENAPI_DOCUMENT } from "../../lib/shadscan-api/openapi";
 import {
   HOSTED_AUDIT_CATEGORIES,
   PUBLIC_CONTRACT_VERSIONS,
 } from "../../lib/shadscan-api/protocol";
-import { enforceRateLimit } from "../../lib/shadscan-api/rate-limit";
+import {
+  enforceRateLimit,
+  getRateLimitHeaders,
+} from "../../lib/shadscan-api/rate-limit";
 
 const VALID_API_KEY = "shadscan_beta_abcdefghijklmnopqrstuvwxyz0123456789";
 const VALID_API_KEY_HASHES = JSON.stringify({
   beta: hashApiKey(VALID_API_KEY),
 });
+const OPENAPI_GITHUB_REVISION_PATTERN = new RegExp(
+  OPENAPI_DOCUMENT.components.schemas.GitHubSource.properties.revision.pattern
+);
+const OPENAPI_SUBDIRECTORY_PATTERN = new RegExp(
+  OPENAPI_DOCUMENT.components.schemas.PortableSubdirectory.pattern
+);
 
 const createAuthenticatedRequest = (authorization?: string): Request =>
   new Request("https://shadscan.dev/v1/scans", {
@@ -107,6 +118,7 @@ describe("hosted scan request contracts", () => {
         revision,
       }).success
     ).toBe(false);
+    expect(revision).not.toMatch(OPENAPI_GITHUB_REVISION_PATTERN);
   });
 
   it.each([
@@ -115,6 +127,7 @@ describe("hosted scan request contracts", () => {
     "packages/design-system/src",
   ])("accepts a portable project subdirectory: %s", (subdirectory) => {
     expect(PortableSubdirectorySchema.parse(subdirectory)).toBe(subdirectory);
+    expect(subdirectory).toMatch(OPENAPI_SUBDIRECTORY_PATTERN);
   });
 
   it.each([
@@ -125,11 +138,13 @@ describe("hosted scan request contracts", () => {
     "apps/./web",
     "apps//web",
     "apps\\web",
+    "apps/\0web",
     "C:/apps/web",
   ])("rejects a non-portable project subdirectory: %s", (subdirectory) => {
     expect(PortableSubdirectorySchema.safeParse(subdirectory).success).toBe(
       false
     );
+    expect(subdirectory).not.toMatch(OPENAPI_SUBDIRECTORY_PATTERN);
   });
 
   it("rejects unknown request and query fields", () => {
@@ -149,6 +164,34 @@ describe("hosted scan request contracts", () => {
         unexpected: true,
       }).success
     ).toBe(false);
+  });
+
+  it("requires an immutable commit SHA or null in completed scan metadata", () => {
+    const completedScan = {
+      engineVersion: "0.0.1",
+      id: "scan_0123456789abcdef0123456789abcdef",
+      resolvedRevision: "0123456789abcdef0123456789abcdef01234567",
+      rulesetVersion: "2026.07.2",
+      sourceDigest:
+        "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      status: "completed",
+    };
+
+    expect(CompletedHostedScanSchema.safeParse(completedScan).success).toBe(
+      true
+    );
+    expect(
+      CompletedHostedScanSchema.safeParse({
+        ...completedScan,
+        resolvedRevision: "main",
+      }).success
+    ).toBe(false);
+    expect(
+      CompletedHostedScanSchema.safeParse({
+        ...completedScan,
+        resolvedRevision: null,
+      }).success
+    ).toBe(true);
   });
 });
 
@@ -205,6 +248,12 @@ describe("hosted API Bearer authentication", () => {
 });
 
 describe("hosted API production limiting", () => {
+  it("never emits a negative reset duration for a completed request", () => {
+    expect(
+      getRateLimitHeaders({ limit: 10, remaining: 9, resetAt: 1000 }, 2000)
+    ).toMatchObject({ "RateLimit-Reset": "0" });
+  });
+
   it("cannot enable the process-local limiter in production", async () => {
     const originalEnvironment = {
       rateLimitMode: process.env.SHADSCAN_RATE_LIMIT_MODE,

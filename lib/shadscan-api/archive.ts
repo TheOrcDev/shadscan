@@ -221,6 +221,7 @@ const extractTarBuffer = async (
   }
 ): Promise<void> => {
   const archive = extract();
+  let entryFailure: unknown;
   const state: ExtractionState = {
     entryCount: 0,
     extractedBytes: 0,
@@ -243,6 +244,7 @@ const extractTarBuffer = async (
       handleEntry()
         .then(next)
         .catch((error: unknown) => {
+          entryFailure = error;
           archive.destroy(
             error instanceof Error ? error : new Error(String(error))
           );
@@ -251,7 +253,22 @@ const extractTarBuffer = async (
   );
 
   archive.end(tarBuffer);
-  await completion;
+  try {
+    await completion;
+  } catch (error) {
+    if (entryFailure !== undefined) {
+      throw entryFailure;
+    }
+
+    throw new HostedScanError(
+      "The request body is not a valid gzip tar archive.",
+      {
+        cause: error,
+        code: "MALFORMED_ARCHIVE",
+        status: 422,
+      }
+    );
+  }
 };
 
 const extractTarGzip = async (

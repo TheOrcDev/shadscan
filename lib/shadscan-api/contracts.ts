@@ -17,6 +17,7 @@ const GITHUB_REVISION_PATTERN = /^[A-Za-z0-9._/-]{1,200}$/;
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
 const SHA256_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const SCAN_ID_PATTERN = /^scan_[a-f0-9]{32}$/;
+const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
 const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 const isPortableSubdirectory = (value: string): boolean => {
@@ -108,7 +109,7 @@ const CompletedHostedScanSchema = z
   .object({
     engineVersion: z.string().min(1),
     id: z.string().regex(SCAN_ID_PATTERN),
-    resolvedRevision: z.string().min(1).nullable(),
+    resolvedRevision: z.string().regex(COMMIT_SHA_PATTERN).nullable(),
     rulesetVersion: z.string().min(1),
     sourceDigest: z.string().regex(SHA256_DIGEST_PATTERN),
     status: z.literal("completed"),

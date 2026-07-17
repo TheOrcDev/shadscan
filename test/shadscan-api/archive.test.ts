@@ -232,6 +232,24 @@ describe("hosted scan archive extraction", () => {
     );
   });
 
+  it("classifies a truncated tar payload as a malformed archive", async () => {
+    const destination = await createDestination();
+    const { tar } = await createTarGzip([
+      {
+        contents: "x".repeat(1024),
+        header: { name: "app/page.tsx", type: "file" },
+      },
+    ]);
+    const truncatedArchive = gzipSync(tar.subarray(0, 768));
+
+    await expectArchiveError(
+      extractTarGzip(truncatedArchive, destination, {
+        forbiddenPathBehavior: "reject",
+      }),
+      "MALFORMED_ARCHIVE"
+    );
+  });
+
   it.each([
     ".env",
     ".env.production",

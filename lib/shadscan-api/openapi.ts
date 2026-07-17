@@ -293,6 +293,8 @@ const OPENAPI_DOCUMENT = {
         type: "string",
         minLength: 1,
         maxLength: 512,
+        pattern:
+          "^(?:\\.|(?![A-Za-z]:[\\\\/])(?!/)(?!.*\\x00)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+)$",
         description:
           "A project-relative POSIX directory without empty, dot, or parent segments. A single dot selects the source root.",
         examples: [".", "apps/storefront"],
@@ -317,6 +319,8 @@ const OPENAPI_DOCUMENT = {
             type: "string",
             minLength: 1,
             maxLength: 200,
+            pattern:
+              "^(?!/)(?!.*\\.\\.)(?!.*//)(?!.*@\\{)(?!.*(?:/|\\.lock)$)[A-Za-z0-9._/-]+$",
             default: "HEAD",
             description:
               "Branch, tag, or commit to resolve to an immutable commit SHA.",

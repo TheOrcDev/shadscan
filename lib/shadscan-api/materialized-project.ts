@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { HostedScanError } from "./errors";
@@ -38,6 +38,28 @@ const resolveProjectRoot = async (
       {
         cause: error,
         code: "PROJECT_ROOT_NOT_FOUND",
+        status: 422,
+      }
+    );
+  }
+
+  try {
+    const packageJson: unknown = JSON.parse(
+      await readFile(path.join(projectRoot, "package.json"), "utf8")
+    );
+    if (
+      packageJson === null ||
+      typeof packageJson !== "object" ||
+      Array.isArray(packageJson)
+    ) {
+      throw new Error("Expected package.json to contain a JSON object.");
+    }
+  } catch (error) {
+    throw new HostedScanError(
+      "The selected source root must contain a valid package.json object.",
+      {
+        cause: error,
+        code: "INVALID_PACKAGE_JSON",
         status: 422,
       }
     );

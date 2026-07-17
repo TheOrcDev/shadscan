@@ -64,7 +64,10 @@ const getRateLimitHeaders = (
 ): Record<string, string> => ({
   "RateLimit-Limit": decision.limit.toString(),
   "RateLimit-Remaining": Math.max(0, decision.remaining).toString(),
-  "RateLimit-Reset": Math.ceil((decision.resetAt - now) / 1000).toString(),
+  "RateLimit-Reset": Math.max(
+    0,
+    Math.ceil((decision.resetAt - now) / 1000)
+  ).toString(),
 });
 
 const throwRateLimitError = (
