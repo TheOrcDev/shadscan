@@ -5,9 +5,11 @@ const nextConfig: NextConfig = {
     "/v1/scans": [
       "./app/**/*",
       "./components/**/*",
+      "./docs/**/*",
       "./lib/**/*",
       "./packages/cli/src/**/*",
       "./packages/cli/test/**/*",
+      "./scripts/**/*",
       "./test/**/*",
       "./AGENTS.md",
       "./CHANGELOG.md",
