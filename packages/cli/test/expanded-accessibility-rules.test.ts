@@ -7,6 +7,7 @@ import { linksHaveAccessibleNamesRule } from "../src/rules/links-have-accessible
 import { navLandmarksHaveNamesRule } from "../src/rules/nav-landmarks-have-names";
 import { noNestedInteractiveControlsRule } from "../src/rules/no-nested-interactive-controls";
 import { noPositiveTabindexRule } from "../src/rules/no-positive-tabindex";
+import { statusMessagesAnnouncedRule } from "../src/rules/status-messages-announced";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("expanded accessibility rules", () => {
@@ -199,6 +200,30 @@ describe("expanded accessibility rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires dynamic status messages to be announced", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/save.tsx",
+        'export function Save() { const [statusMessage, setStatus] = useState(""); return <p>{statusMessage}</p>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, statusMessagesAnnouncedRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/save.tsx",
+        'export function Save() { const [statusMessage, setStatus] = useState(""); return <p role="status">{statusMessage}</p>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, statusMessagesAnnouncedRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();

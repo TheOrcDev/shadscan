@@ -22,6 +22,7 @@ import { noStarterCopyRule } from "./no-starter-copy";
 import { notFoundRecoveryPresentRule } from "./not-found-recovery-present";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
 import { socialPreviewPresentRule } from "./social-preview-present";
+import { statusMessagesAnnouncedRule } from "./status-messages-announced";
 import { suspenseFallbackUsefulRule } from "./suspense-fallback-useful";
 import { themeHydrationSafeRule } from "./theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "./theme-provider-mounted-in-shell";
@@ -55,6 +56,7 @@ const defaultRules = [
   iframesHaveTitleRule,
   navLandmarksHaveNamesRule,
   noNestedInteractiveControlsRule,
+  statusMessagesAnnouncedRule,
   ...accessibilityRules,
 ];
 
