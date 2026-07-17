@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { destructiveActionsConfirmedRule } from "../src/rules/destructive-actions-confirmed";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -46,6 +47,30 @@ describe("browser-sensitive advisory rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, responsiveShellPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("advises when destructive actions have no confirmation or undo", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/account.tsx",
+        'export function Account() { return <Button variant="destructive">Delete account</Button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/account.tsx",
+        'export function Account() { return <AlertDialog><Button variant="destructive">Delete account</Button></AlertDialog>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();

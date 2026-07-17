@@ -4,6 +4,7 @@ import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
 import { customControlsHaveLabelsRule } from "./custom-controls-have-labels";
+import { destructiveActionsConfirmedRule } from "./destructive-actions-confirmed";
 import { emptyStatePresentRule } from "./empty-state-present";
 import { errorStateRetryPresentRule } from "./error-state-retry-present";
 import { fieldErrorsRenderedRule } from "./field-errors-rendered";
@@ -73,6 +74,7 @@ const defaultRules = [
   personalDataAutocompletePresentRule,
   headingStructureSaneRule,
   responsiveShellPresentRule,
+  destructiveActionsConfirmedRule,
   ...accessibilityRules,
 ];
 
