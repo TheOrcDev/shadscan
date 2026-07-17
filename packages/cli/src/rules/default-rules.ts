@@ -8,6 +8,7 @@ import { emptyStatePresentRule } from "./empty-state-present";
 import { errorStateRetryPresentRule } from "./error-state-retry-present";
 import { fieldErrorsRenderedRule } from "./field-errors-rendered";
 import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
+import { formButtonsHaveExplicitTypeRule } from "./form-buttons-have-explicit-type";
 import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { groupedControlsHaveLegendRule } from "./grouped-controls-have-legend";
 import { highConfidenceRules } from "./high-confidence";
@@ -65,6 +66,7 @@ const defaultRules = [
   fieldErrorsRenderedRule,
   invalidFieldsAssociatedWithErrorsRule,
   groupedControlsHaveLegendRule,
+  formButtonsHaveExplicitTypeRule,
   ...accessibilityRules,
 ];
 

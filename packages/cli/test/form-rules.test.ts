@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fieldErrorsRenderedRule } from "../src/rules/field-errors-rendered";
+import { formButtonsHaveExplicitTypeRule } from "../src/rules/form-buttons-have-explicit-type";
 import { groupedControlsHaveLegendRule } from "../src/rules/grouped-controls-have-legend";
 import { invalidFieldsAssociatedWithErrorsRule } from "../src/rules/invalid-fields-associated-with-errors";
 import { validationWiredToFormRule } from "../src/rules/validation-wired-to-form";
@@ -98,6 +99,30 @@ describe("form rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, groupedControlsHaveLegendRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires buttons inside forms to declare their type", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/contact.tsx",
+        "export function Contact() { return <form><Button>Save</Button></form>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, formButtonsHaveExplicitTypeRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/contact.tsx",
+        'export function Contact() { return <form><Button type="submit">Save</Button></form>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, formButtonsHaveExplicitTypeRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
