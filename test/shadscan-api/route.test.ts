@@ -108,9 +108,10 @@ const withoutExecutionMetadata = (
 
 const createSnapshotRequest = (
   archive: Buffer,
-  headers: HeadersInit = {}
+  headers: HeadersInit = {},
+  url = SCAN_URL
 ): Request =>
-  new Request(SCAN_URL, {
+  new Request(url, {
     body: new Blob([Uint8Array.from(archive)]),
     headers: {
       authorization: `Bearer ${PRIMARY_API_KEY}`,
@@ -229,6 +230,56 @@ describe("POST /v1/scans", () => {
     expect(prompt).toContain("You are improving a React shadcn application");
     expect(prompt).toContain("<shadscan-data");
     expect(prompt).toContain('"kind": "snapshot"');
+  });
+
+  it("returns the same prompt in JSON and negotiated Markdown", async () => {
+    const archive = await createMinimalReactSnapshot();
+
+    const jsonResponse = await POST(createSnapshotRequest(archive));
+    const jsonResult = (await jsonResponse.json()) as HostedScanResponse;
+    const markdownResponse = await POST(
+      createSnapshotRequest(archive, { accept: MARKDOWN_MEDIA_TYPE })
+    );
+
+    expect(markdownResponse.status).toBe(200);
+    await expect(markdownResponse.text()).resolves.toBe(
+      jsonResult.handoff.promptMarkdown
+    );
+  });
+
+  it("scans a selected category inside a snapshot subdirectory", async () => {
+    const archive = await createTarGzip([
+      {
+        contents: FIXTURE_PACKAGE_JSON,
+        header: { name: "apps/web/package.json", type: "file" },
+      },
+      {
+        contents: FIXTURE_APP_SOURCE,
+        header: { name: "apps/web/src/App.tsx", type: "file" },
+      },
+    ]);
+    const response = await POST(
+      createSnapshotRequest(
+        archive,
+        {},
+        `${SCAN_URL}?subdirectory=apps/web&category=accessibility`
+      )
+    );
+    const result = (await response.json()) as HostedScanResponse;
+
+    expect(response.status).toBe(200);
+    expect(result.report.packageName).toBe("hosted-route-fixture");
+    expect(result.report.scope.categories).toEqual(["accessibility"]);
+    expect(result.report.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "accessibility" }),
+      ])
+    );
+    expect(
+      result.report.findings.every(
+        (finding) => finding.category === "accessibility"
+      )
+    ).toBe(true);
   });
 
   it.each([
