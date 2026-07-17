@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { animationsRespectReducedMotionRule } from "../src/rules/animations-respect-reduced-motion";
 import { destructiveActionsConfirmedRule } from "../src/rules/destructive-actions-confirmed";
+import { dialogFocusTrapWorksRule } from "../src/rules/dialog-focus-trap-works";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
 import { publicAppSeoFilesPresentRule } from "../src/rules/public-app-seo-files-present";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
@@ -127,6 +128,30 @@ describe("browser-sensitive advisory rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, publicAppSeoFilesPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("advises when a custom dialog has no focus-managed primitive", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/modal.tsx",
+        'export function Modal() { return <div role="dialog" aria-modal="true">Settings</div>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, dialogFocusTrapWorksRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/modal.tsx",
+        'import { DialogContent } from "@/components/ui/dialog"; export function Modal() { return <DialogContent>Settings</DialogContent>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, dialogFocusTrapWorksRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
