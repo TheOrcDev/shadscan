@@ -34,6 +34,12 @@ Prompt output is deterministic, neutral, repository-relative Markdown. It asks
 the agent to verify evidence, fix P0/P1 findings, review P2 advisories, run the
 project's checks, and rescan with the same ruleset.
 
+The executable is read-only and static: it does not start the app, edit project
+files, call an AI model, or send source over the network. Findings return exit
+status `0` unless `--fail-under` is not satisfied; discovery and audit failures
+return `1`. The complete command contract is maintained at
+<https://github.com/TheOrcDev/headless-shadcn/blob/main/docs/cli-contract.md>.
+
 ## Contracts
 
 - Audit JSON uses schema version `2` and is validated by the exported

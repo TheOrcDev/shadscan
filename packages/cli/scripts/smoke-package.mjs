@@ -61,6 +61,14 @@ try {
   );
   assert.equal(tarballs.length, 1, "Expected exactly one packed tarball.");
   const tarballPath = path.join(packDirectory, tarballs[0]);
+  const npxExecutable = process.platform === "win32" ? "npx.cmd" : "npx";
+
+  const npxVersionResult = await run(
+    npxExecutable,
+    ["--yes", `--package=${tarballPath}`, "shadscan", "--version"],
+    { cwd: packDirectory }
+  );
+  assert.equal(npxVersionResult.stdout.trim(), packageManifest.version);
 
   await writeFile(
     path.join(consumerDirectory, "package.json"),
@@ -120,6 +128,22 @@ try {
     "shadscan-smoke-consumer"
   );
 
+  const npxReportResult = await run(
+    npxExecutable,
+    [
+      "--yes",
+      `--package=${tarballPath}`,
+      "shadscan",
+      consumerDirectory,
+      "--json",
+    ],
+    { cwd: packDirectory }
+  );
+  assert.equal(
+    JSON.parse(npxReportResult.stdout).packageName,
+    "shadscan-smoke-consumer"
+  );
+
   const categoryResult = await run(
     executable,
     ["--json", "--category", "accessibility"],
@@ -160,7 +184,7 @@ try {
   await run(process.execPath, [importCheckPath], { cwd: consumerDirectory });
 
   process.stdout.write(
-    `Packed Shadscan ${packageManifest.version} passed install, bin, output, threshold, and import smoke tests.\n`
+    `Packed Shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, and import smoke tests.\n`
   );
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });

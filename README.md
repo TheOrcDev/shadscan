@@ -39,6 +39,8 @@ repository-relative evidence without roast copy or machine-local paths.
 
 Both human and JSON output include an `agentHandoff` section with suggested
 skills, context, and prioritized actionables for another agent to pick up.
+The executable's path, output, exit, stability, and privacy guarantees are
+defined in the [CLI contract](docs/cli-contract.md).
 
 ## Hosted API
 
