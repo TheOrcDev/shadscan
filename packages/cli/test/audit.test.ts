@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  AUDIT_REPORT_SCHEMA_VERSION,
   AuditReportSchema,
   type AuditRule,
   createAuditReport,
+  ENGINE_VERSION,
   runAudit,
 } from "../src/audit";
 import type { ProjectDiscovery } from "../src/discovery";
@@ -71,17 +73,43 @@ afterEach(async () => {
 describe("runAudit", () => {
   it("validates the JSON report contract", async () => {
     const rootDir = await createReactFixture();
+    await writeFixtureFile(
+      rootDir,
+      "components.json",
+      '{"style":"default","aliases":{}}\n'
+    );
 
     const report = await runAudit(rootDir, {
       rules: [
         createRule({
           id: "passing-rule",
-          run: () => ({ status: "pass" }),
+          run: () => ({
+            evidence: [
+              {
+                filePath: path.join(rootDir, "src", "App.tsx"),
+                line: 1,
+                message: "App entry inspected.",
+              },
+            ],
+            status: "pass",
+          }),
         }),
       ],
+      rulesetVersion: "test-rules-v1",
     });
 
     expect(() => AuditReportSchema.parse(report)).not.toThrow();
+    expect(report.schemaVersion).toBe(AUDIT_REPORT_SCHEMA_VERSION);
+    expect(report.engineVersion).toBe(ENGINE_VERSION);
+    expect(report.rulesetVersion).toBe("test-rules-v1");
+    expect(report.scope.categories).toEqual([
+      "foundation",
+      "interaction",
+      "states",
+      "accessibility",
+      "forms",
+      "production-polish",
+    ]);
     expect(report.score).toBe(100);
     expect(report.grade).toBe("A");
     expect(report.framework.adapter).toBe("generic-react");
@@ -89,6 +117,57 @@ describe("runAudit", () => {
     expect(report.agentHandoff.goal).toContain(
       "Keep audit-fixture's Shadscan score at 100/100"
     );
+    expect(report.findings[0]?.evidence[0]?.filePath).toBe("src/App.tsx");
+    expect(report.shadcn.configPath).toBe("components.json");
+    expect(report.agentHandoff.context).toContain(
+      "shadcn confidence: high; config: components.json"
+    );
+    expect(
+      AuditReportSchema.safeParse({
+        ...report,
+        shadcn: { ...report.shadcn, configPath: "/tmp/components.json" },
+      }).success
+    ).toBe(false);
+    expect(
+      AuditReportSchema.safeParse({
+        ...report,
+        findings: [
+          {
+            ...report.findings[0],
+            evidence: [
+              {
+                filePath: "..\\secret.txt",
+                message: "Invalid path.",
+              },
+            ],
+          },
+        ],
+      }).success
+    ).toBe(false);
+  });
+
+  it("does not expose evidence paths outside the project", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          run: () => ({
+            evidence: [
+              {
+                filePath: path.join(rootDir, "..", "secret.txt"),
+                message: "External file inspected.",
+              },
+            ],
+            status: "fail",
+          }),
+        }),
+      ],
+    });
+
+    expect(report.findings[0]?.evidence).toEqual([
+      { message: "External file inspected." },
+    ]);
   });
 
   it("weights category scores and normalizes active categories to 100", async () => {

@@ -59,6 +59,7 @@ const createReport = (): AuditReport => ({
     },
   ],
   durationMs: 4,
+  engineVersion: "0.0.1",
   findings: [
     {
       category: "foundation",
@@ -90,11 +91,21 @@ const createReport = (): AuditReport => ({
   maxScore: 100,
   packageManager: "pnpm",
   packageName: "demo",
+  rulesetVersion: "0.0.1",
+  schemaVersion: 1,
   score: 50,
+  scope: {
+    categories: ["foundation"],
+  },
   shadcn: {
     confidence: "high",
     configPath: "/tmp/components.json",
     style: "new-york",
+  },
+  source: {
+    digest: null,
+    kind: "working-tree",
+    revision: null,
   },
   versions: {
     next: "16.2.6",

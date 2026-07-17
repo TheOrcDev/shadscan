@@ -1,5 +1,7 @@
+import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
+import packageJson from "../package.json";
 import {
   type Confidence,
   discoverProject,
@@ -15,6 +17,11 @@ const AUDIT_CATEGORIES = [
   "forms",
   "production-polish",
 ] as const;
+
+const AUDIT_REPORT_SCHEMA_VERSION = 1 as const;
+const ENGINE_VERSION = packageJson.version;
+const CUSTOM_RULESET_VERSION = "custom";
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
 
 const CATEGORY_DETAILS = {
   accessibility: {
@@ -47,6 +54,7 @@ const AuditCategorySchema = z.enum(AUDIT_CATEGORIES);
 const ActionablePrioritySchema = z.enum(["P0", "P1", "P2"]);
 const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 const RuleStatusSchema = z.enum(["advisory", "fail", "not-applicable", "pass"]);
+const ScanSourceKindSchema = z.enum(["git", "snapshot", "working-tree"]);
 const SeveritySchema = z.enum(["error", "info", "warning"]);
 type ActionablePriority = z.infer<typeof ActionablePrioritySchema>;
 type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
@@ -54,6 +62,17 @@ type AuditRuleAdapter = "core" | FrameworkAdapter;
 type AuditRuleStatus = z.infer<typeof RuleStatusSchema>;
 type AuditSeverity = z.infer<typeof SeveritySchema>;
 type AuditGrade = "A" | "B" | "C" | "D" | "F";
+type ScanSourceKind = z.infer<typeof ScanSourceKindSchema>;
+
+interface ScanSource {
+  digest: string | null;
+  kind: ScanSourceKind;
+  revision: string | null;
+}
+
+interface ScanScope {
+  categories: AuditCategory[];
+}
 
 interface AuditEvidence {
   filePath?: string;
@@ -137,28 +156,57 @@ interface AuditReport {
   agentHandoff: AgentHandoff;
   categories: AuditCategoryScore[];
   durationMs: number;
+  engineVersion: string;
   findings: AuditFinding[];
   framework: ProjectDiscovery["framework"];
   grade: AuditGrade;
   maxScore: 100;
   packageManager: ProjectDiscovery["packageManager"];
   packageName: string | null;
+  rulesetVersion: string;
+  schemaVersion: typeof AUDIT_REPORT_SCHEMA_VERSION;
+  scope: ScanScope;
   score: number;
   shadcn: Pick<
     ProjectDiscovery["shadcn"],
     "confidence" | "configPath" | "style"
   >;
+  source: ScanSource;
   versions: ProjectDiscovery["versions"];
   warnings: string[];
 }
 
 interface RunAuditOptions {
   category?: AuditCategory;
-  rules?: AuditRule[];
+  rules: AuditRule[];
+  rulesetVersion?: string;
+  source?: ScanSource;
 }
 
+const isPortableProjectPath = (filePath: string): boolean => {
+  if (filePath === ".") {
+    return true;
+  }
+
+  if (
+    filePath.startsWith("/") ||
+    filePath.startsWith("\\") ||
+    filePath.includes("\\") ||
+    WINDOWS_ABSOLUTE_PATH_PATTERN.test(filePath)
+  ) {
+    return false;
+  }
+
+  return filePath.split("/").every((segment) => segment !== "..");
+};
+
+const ProjectPathSchema = z
+  .string()
+  .min(1)
+  .refine(isPortableProjectPath, "Expected a project-relative POSIX path.");
+
 const AuditEvidenceSchema = z.object({
-  filePath: z.string().optional(),
+  filePath: ProjectPathSchema.optional(),
   line: z.number().int().positive().optional(),
   message: z.string(),
 });
@@ -215,6 +263,7 @@ const AuditReportSchema = z.object({
     })
   ),
   durationMs: z.number(),
+  engineVersion: z.string().min(1),
   findings: z.array(AuditFindingSchema),
   framework: z.object({
     adapter: z.enum(["generic-react", "next-app-router", "vite-react"]),
@@ -224,11 +273,21 @@ const AuditReportSchema = z.object({
   maxScore: z.literal(100),
   packageManager: z.enum(["bun", "npm", "pnpm", "unknown", "yarn"]),
   packageName: z.string().nullable(),
+  rulesetVersion: z.string().min(1),
+  schemaVersion: z.literal(AUDIT_REPORT_SCHEMA_VERSION),
   score: z.number().min(0).max(100),
+  scope: z.object({
+    categories: z.array(AuditCategorySchema).min(1),
+  }),
   shadcn: z.object({
     confidence: ConfidenceSchema,
-    configPath: z.string().nullable(),
+    configPath: ProjectPathSchema.nullable(),
     style: z.string().nullable(),
+  }),
+  source: z.object({
+    digest: z.string().min(1).nullable(),
+    kind: ScanSourceKindSchema,
+    revision: z.string().min(1).nullable(),
   }),
   versions: z.object({
     next: z.string().nullable(),
@@ -257,6 +316,66 @@ const getGrade = (score: number): AuditGrade => {
 
   return "F";
 };
+
+const getProjectRelativePath = (
+  rootDir: string,
+  filePath: string
+): string | undefined => {
+  const absoluteRoot = path.resolve(rootDir);
+  const absoluteFile = path.resolve(absoluteRoot, filePath);
+  const relativePath = path.relative(absoluteRoot, absoluteFile);
+  const isOutsideRoot =
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath);
+
+  if (isOutsideRoot) {
+    return;
+  }
+
+  if (relativePath === "") {
+    return ".";
+  }
+
+  return relativePath.split(path.sep).join("/");
+};
+
+const normalizeEvidencePaths = (
+  evidence: AuditEvidence[],
+  rootDir: string
+): AuditEvidence[] =>
+  evidence
+    .map((item) => {
+      if (!item.filePath) {
+        return item;
+      }
+
+      const filePath = getProjectRelativePath(rootDir, item.filePath);
+
+      if (!filePath) {
+        return {
+          line: item.line,
+          message: item.message,
+        };
+      }
+
+      return { ...item, filePath };
+    })
+    .sort(
+      (left, right) =>
+        (left.filePath ?? "").localeCompare(right.filePath ?? "") ||
+        (left.line ?? 0) - (right.line ?? 0) ||
+        left.message.localeCompare(right.message)
+    );
+
+const normalizeFindingPaths = (
+  findings: AuditFinding[],
+  rootDir: string
+): AuditFinding[] =>
+  findings.map((finding) => ({
+    ...finding,
+    evidence: normalizeEvidencePaths(finding.evidence, rootDir),
+  }));
 
 const shouldRunRule = ({
   category,
@@ -483,7 +602,10 @@ const createAgentHandoff = ({
     actionables.length === 0
       ? `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}); no missing fundamentals were found.`
       : `Raise ${packageName}'s Shadscan score from ${score}/100 (${grade}) by addressing agent-ready UI audit findings.`;
-  const configPath = project.shadcn.configPath ?? "not found";
+  const configPath = project.shadcn.configPath
+    ? (getProjectRelativePath(project.rootDir, project.shadcn.configPath) ??
+      "outside project")
+    : "not found";
   const warnings =
     project.warnings.length === 0 ? "none" : project.warnings.join("; ");
 
@@ -504,38 +626,59 @@ const createAgentHandoff = ({
 };
 
 const createAuditReport = ({
+  category,
   durationMs,
   findings,
   project,
+  rulesetVersion = CUSTOM_RULESET_VERSION,
+  source = {
+    digest: null,
+    kind: "working-tree",
+    revision: null,
+  },
 }: {
+  category?: AuditCategory;
   durationMs: number;
   findings: AuditFinding[];
   project: ProjectDiscovery;
+  rulesetVersion?: string;
+  source?: ScanSource;
 }): AuditReport => {
-  const categories = getCategoryScores(findings);
+  const normalizedFindings = normalizeFindingPaths(findings, project.rootDir);
+  const categories = getCategoryScores(normalizedFindings);
   const score = getTotalScore(categories);
   const grade = getGrade(score);
   const report: AuditReport = {
     agentHandoff: createAgentHandoff({
-      findings,
+      findings: normalizedFindings,
       grade,
       project,
       score,
     }),
     categories,
     durationMs,
-    findings,
+    engineVersion: ENGINE_VERSION,
+    findings: normalizedFindings,
     framework: project.framework,
     grade,
     maxScore: 100,
     packageManager: project.packageManager,
     packageName: project.packageName,
+    rulesetVersion,
+    schemaVersion: AUDIT_REPORT_SCHEMA_VERSION,
     score,
+    scope: {
+      categories: category ? [category] : [...AUDIT_CATEGORIES],
+    },
     shadcn: {
       confidence: project.shadcn.confidence,
-      configPath: project.shadcn.configPath,
+      configPath: project.shadcn.configPath
+        ? (getProjectRelativePath(project.rootDir, project.shadcn.configPath) ??
+          null)
+        : null,
       style: project.shadcn.style,
     },
+    source,
     versions: project.versions,
     warnings: project.warnings,
   };
@@ -545,15 +688,14 @@ const createAuditReport = ({
 
 const runAudit = async (
   cwd: string,
-  options: RunAuditOptions = {}
+  options: RunAuditOptions
 ): Promise<AuditReport> => {
   const startedAt = performance.now();
   const project = await discoverProject(cwd);
-  const rules = options.rules ?? [];
   const context: AuditContext = { project };
   const findings: AuditFinding[] = [];
 
-  for (const rule of rules) {
+  for (const rule of options.rules) {
     if (!shouldRunRule({ category: options.category, project, rule })) {
       continue;
     }
@@ -562,9 +704,12 @@ const runAudit = async (
   }
 
   return createAuditReport({
+    category: options.category,
     durationMs: Math.round(performance.now() - startedAt),
     findings,
     project,
+    rulesetVersion: options.rulesetVersion,
+    source: options.source,
   });
 };
 
@@ -584,12 +729,17 @@ export type {
   AuditRuleStatus,
   AuditSeverity,
   RunAuditOptions,
+  ScanScope,
+  ScanSource,
+  ScanSourceKind,
 };
 export {
   AUDIT_CATEGORIES,
+  AUDIT_REPORT_SCHEMA_VERSION,
   AuditReportSchema,
   CATEGORY_DETAILS,
   createAuditReport,
+  ENGINE_VERSION,
   getGrade,
   runAudit,
 };

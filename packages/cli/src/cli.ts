@@ -1,13 +1,13 @@
 import { Command, InvalidArgumentError } from "commander";
 import packageJson from "../package.json";
-import { AUDIT_CATEGORIES, type RunAuditOptions, runAudit } from "./audit";
+import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
 import { renderHumanReport, stripRoasts } from "./render-human";
-import { defaultRules } from "./rules/default-rules";
+import { scanProject } from "./scan";
 
 const VERSION = packageJson.version;
 
 interface CliOptions {
-  category?: RunAuditOptions["category"];
+  category?: AuditCategory;
   failUnder?: number;
   json?: boolean;
   roast?: boolean;
@@ -23,7 +23,7 @@ const parseScore = (value: string): number => {
   return score;
 };
 
-const parseCategory = (value: string): RunAuditOptions["category"] => {
+const parseCategory = (value: string): AuditCategory => {
   const category = AUDIT_CATEGORIES.find(
     (auditCategory) => auditCategory === value
   );
@@ -62,9 +62,8 @@ const createProgram = (): Command => {
       const explicitRoast = process.argv.includes("--roast");
       const includeRoast =
         explicitRoast || !(options.json || explicitNoRoast || process.env.CI);
-      const report = await runAudit(process.cwd(), {
+      const report = await scanProject(process.cwd(), {
         category: options.category,
-        rules: defaultRules,
       });
       const outputReport = includeRoast ? report : stripRoasts(report);
 
