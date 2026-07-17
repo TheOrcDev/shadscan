@@ -5,6 +5,7 @@ import { errorStateRetryPresentRule } from "../src/rules/error-state-retry-prese
 import { notFoundRecoveryPresentRule } from "../src/rules/not-found-recovery-present";
 import { routeLoadingBoundaryPresentRule } from "../src/rules/route-loading-boundary-present";
 import { suspenseFallbackUsefulRule } from "../src/rules/suspense-fallback-useful";
+import { toastProviderMountedRule } from "../src/rules/toast-provider-mounted";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("state rules", () => {
@@ -155,6 +156,34 @@ describe("state rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, asyncActionPendingStateRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires toast infrastructure to be mounted from the app shell", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+      sonner: "2.0.0",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <html><body>{children}</body></html>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, toastProviderMountedRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <html><body>{children}<Toaster /></body></html>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, toastProviderMountedRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
