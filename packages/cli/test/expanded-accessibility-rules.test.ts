@@ -52,6 +52,14 @@ describe("expanded accessibility rules", () => {
 
       await fixture.write(
         "src/App.tsx",
+        'export function App() { return <Image src="/team.png" alt={null} />; }'
+      );
+      expect((await runRule(fixture.rootDir, imagesHaveAltRule)).status).toBe(
+        "fail"
+      );
+
+      await fixture.write(
+        "src/App.tsx",
         'export function App() { return <Image src="/team.png" alt="The Acme team" />; }'
       );
       expect((await runRule(fixture.rootDir, imagesHaveAltRule)).status).toBe(
@@ -73,6 +81,22 @@ describe("expanded accessibility rules", () => {
       expect(
         (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
       ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <Link href="/settings">{null}</Link>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App({ label }) { return <Link href="/settings">{label}</Link>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
+      ).toBe("advisory");
 
       await fixture.write(
         "src/App.tsx",
@@ -148,6 +172,14 @@ describe("expanded accessibility rules", () => {
 
       await fixture.write(
         "src/App.tsx",
+        'export function App() { return <iframe src="/report" title={null} />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, iframesHaveTitleRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
         'export function App() { return <iframe src="/report" title="Quarterly report" />; }'
       );
       expect(
@@ -172,6 +204,14 @@ describe("expanded accessibility rules", () => {
 
       await fixture.write(
         "src/App.tsx",
+        'export function App() { return <><nav aria-label="">Primary</nav><nav aria-label="Account">Account</nav></>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, navLandmarksHaveNamesRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
         'export function App() { return <><nav aria-label="Primary">Primary</nav><nav aria-label="Account">Account</nav></>; }'
       );
       expect(
@@ -189,6 +229,14 @@ describe("expanded accessibility rules", () => {
       await fixture.write(
         "src/App.tsx",
         'export function App() { return <a href="/"><button>Home</button></a>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <button><a href="/" /></button>; }'
       );
       expect(
         (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status

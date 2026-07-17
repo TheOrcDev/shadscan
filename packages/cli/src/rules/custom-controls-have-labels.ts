@@ -1,16 +1,23 @@
-import { isJsxElement, isJsxSelfClosingElement } from "typescript";
+import {
+  isJsxElement,
+  isJsxSelfClosingElement,
+  type JsxElement,
+  type JsxOpeningLikeElement,
+  type Node,
+} from "typescript";
 import {
   ancestorHasTagName,
+  type EvidenceState,
+  getAccessibleTextState,
   getJsxAttribute,
   getJsxTagName,
   getLineNumber,
-  hasAccessibleText,
-  hasJsxAttribute,
+  getTextAttributeState,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, pass } from "./rule-result";
+import { advisory, fail, pass } from "./rule-result";
 
 const CUSTOM_CONTROL_TAGS = new Set([
   "Checkbox",
@@ -24,6 +31,38 @@ const CUSTOM_CONTROL_TAGS = new Set([
 const LABEL_TAGS = new Set(["FieldLabel", "Label", "label"]);
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 
+const getControlLabelState = ({
+  ancestors,
+  labelTargets,
+  node,
+  openingElement,
+}: {
+  ancestors: Node[];
+  labelTargets: Set<string>;
+  node: JsxElement | JsxOpeningLikeElement;
+  openingElement: JsxOpeningLikeElement;
+}): EvidenceState => {
+  const id = getJsxAttribute(openingElement, "id");
+  const isLabeledById =
+    typeof id === "string" && id.trim().length > 0 && labelTargets.has(id);
+  const isWrappedByLabel =
+    ancestorHasTagName(ancestors, "label") ||
+    ancestorHasTagName(ancestors, "Label") ||
+    ancestorHasTagName(ancestors, "FieldLabel");
+  const states = [
+    isJsxElement(node) ? getAccessibleTextState(node.children) : "invalid",
+    getTextAttributeState(openingElement, "aria-label"),
+    getTextAttributeState(openingElement, "aria-labelledby"),
+    getTextAttributeState(openingElement, "title"),
+  ];
+
+  if (isLabeledById || isWrappedByLabel || states.includes("valid")) {
+    return "valid";
+  }
+
+  return states.includes("unknown") ? "unknown" : "invalid";
+};
+
 const customControlsHaveLabelsRule: AuditRule = {
   adapters: ["core"],
   category: "accessibility",
@@ -36,6 +75,7 @@ const customControlsHaveLabelsRule: AuditRule = {
       (file) => !GENERATED_UI_PATH_PATTERN.test(file.filePath)
     );
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     for (const file of files) {
       const labelTargets = new Set<string>();
@@ -53,7 +93,7 @@ const customControlsHaveLabelsRule: AuditRule = {
 
         const htmlFor = getJsxAttribute(node, "htmlFor");
 
-        if (typeof htmlFor === "string") {
+        if (typeof htmlFor === "string" && htmlFor.trim().length > 0) {
           labelTargets.add(htmlFor);
         }
       });
@@ -70,23 +110,24 @@ const customControlsHaveLabelsRule: AuditRule = {
           return;
         }
 
-        const id = getJsxAttribute(openingElement, "id");
-        const isLabeledById = typeof id === "string" && labelTargets.has(id);
-        const isWrappedByLabel =
-          ancestorHasTagName(ancestors, "label") ||
-          ancestorHasTagName(ancestors, "Label") ||
-          ancestorHasTagName(ancestors, "FieldLabel");
-        const hasVisibleName =
-          isJsxElement(node) && hasAccessibleText(node.children);
+        const labelState = getControlLabelState({
+          ancestors,
+          labelTargets,
+          node,
+          openingElement,
+        });
 
-        if (
-          isLabeledById ||
-          isWrappedByLabel ||
-          hasVisibleName ||
-          hasJsxAttribute(openingElement, "aria-label") ||
-          hasJsxAttribute(openingElement, "aria-labelledby") ||
-          hasJsxAttribute(openingElement, "title")
-        ) {
+        if (labelState === "valid") {
+          return;
+        }
+
+        if (labelState === "unknown") {
+          uncertainResult ??= advisory(
+            `${tagName} uses a dynamic accessible label that cannot be verified statically.`,
+            "Ensure the dynamic label always resolves to meaningful text.",
+            file.filePath,
+            getLineNumber(file, openingElement)
+          );
           return;
         }
 
@@ -105,7 +146,7 @@ const customControlsHaveLabelsRule: AuditRule = {
       }
     }
 
-    return pass("No unlabeled custom controls were found.");
+    return uncertainResult ?? pass("No unlabeled custom controls were found.");
   },
   severity: "error",
   title: "custom controls have accessible labels",

@@ -2,17 +2,19 @@ import {
   isJsxElement,
   isJsxSelfClosingElement,
   type JsxChild,
+  type JsxElement,
+  type Node,
 } from "typescript";
 import {
-  ancestorHasTagName,
+  type EvidenceState,
   getJsxTagName,
   getLineNumber,
-  hasJsxAttribute,
+  getTextAttributeState,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, notApplicable, pass } from "./rule-result";
+import { advisory, fail, notApplicable, pass } from "./rule-result";
 
 const childrenContainTag = (
   children: readonly JsxChild[],
@@ -38,6 +40,60 @@ const childrenContainTag = (
 const LEGEND_TAGS = new Set(["FieldLegend", "legend"]);
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 
+interface GroupEvaluation {
+  kind: "Fieldset" | "RadioGroup";
+  state: EvidenceState;
+}
+
+const getAttributeNameState = (node: JsxElement): EvidenceState => {
+  const states = [
+    getTextAttributeState(node.openingElement, "aria-label"),
+    getTextAttributeState(node.openingElement, "aria-labelledby"),
+  ];
+
+  if (states.includes("valid")) {
+    return "valid";
+  }
+
+  return states.includes("unknown") ? "unknown" : "invalid";
+};
+
+const evaluateGroup = (
+  node: JsxElement,
+  ancestors: Node[]
+): GroupEvaluation | null => {
+  const tagName = getJsxTagName(node.openingElement);
+  const attributeState = getAttributeNameState(node);
+
+  if (tagName === "fieldset") {
+    return {
+      kind: "Fieldset",
+      state: childrenContainTag(node.children, LEGEND_TAGS)
+        ? "valid"
+        : attributeState,
+    };
+  }
+
+  if (tagName !== "RadioGroup") {
+    return null;
+  }
+
+  const fieldSetAncestor = ancestors.find(
+    (ancestor) =>
+      isJsxElement(ancestor) &&
+      getJsxTagName(ancestor.openingElement) === "FieldSet"
+  );
+  const hasLegend =
+    fieldSetAncestor &&
+    isJsxElement(fieldSetAncestor) &&
+    childrenContainTag(fieldSetAncestor.children, LEGEND_TAGS);
+
+  return {
+    kind: "RadioGroup",
+    state: hasLegend ? "valid" : attributeState,
+  };
+};
+
 const groupedControlsHaveLegendRule: AuditRule = {
   adapters: ["core"],
   category: "forms",
@@ -52,58 +108,47 @@ const groupedControlsHaveLegendRule: AuditRule = {
     );
     let groupedControlCount = 0;
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ ancestors, file, node }) => {
       if (failure || !isJsxElement(node)) {
         return;
       }
 
-      const openingElement = node.openingElement;
-      const tagName = getJsxTagName(openingElement);
+      const evaluation = evaluateGroup(node, ancestors);
 
-      if (tagName === "fieldset") {
-        groupedControlCount += 1;
-
-        if (
-          childrenContainTag(node.children, LEGEND_TAGS) ||
-          hasJsxAttribute(openingElement, "aria-label") ||
-          hasJsxAttribute(openingElement, "aria-labelledby")
-        ) {
-          return;
-        }
-
-        failure = fail(
-          "Fieldset has no legend or accessible group name.",
-          "Add a legend, aria-label, or aria-labelledby value describing the grouped controls.",
-          {
-            filePath: file.filePath,
-            line: getLineNumber(file, openingElement),
-          }
-        );
-        return;
-      }
-
-      if (tagName !== "RadioGroup") {
+      if (!evaluation) {
         return;
       }
 
       groupedControlCount += 1;
-      const hasGroupName =
-        hasJsxAttribute(openingElement, "aria-label") ||
-        hasJsxAttribute(openingElement, "aria-labelledby") ||
-        (ancestorHasTagName(ancestors, "FieldSet") &&
-          file.content.includes("<FieldLegend"));
 
-      if (!hasGroupName) {
-        failure = fail(
-          "RadioGroup has no legend or accessible group name.",
-          "Place it in FieldSet with FieldLegend, or add aria-label/aria-labelledby.",
-          {
-            filePath: file.filePath,
-            line: getLineNumber(file, openingElement),
-          }
-        );
+      if (evaluation.state === "valid") {
+        return;
       }
+
+      if (evaluation.state === "unknown") {
+        uncertainResult ??= advisory(
+          `${evaluation.kind} uses a dynamic accessible group name that cannot be verified statically.`,
+          "Ensure the dynamic label always resolves to meaningful text.",
+          file.filePath,
+          getLineNumber(file, node.openingElement)
+        );
+        return;
+      }
+
+      const remediation =
+        evaluation.kind === "Fieldset"
+          ? "Add a legend, aria-label, or aria-labelledby value describing the grouped controls."
+          : "Place it in FieldSet with FieldLegend, or add aria-label/aria-labelledby.";
+      failure = fail(
+        `${evaluation.kind} has no legend or accessible group name.`,
+        remediation,
+        {
+          filePath: file.filePath,
+          line: getLineNumber(file, node.openingElement),
+        }
+      );
     });
 
     if (failure) {
@@ -114,7 +159,10 @@ const groupedControlsHaveLegendRule: AuditRule = {
       return notApplicable("No fieldset or RadioGroup grouping was found.");
     }
 
-    return pass(`All ${groupedControlCount} control groups have names.`);
+    return (
+      uncertainResult ??
+      pass(`All ${groupedControlCount} control groups have names.`)
+    );
   },
   severity: "error",
   title: "grouped controls have legends",

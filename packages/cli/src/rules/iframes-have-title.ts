@@ -1,39 +1,13 @@
-import {
-  isJsxAttribute,
-  isJsxElement,
-  isJsxExpression,
-  isStringLiteral,
-} from "typescript";
+import { isJsxElement } from "typescript";
 import {
   getJsxTagName,
   getLineNumber,
+  getTextAttributeState,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, pass } from "./rule-result";
-
-const hasIframeTitle = (
-  node: import("typescript").JsxOpeningLikeElement
-): boolean => {
-  for (const property of node.attributes.properties) {
-    if (!isJsxAttribute(property) || property.name.getText() !== "title") {
-      continue;
-    }
-
-    const initializer = property.initializer;
-
-    if (initializer && isStringLiteral(initializer)) {
-      return initializer.text.trim().length > 0;
-    }
-
-    return Boolean(
-      initializer && isJsxExpression(initializer) && initializer.expression
-    );
-  }
-
-  return false;
-};
+import { advisory, fail, pass } from "./rule-result";
 
 const iframesHaveTitleRule: AuditRule = {
   adapters: ["core"],
@@ -45,13 +19,26 @@ const iframesHaveTitleRule: AuditRule = {
   run: async ({ project }) => {
     const files = await parseProjectSourceFiles(project);
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ file, node }) => {
       if (failure || isJsxElement(node) || getJsxTagName(node) !== "iframe") {
         return;
       }
 
-      if (hasIframeTitle(node)) {
+      const titleState = getTextAttributeState(node, "title");
+
+      if (titleState === "valid") {
+        return;
+      }
+
+      if (titleState === "unknown") {
+        uncertainResult ??= advisory(
+          "Iframe uses a dynamic title that cannot be verified statically.",
+          "Ensure the title always resolves to concise, meaningful text.",
+          file.filePath,
+          getLineNumber(file, node)
+        );
         return;
       }
 
@@ -62,7 +49,9 @@ const iframesHaveTitleRule: AuditRule = {
       );
     });
 
-    return failure ?? pass("No untitled iframes were found.");
+    return (
+      failure ?? uncertainResult ?? pass("No untitled iframes were found.")
+    );
   },
   severity: "error",
   title: "iframes have titles",

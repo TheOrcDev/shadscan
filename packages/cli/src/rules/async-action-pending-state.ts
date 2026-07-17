@@ -1,6 +1,6 @@
+import { findOwnedSourceScopes } from "../ast";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
-import { getProjectSourceFiles, getTextLineNumber } from "./source-files";
 
 const ASYNC_ACTION_PATTERN =
   /(?:useActionState|useFormStatus|useTransition|useMutation|\bonSubmit\s*=|<form\b[^>]*\baction\s*=)/;
@@ -20,43 +20,47 @@ const asyncActionPendingStateRule: AuditRule = {
   id: "async-action-pending-state",
   maxScore: 4,
   run: async ({ project }) => {
-    const files = await getProjectSourceFiles(project);
-    const actionFile = files.find((file) =>
-      ASYNC_ACTION_PATTERN.test(file.content)
+    const actionScopes = await findOwnedSourceScopes(
+      project,
+      ASYNC_ACTION_PATTERN
     );
 
-    if (!actionFile) {
+    if (actionScopes.length === 0) {
       return notApplicable(
         "No recognizable asynchronous action surface was found."
       );
     }
 
-    const projectSource = files.map((file) => file.content).join("\n");
-    const hasPendingState = PENDING_STATE_PATTERN.test(projectSource);
-    const disablesWhilePending = DISABLED_PENDING_PATTERN.test(projectSource);
-    const showsPendingFeedback = VISIBLE_PENDING_PATTERN.test(projectSource);
+    for (const scope of actionScopes) {
+      const hasPendingState = PENDING_STATE_PATTERN.test(scope.content);
+      const disablesWhilePending = DISABLED_PENDING_PATTERN.test(scope.content);
+      const showsPendingFeedback = VISIBLE_PENDING_PATTERN.test(scope.content);
 
-    if (hasPendingState && disablesWhilePending && showsPendingFeedback) {
-      return pass(
-        "Async actions expose visible pending feedback and disable duplicate submission.",
-        actionFile.path,
-        getTextLineNumber(actionFile.content, ASYNC_ACTION_PATTERN)
+      if (hasPendingState && disablesWhilePending && showsPendingFeedback) {
+        continue;
+      }
+
+      const missing = [
+        hasPendingState ? null : "pending state",
+        showsPendingFeedback ? null : "visible pending feedback",
+        disablesWhilePending ? null : "a disabled trigger while pending",
+      ].filter((item): item is string => item !== null);
+
+      return fail(
+        `Async action handling is missing ${missing.join(", ")}.`,
+        "Expose the action's pending state, show progress in the trigger, and disable duplicate submission until it settles.",
+        {
+          filePath: scope.file.filePath,
+          line: scope.line,
+        }
       );
     }
 
-    const missing = [
-      hasPendingState ? null : "pending state",
-      showsPendingFeedback ? null : "visible pending feedback",
-      disablesWhilePending ? null : "a disabled trigger while pending",
-    ].filter((item): item is string => item !== null);
-
-    return fail(
-      `Async action handling is missing ${missing.join(", ")}.`,
-      "Expose the action's pending state, show progress in the trigger, and disable duplicate submission until it settles.",
-      {
-        filePath: actionFile.path,
-        line: getTextLineNumber(actionFile.content, ASYNC_ACTION_PATTERN),
-      }
+    const firstScope = actionScopes[0];
+    return pass(
+      "Async actions expose visible pending feedback and disable duplicate submission.",
+      firstScope?.file.filePath,
+      firstScope?.line
     );
   },
   severity: "warning",

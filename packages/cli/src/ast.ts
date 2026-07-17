@@ -1,13 +1,21 @@
 import {
   createSourceFile,
+  type Expression,
   forEachChild,
+  isArrowFunction,
+  isFunctionDeclaration,
+  isFunctionExpression,
   isIdentifier,
   isJsxAttribute,
   isJsxElement,
   isJsxExpression,
+  isJsxFragment,
   isJsxOpeningElement,
   isJsxSelfClosingElement,
   isJsxText,
+  isMethodDeclaration,
+  isNoSubstitutionTemplateLiteral,
+  isNumericLiteral,
   isStringLiteral,
   type JsxChild,
   type JsxElement,
@@ -16,6 +24,7 @@ import {
   ScriptKind,
   ScriptTarget,
   type SourceFile,
+  SyntaxKind,
 } from "typescript";
 import type { ProjectDiscovery } from "./discovery";
 import { getProjectSourceFiles } from "./rules/source-files";
@@ -32,18 +41,46 @@ interface JsxNodeVisit {
   node: JsxElement | JsxOpeningLikeElement;
 }
 
+interface SourceScope {
+  content: string;
+  end: number;
+  file: ParsedSourceFile;
+  line: number;
+  start: number;
+}
+
+type EvidenceState = "invalid" | "unknown" | "valid";
+type StaticJsxValue = boolean | null | number | string | undefined;
+
+type JsxAttributeValue =
+  | { kind: "absent" }
+  | { kind: "dynamic" }
+  | { kind: "static"; value: StaticJsxValue };
+
 const UPPERCASE_COMPONENT_PATTERN = /^[A-Z]/;
-const JSX_FILE_PATTERN = /\.[jt]sx$/;
+const SCRIPT_FILE_PATTERN = /\.[jt]sx?$/;
 const parsedSourceFileCache = new WeakMap<
   ProjectDiscovery,
   Promise<ParsedSourceFile[]>
 >();
 
+const getScriptKind = (filePath: string): ScriptKind => {
+  if (filePath.endsWith(".tsx")) {
+    return ScriptKind.TSX;
+  }
+
+  if (filePath.endsWith(".jsx")) {
+    return ScriptKind.JSX;
+  }
+
+  return filePath.endsWith(".ts") ? ScriptKind.TS : ScriptKind.JS;
+};
+
 const loadParsedSourceFiles = async (
   project: ProjectDiscovery
 ): Promise<ParsedSourceFile[]> => {
   const sourceFiles = (await getProjectSourceFiles(project)).filter((file) =>
-    JSX_FILE_PATTERN.test(file.path)
+    SCRIPT_FILE_PATTERN.test(file.path)
   );
   const files: ParsedSourceFile[] = [];
 
@@ -56,12 +93,73 @@ const loadParsedSourceFiles = async (
         file.content,
         ScriptTarget.Latest,
         true,
-        ScriptKind.TSX
+        getScriptKind(file.path)
       ),
     });
   }
 
   return files;
+};
+
+const isFunctionOwner = (node: Node): boolean =>
+  isArrowFunction(node) ||
+  isFunctionDeclaration(node) ||
+  isFunctionExpression(node) ||
+  isMethodDeclaration(node);
+
+const getPatternIndexes = (content: string, pattern: RegExp): number[] => {
+  const flags = pattern.flags.includes("g")
+    ? pattern.flags
+    : `${pattern.flags}g`;
+  const matcher = new RegExp(pattern.source, flags);
+  return [...content.matchAll(matcher)].map((match) => match.index);
+};
+
+const getOwnedSourceScopes = (
+  file: ParsedSourceFile,
+  pattern: RegExp
+): SourceScope[] => {
+  const ownerNodes: Node[] = [];
+
+  walkNodes(file.sourceFile, (node, ancestors) => {
+    if (
+      isFunctionOwner(node) &&
+      !ancestors.some((ancestor) => isFunctionOwner(ancestor))
+    ) {
+      ownerNodes.push(node);
+    }
+  });
+
+  const scopes = new Map<string, SourceScope>();
+
+  for (const matchIndex of getPatternIndexes(file.content, pattern)) {
+    const ownerNode = ownerNodes.find(
+      (node) =>
+        node.getStart(file.sourceFile) <= matchIndex &&
+        node.getEnd() >= matchIndex
+    );
+    const start = ownerNode?.getStart(file.sourceFile) ?? 0;
+    const end = ownerNode?.getEnd() ?? file.content.length;
+    const key = `${start}:${end}`;
+
+    scopes.set(key, {
+      content: file.content.slice(start, end),
+      end,
+      file,
+      line: file.sourceFile.getLineAndCharacterOfPosition(matchIndex).line + 1,
+      start,
+    });
+  }
+
+  return [...scopes.values()];
+};
+
+const findOwnedSourceScopes = async (
+  project: ProjectDiscovery,
+  pattern: RegExp
+): Promise<SourceScope[]> => {
+  const files = await parseProjectSourceFiles(project);
+  return files.flatMap((file) => getOwnedSourceScopes(file, pattern));
 };
 
 const parseProjectSourceFiles = (
@@ -88,35 +186,102 @@ const getJsxTagName = (node: JsxOpeningLikeElement): string | null => {
   return tagName.getText();
 };
 
-const getJsxAttribute = (
+const getExpressionAttributeValue = (
+  expression: Expression
+): JsxAttributeValue => {
+  if (
+    isStringLiteral(expression) ||
+    isNoSubstitutionTemplateLiteral(expression)
+  ) {
+    return { kind: "static", value: expression.text };
+  }
+
+  if (isNumericLiteral(expression)) {
+    return { kind: "static", value: Number(expression.text) };
+  }
+
+  if (expression.kind === SyntaxKind.TrueKeyword) {
+    return { kind: "static", value: true };
+  }
+
+  if (expression.kind === SyntaxKind.FalseKeyword) {
+    return { kind: "static", value: false };
+  }
+
+  if (expression.kind === SyntaxKind.NullKeyword) {
+    return { kind: "static", value: null };
+  }
+
+  if (isIdentifier(expression) && expression.text === "undefined") {
+    return { kind: "static", value: undefined };
+  }
+
+  return { kind: "dynamic" };
+};
+
+const getJsxAttributeValue = (
   node: JsxOpeningLikeElement,
   name: string
-): string | true | null => {
+): JsxAttributeValue => {
   for (const property of node.attributes.properties) {
     if (!isJsxAttribute(property) || property.name.getText() !== name) {
       continue;
     }
 
     if (!property.initializer) {
-      return true;
+      return { kind: "static", value: true };
     }
 
     if (isStringLiteral(property.initializer)) {
-      return property.initializer.text;
+      return { kind: "static", value: property.initializer.text };
     }
 
-    if (
-      isJsxExpression(property.initializer) &&
-      property.initializer.expression &&
-      isStringLiteral(property.initializer.expression)
-    ) {
-      return property.initializer.expression.text;
+    if (!isJsxExpression(property.initializer)) {
+      return { kind: "dynamic" };
     }
 
-    return true;
+    if (!property.initializer.expression) {
+      return { kind: "static", value: undefined };
+    }
+
+    return getExpressionAttributeValue(property.initializer.expression);
   }
 
-  return null;
+  return { kind: "absent" };
+};
+
+const getJsxAttribute = (
+  node: JsxOpeningLikeElement,
+  name: string
+): string | true | null => {
+  const attribute = getJsxAttributeValue(node, name);
+
+  if (attribute.kind === "absent") {
+    return null;
+  }
+
+  if (attribute.kind === "static" && typeof attribute.value === "string") {
+    return attribute.value;
+  }
+
+  return true;
+};
+
+const getTextAttributeState = (
+  node: JsxOpeningLikeElement,
+  name: string
+): EvidenceState => {
+  const attribute = getJsxAttributeValue(node, name);
+
+  if (attribute.kind === "dynamic") {
+    return "unknown";
+  }
+
+  if (attribute.kind === "static" && typeof attribute.value === "string") {
+    return attribute.value.trim().length > 0 ? "valid" : "invalid";
+  }
+
+  return "invalid";
 };
 
 const hasJsxAttribute = (node: JsxOpeningLikeElement, name: string): boolean =>
@@ -154,28 +319,74 @@ const visitJsxNodes = (
   }
 };
 
-const childHasAccessibleText = (child: JsxChild): boolean => {
+const getChildAccessibleTextState = (child: JsxChild): EvidenceState => {
   if (isJsxText(child)) {
-    return child.getText().trim().length > 0;
+    return child.getText().trim().length > 0 ? "valid" : "invalid";
   }
 
-  if (
-    isJsxExpression(child) &&
-    child.expression &&
-    isStringLiteral(child.expression)
-  ) {
-    return child.expression.text.trim().length > 0;
+  if (isJsxExpression(child)) {
+    const expression = child.expression;
+
+    if (!expression) {
+      return "invalid";
+    }
+
+    if (
+      isStringLiteral(expression) ||
+      isNoSubstitutionTemplateLiteral(expression)
+    ) {
+      return expression.text.trim().length > 0 ? "valid" : "invalid";
+    }
+
+    if (isNumericLiteral(expression)) {
+      return "valid";
+    }
+
+    if (
+      expression.kind === SyntaxKind.FalseKeyword ||
+      expression.kind === SyntaxKind.NullKeyword ||
+      expression.kind === SyntaxKind.TrueKeyword ||
+      (isIdentifier(expression) && expression.text === "undefined")
+    ) {
+      return "invalid";
+    }
+
+    return "unknown";
   }
 
   if (isJsxElement(child)) {
-    return hasAccessibleText(child.children);
+    return getAccessibleTextState(child.children);
   }
 
-  return false;
+  if (isJsxFragment(child)) {
+    return getAccessibleTextState(child.children);
+  }
+
+  return "invalid";
+};
+
+const getAccessibleTextState = (
+  children: readonly JsxChild[]
+): EvidenceState => {
+  let hasUnknownText = false;
+
+  for (const child of children) {
+    const state = getChildAccessibleTextState(child);
+
+    if (state === "valid") {
+      return "valid";
+    }
+
+    if (state === "unknown") {
+      hasUnknownText = true;
+    }
+  }
+
+  return hasUnknownText ? "unknown" : "invalid";
 };
 
 const hasAccessibleText = (children: readonly JsxChild[]): boolean =>
-  children.some((child) => childHasAccessibleText(child));
+  getAccessibleTextState(children) !== "invalid";
 
 const childLooksVisual = (child: JsxChild): boolean => {
   if (isJsxElement(child)) {
@@ -207,15 +418,26 @@ const ancestorHasTagName = (ancestors: Node[], tagName: string): boolean =>
       getJsxTagName(ancestor.openingElement) === tagName
   );
 
-export type { JsxNodeVisit, ParsedSourceFile };
+export type {
+  EvidenceState,
+  JsxAttributeValue,
+  JsxNodeVisit,
+  ParsedSourceFile,
+  SourceScope,
+};
 export {
   ancestorHasTagName,
+  findOwnedSourceScopes,
+  getAccessibleTextState,
   getJsxAttribute,
+  getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
+  getTextAttributeState,
   hasAccessibleText,
   hasJsxAttribute,
   hasVisualChild,
   parseProjectSourceFiles,
   visitJsxNodes,
+  walkNodes,
 };

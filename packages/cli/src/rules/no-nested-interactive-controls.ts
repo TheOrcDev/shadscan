@@ -1,8 +1,8 @@
-import { isJsxElement } from "typescript";
+import { isJsxElement, isJsxSelfClosingElement } from "typescript";
 import {
+  getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
-  hasJsxAttribute,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
@@ -32,11 +32,12 @@ const noNestedInteractiveControlsRule: AuditRule = {
     let failure: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ ancestors, file, node }) => {
-      if (failure || !isJsxElement(node)) {
+      if (failure || !(isJsxElement(node) || isJsxSelfClosingElement(node))) {
         return;
       }
 
-      const tagName = getJsxTagName(node.openingElement);
+      const openingElement = isJsxElement(node) ? node.openingElement : node;
+      const tagName = getJsxTagName(openingElement);
 
       if (!(tagName && INTERACTIVE_TAGS.has(tagName))) {
         return;
@@ -48,9 +49,13 @@ const noNestedInteractiveControlsRule: AuditRule = {
         }
 
         const ancestorTag = getJsxTagName(ancestor.openingElement);
+        const asChild = getJsxAttributeValue(
+          ancestor.openingElement,
+          "asChild"
+        );
         return (
           Boolean(ancestorTag && INTERACTIVE_TAGS.has(ancestorTag)) &&
-          !hasJsxAttribute(ancestor.openingElement, "asChild")
+          !(asChild.kind === "static" && asChild.value === true)
         );
       });
 
@@ -64,7 +69,7 @@ const noNestedInteractiveControlsRule: AuditRule = {
         "Render one interactive element, or use the component's asChild/slot composition when supported.",
         {
           filePath: file.filePath,
-          line: getLineNumber(file, node.openingElement),
+          line: getLineNumber(file, openingElement),
         }
       );
     });

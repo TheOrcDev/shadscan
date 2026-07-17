@@ -71,6 +71,15 @@ describe("form rules", () => {
 
       await fixture.write(
         "src/contact.tsx",
+        'export function Contact() { return <Input aria-invalid="true" aria-describedby="missing-error" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, invalidFieldsAssociatedWithErrorsRule))
+          .status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/contact.tsx",
         'export function Contact() { return <><Input aria-invalid="true" aria-describedby="email-error" /><FieldError id="email-error">Invalid email</FieldError></>; }'
       );
       expect(
@@ -89,6 +98,14 @@ describe("form rules", () => {
       await fixture.write(
         "src/preferences.tsx",
         'export function Preferences() { return <fieldset><input type="checkbox" /></fieldset>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, groupedControlsHaveLegendRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/preferences.tsx",
+        'export function Preferences() { return <fieldset aria-label=""><input type="checkbox" /></fieldset>; }'
       );
       expect(
         (await runRule(fixture.rootDir, groupedControlsHaveLegendRule)).status
@@ -137,6 +154,15 @@ describe("form rules", () => {
       await fixture.write(
         "src/profile.tsx",
         'export function Profile() { return <Input name="email" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/profile.tsx",
+        'export function Profile() { return <Input name="email" autoComplete="name" />; }'
       );
       expect(
         (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))

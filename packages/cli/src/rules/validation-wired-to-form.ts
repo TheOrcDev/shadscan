@@ -1,6 +1,6 @@
+import { findOwnedSourceScopes } from "../ast";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
-import { getProjectSourceFiles, getTextLineNumber } from "./source-files";
 
 const FORM_PATTERN = /<form(?:\s|>)/;
 const VALIDATION_PATTERN =
@@ -16,34 +16,34 @@ const validationWiredToFormRule: AuditRule = {
   id: "validation-wired-to-form",
   maxScore: 3,
   run: async ({ project }) => {
-    const files = (await getProjectSourceFiles(project)).filter(
-      (file) => !GENERATED_UI_PATH_PATTERN.test(file.path)
-    );
-    const formFile = files.find((file) => FORM_PATTERN.test(file.content));
+    const formScopes = (
+      await findOwnedSourceScopes(project, FORM_PATTERN)
+    ).filter((scope) => !GENERATED_UI_PATH_PATTERN.test(scope.file.filePath));
 
-    if (!formFile) {
+    if (formScopes.length === 0) {
       return notApplicable("No app-level form was found.");
     }
 
-    const validationFile = files.find((file) =>
-      VALIDATION_PATTERN.test(file.content)
-    );
+    for (const scope of formScopes) {
+      if (VALIDATION_PATTERN.test(scope.content)) {
+        continue;
+      }
 
-    if (validationFile) {
-      return pass(
-        "Form validation is wired through native constraints, field rules, or schema parsing.",
-        validationFile.path,
-        getTextLineNumber(validationFile.content, VALIDATION_PATTERN)
+      return fail(
+        "A form was found without wired validation.",
+        "Add native constraints, field-level rules, or schema validation connected to submission.",
+        {
+          filePath: scope.file.filePath,
+          line: scope.line,
+        }
       );
     }
 
-    return fail(
-      "Forms were found without wired validation.",
-      "Add native constraints, field-level rules, or schema validation connected to submission.",
-      {
-        filePath: formFile.path,
-        line: getTextLineNumber(formFile.content, FORM_PATTERN),
-      }
+    const firstScope = formScopes[0];
+    return pass(
+      "Form validation is wired through native constraints, field rules, or schema parsing.",
+      firstScope?.file.filePath,
+      firstScope?.line
     );
   },
   severity: "warning",

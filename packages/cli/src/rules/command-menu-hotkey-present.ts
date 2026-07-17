@@ -1,10 +1,12 @@
+import { findOwnedSourceScopes } from "../ast";
 import type { AuditRule } from "../audit";
 import { fail, pass } from "./rule-result";
-import { getProjectSourceFiles, getTextLineNumber } from "./source-files";
 
 const COMMAND_HOTKEY_LIBRARY_PATTERN =
   /useHotkeys\(\s*["'](?:mod|meta|ctrl)\+k["']/i;
 const KEYDOWN_PATTERN = /addEventListener\(\s*["']keydown["']|onKeyDown/;
+const COMMAND_HOTKEY_TRIGGER_PATTERN =
+  /useHotkeys\(\s*["'](?:mod|meta|ctrl)\+k["']|addEventListener\(\s*["']keydown["']|onKeyDown/i;
 const K_KEY_PATTERN = /(?:key\.toLowerCase\(\)|key)\s*(?:===|!==)\s*["']k["']/;
 const MODIFIER_PATTERN =
   /(?:metaKey\s*\|\|\s*\w*\.?ctrlKey|ctrlKey\s*\|\|\s*\w*\.?metaKey|metaKey\s*&&|ctrlKey\s*&&)/;
@@ -21,27 +23,25 @@ const commandMenuHotkeyPresentRule: AuditRule = {
   id: "command-menu-hotkey-present",
   maxScore: 4,
   run: async ({ project }) => {
-    const files = await getProjectSourceFiles(project);
+    const hotkeyScopes = await findOwnedSourceScopes(
+      project,
+      COMMAND_HOTKEY_TRIGGER_PATTERN
+    );
 
-    for (const file of files) {
-      const libraryLine = getTextLineNumber(
-        file.content,
-        COMMAND_HOTKEY_LIBRARY_PATTERN
-      );
-
-      if (libraryLine !== undefined) {
+    for (const scope of hotkeyScopes) {
+      if (COMMAND_HOTKEY_LIBRARY_PATTERN.test(scope.content)) {
         return pass(
           "Command-menu shortcut registered through a hotkey helper.",
-          file.path,
-          libraryLine
+          scope.file.filePath,
+          scope.line
         );
       }
 
-      const hasKeydown = KEYDOWN_PATTERN.test(file.content);
-      const checksK = K_KEY_PATTERN.test(file.content);
-      const checksModifier = MODIFIER_PATTERN.test(file.content);
-      const preventsDefault = PREVENT_DEFAULT_PATTERN.test(file.content);
-      const opensMenu = OPEN_ACTION_PATTERN.test(file.content);
+      const hasKeydown = KEYDOWN_PATTERN.test(scope.content);
+      const checksK = K_KEY_PATTERN.test(scope.content);
+      const checksModifier = MODIFIER_PATTERN.test(scope.content);
+      const preventsDefault = PREVENT_DEFAULT_PATTERN.test(scope.content);
+      const opensMenu = OPEN_ACTION_PATTERN.test(scope.content);
 
       if (
         hasKeydown &&
@@ -52,8 +52,8 @@ const commandMenuHotkeyPresentRule: AuditRule = {
       ) {
         return pass(
           "Cmd/Ctrl+K command-menu shortcut found.",
-          file.path,
-          getTextLineNumber(file.content, KEYDOWN_PATTERN)
+          scope.file.filePath,
+          scope.line
         );
       }
     }

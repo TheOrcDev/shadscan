@@ -1,20 +1,31 @@
 import { isJsxElement, isJsxSelfClosingElement } from "typescript";
 import {
   getJsxAttribute,
+  getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
-  hasJsxAttribute,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, notApplicable, pass } from "./rule-result";
+import { advisory, fail, notApplicable, pass } from "./rule-result";
 
 const INPUT_TAGS = new Set(["Input", "input"]);
 const PERSONAL_INPUT_TYPES = new Set(["email", "password", "tel"]);
 const PERSONAL_FIELD_PATTERN =
   /(?:^|-)(?:address|bday|cc|country|credit-card|current-password|email|family-name|first-name|given-name|last-name|name|new-password|organization|phone|postal|street|tel|username|zip)(?:-|$)/;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+const GIVEN_NAME_PATTERN = /(?:first|given)-name/;
+const FAMILY_NAME_PATTERN = /(?:family|last)-name/;
+const WHITESPACE_PATTERN = /\s+/;
+const TEL_AUTOCOMPLETE_TOKENS = [
+  "tel",
+  "tel-area-code",
+  "tel-country-code",
+  "tel-extension",
+  "tel-local",
+  "tel-national",
+];
 
 const normalizeFieldName = (value: string): string =>
   value
@@ -41,6 +52,102 @@ const isPersonalDataInput = (
   );
 };
 
+const getNamedFieldTokens = (fieldName: string): string[] => {
+  if (fieldName.includes("username")) {
+    return ["username"];
+  }
+
+  if (GIVEN_NAME_PATTERN.test(fieldName)) {
+    return ["given-name"];
+  }
+
+  if (FAMILY_NAME_PATTERN.test(fieldName)) {
+    return ["family-name"];
+  }
+
+  if (fieldName.includes("postal") || fieldName.includes("zip")) {
+    return ["postal-code"];
+  }
+
+  if (fieldName.includes("address") || fieldName.includes("street")) {
+    return [
+      "address-line1",
+      "address-line2",
+      "address-line3",
+      "street-address",
+    ];
+  }
+
+  if (fieldName.includes("country")) {
+    return ["country", "country-name"];
+  }
+
+  if (fieldName.includes("organization")) {
+    return ["organization", "organization-title"];
+  }
+
+  if (fieldName.includes("bday")) {
+    return ["bday", "bday-day", "bday-month", "bday-year"];
+  }
+
+  if (fieldName.includes("cc") || fieldName.includes("credit-card")) {
+    return [
+      "cc-additional-name",
+      "cc-csc",
+      "cc-exp",
+      "cc-exp-month",
+      "cc-exp-year",
+      "cc-family-name",
+      "cc-given-name",
+      "cc-name",
+      "cc-number",
+      "cc-type",
+    ];
+  }
+
+  return ["name"];
+};
+
+const getExpectedAutocompleteTokens = (
+  name: string | true | null,
+  id: string | true | null,
+  type: string | true | null
+): string[] => {
+  const fieldName = [name, id]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => normalizeFieldName(value))
+    .join("-");
+  const normalizedType = typeof type === "string" ? type.toLowerCase() : "";
+
+  if (normalizedType === "email" || fieldName.includes("email")) {
+    return ["email"];
+  }
+
+  if (
+    normalizedType === "tel" ||
+    fieldName.includes("phone") ||
+    fieldName.includes("tel")
+  ) {
+    return TEL_AUTOCOMPLETE_TOKENS;
+  }
+
+  if (fieldName.includes("current-password")) {
+    return ["current-password"];
+  }
+
+  if (fieldName.includes("new-password")) {
+    return ["new-password"];
+  }
+
+  if (normalizedType === "password") {
+    return fieldName.includes("new")
+      ? ["new-password"]
+      : ["current-password", "new-password"];
+  }
+
+  return getNamedFieldTokens(fieldName);
+};
+
 const personalDataAutocompletePresentRule: AuditRule = {
   adapters: ["core"],
   category: "forms",
@@ -55,6 +162,7 @@ const personalDataAutocompletePresentRule: AuditRule = {
     );
     let personalFieldCount = 0;
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ file, node }) => {
       if (failure || !(isJsxElement(node) || isJsxSelfClosingElement(node))) {
@@ -64,29 +172,46 @@ const personalDataAutocompletePresentRule: AuditRule = {
       const openingElement = isJsxElement(node) ? node.openingElement : node;
       const tagName = getJsxTagName(openingElement);
 
+      const name = getJsxAttribute(openingElement, "name");
+      const id = getJsxAttribute(openingElement, "id");
+      const type = getJsxAttribute(openingElement, "type");
+
       if (
         !(
           tagName &&
           INPUT_TAGS.has(tagName) &&
-          isPersonalDataInput(
-            getJsxAttribute(openingElement, "name"),
-            getJsxAttribute(openingElement, "id"),
-            getJsxAttribute(openingElement, "type")
-          )
+          isPersonalDataInput(name, id, type)
         )
       ) {
         return;
       }
 
       personalFieldCount += 1;
+      const autocomplete = getJsxAttributeValue(openingElement, "autoComplete");
 
-      if (hasJsxAttribute(openingElement, "autoComplete")) {
+      if (autocomplete.kind === "dynamic") {
+        uncertainResult ??= advisory(
+          `${tagName} uses a dynamic autocomplete purpose that cannot be verified statically.`,
+          "Ensure it always resolves to the field's expected autocomplete token.",
+          file.filePath,
+          getLineNumber(file, openingElement)
+        );
+        return;
+      }
+
+      const expectedTokens = getExpectedAutocompleteTokens(name, id, type);
+      const declaredTokens =
+        autocomplete.kind === "static" && typeof autocomplete.value === "string"
+          ? autocomplete.value.toLowerCase().trim().split(WHITESPACE_PATTERN)
+          : [];
+
+      if (expectedTokens.some((token) => declaredTokens.includes(token))) {
         return;
       }
 
       failure = fail(
-        `${tagName} collects personal data without an autocomplete purpose.`,
-        "Add the appropriate autoComplete token, such as email, name, tel, or current-password.",
+        `${tagName} does not declare an autocomplete purpose matching this personal-data field.`,
+        `Use one of: ${expectedTokens.join(", ")}.`,
         {
           filePath: file.filePath,
           line: getLineNumber(file, openingElement),
@@ -102,8 +227,11 @@ const personalDataAutocompletePresentRule: AuditRule = {
       return notApplicable("No personal-data inputs were found.");
     }
 
-    return pass(
-      `All ${personalFieldCount} personal-data inputs declare autocomplete purposes.`
+    return (
+      uncertainResult ??
+      pass(
+        `All ${personalFieldCount} personal-data inputs declare autocomplete purposes.`
+      )
     );
   },
   severity: "warning",

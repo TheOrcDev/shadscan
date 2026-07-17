@@ -1,4 +1,5 @@
 import path from "node:path";
+import { findOwnedSourceScopes } from "../ast";
 import type {
   AuditContext,
   AuditEvidence,
@@ -9,7 +10,6 @@ import {
   fileExists,
   findFiles,
   findSourceMatch,
-  getProjectSourceFiles,
   getTextLineNumber,
   readProjectSourceFile,
 } from "./source-files";
@@ -154,19 +154,22 @@ const themeHotkeyPresentRule: AuditRule = {
   id: "theme-hotkey-present",
   maxScore: 5,
   run: async (context) => {
-    const files = await getProjectSourceFiles(context.project);
+    const hotkeyScopes = await findOwnedSourceScopes(
+      context.project,
+      KEYDOWN_HANDLER_PATTERN
+    );
 
-    for (const file of files) {
-      const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(file.content);
-      const togglesTheme = THEME_TOGGLE_PATTERN.test(file.content);
-      const checksDKey = D_KEY_PATTERN.test(file.content);
-      const ignoresTypingTargets = TYPING_TARGET_PATTERN.test(file.content);
+    for (const scope of hotkeyScopes) {
+      const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(scope.content);
+      const togglesTheme = THEME_TOGGLE_PATTERN.test(scope.content);
+      const checksDKey = D_KEY_PATTERN.test(scope.content);
+      const ignoresTypingTargets = TYPING_TARGET_PATTERN.test(scope.content);
 
       if (hasKeyHandler && togglesTheme && checksDKey && ignoresTypingTargets) {
         return pass(
           "Dark-mode keyboard shortcut found and typing targets are guarded.",
-          file.path,
-          getTextLineNumber(file.content, KEYDOWN_HANDLER_PATTERN)
+          scope.file.filePath,
+          scope.line
         );
       }
     }

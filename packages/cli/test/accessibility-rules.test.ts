@@ -71,6 +71,39 @@ describe("accessibility rules", () => {
     ).toBe("fail");
   });
 
+  it("distinguishes empty and dynamic button labels", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      'export function App() { return <button aria-label=""><SearchIcon /></button>; }\n'
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find((finding) => finding.id === "icon-buttons-have-labels")
+        ?.status
+    ).toBe("fail");
+
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      "export function App({ label }) { return <button aria-label={label}><SearchIcon /></button>; }\n"
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find((finding) => finding.id === "icon-buttons-have-labels")
+        ?.status
+    ).toBe("advisory");
+  });
+
   it("passes icon buttons with labels and form controls with labels", async () => {
     const rootDir = await createFixture();
     await writeFixtureFile(
@@ -121,6 +154,41 @@ describe("accessibility rules", () => {
     ).toBe("fail");
   });
 
+  it("requires role and focusability on keyboard-enabled click targets", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      "export function App() { return <div onClick={open} onKeyDown={open}>Open</div>; }\n"
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find(
+        (finding) => finding.id === "interactive-elements-are-semantic"
+      )?.status
+    ).toBe("fail");
+
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      'export function App() { return <div role="button" tabIndex={0} onClick={open} onKeyDown={open}>Open</div>; }\n'
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find(
+        (finding) => finding.id === "interactive-elements-are-semantic"
+      )?.status
+    ).toBe("pass");
+  });
+
   it("fails unlabeled form controls", async () => {
     const rootDir = await createFixture();
     await writeFixtureFile(
@@ -153,6 +221,32 @@ describe("accessibility rules", () => {
 
     expect(
       report.findings.find(
+        (finding) => finding.id === "dialogs-have-accessible-names"
+      )?.status
+    ).toBe("fail");
+  });
+
+  it("requires a title inside every dialog subtree", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App() {
+          return <>
+            <DialogContent><DialogTitle>Named</DialogTitle></DialogContent>
+            <DialogContent>Still unnamed</DialogContent>
+          </>;
+        }
+      `
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find(
         (finding) => finding.id === "dialogs-have-accessible-names"
       )?.status
     ).toBe("fail");

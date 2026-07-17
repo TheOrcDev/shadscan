@@ -1,47 +1,53 @@
 import {
   isJsxElement,
-  isJsxExpression,
   isJsxSelfClosingElement,
-  isJsxText,
   type JsxChild,
 } from "typescript";
 import {
+  type EvidenceState,
+  getAccessibleTextState,
   getJsxTagName,
   getLineNumber,
-  hasJsxAttribute,
+  getTextAttributeState,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, pass } from "./rule-result";
+import { advisory, fail, pass } from "./rule-result";
 
 const LINK_TAGS = new Set(["Link", "a"]);
 
-const childProvidesName = (child: JsxChild): boolean => {
-  if (isJsxText(child)) {
-    return child.getText().trim().length > 0;
-  }
-
-  if (isJsxExpression(child)) {
-    return Boolean(child.expression);
-  }
-
+const getChildNameState = (child: JsxChild): EvidenceState => {
   if (isJsxSelfClosingElement(child)) {
     const tagName = getJsxTagName(child);
-    return (
-      (tagName === "Image" || tagName === "img") &&
-      hasJsxAttribute(child, "alt")
-    );
+
+    return tagName === "Image" || tagName === "img"
+      ? getTextAttributeState(child, "alt")
+      : "invalid";
   }
 
   if (isJsxElement(child)) {
-    return (
-      hasJsxAttribute(child.openingElement, "aria-label") ||
-      child.children.some((nestedChild) => childProvidesName(nestedChild))
+    const ariaLabelState = getTextAttributeState(
+      child.openingElement,
+      "aria-label"
     );
+
+    if (ariaLabelState === "valid") {
+      return "valid";
+    }
+
+    const textState = getAccessibleTextState(child.children);
+
+    if (textState === "valid") {
+      return "valid";
+    }
+
+    return ariaLabelState === "unknown" || textState === "unknown"
+      ? "unknown"
+      : "invalid";
   }
 
-  return false;
+  return getAccessibleTextState([child]);
 };
 
 const linksHaveAccessibleNamesRule: AuditRule = {
@@ -54,6 +60,7 @@ const linksHaveAccessibleNamesRule: AuditRule = {
   run: async ({ project }) => {
     const files = await parseProjectSourceFiles(project);
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ file, node }) => {
       if (failure || !(isJsxElement(node) || isJsxSelfClosingElement(node))) {
@@ -67,13 +74,26 @@ const linksHaveAccessibleNamesRule: AuditRule = {
         return;
       }
 
-      if (
-        hasJsxAttribute(openingElement, "aria-label") ||
-        hasJsxAttribute(openingElement, "aria-labelledby") ||
-        hasJsxAttribute(openingElement, "title") ||
-        (isJsxElement(node) &&
-          node.children.some((child) => childProvidesName(child)))
-      ) {
+      const states = [
+        getTextAttributeState(openingElement, "aria-label"),
+        getTextAttributeState(openingElement, "aria-labelledby"),
+        getTextAttributeState(openingElement, "title"),
+        ...(isJsxElement(node)
+          ? node.children.map((child) => getChildNameState(child))
+          : []),
+      ];
+
+      if (states.includes("valid")) {
+        return;
+      }
+
+      if (states.includes("unknown")) {
+        uncertainResult ??= advisory(
+          "Link uses a dynamic accessible name that cannot be verified statically.",
+          "Ensure the dynamic content always resolves to meaningful link text.",
+          file.filePath,
+          getLineNumber(file, openingElement)
+        );
         return;
       }
 
@@ -84,7 +104,7 @@ const linksHaveAccessibleNamesRule: AuditRule = {
       );
     });
 
-    return failure ?? pass("No unnamed links were found.");
+    return failure ?? uncertainResult ?? pass("No unnamed links were found.");
   },
   severity: "error",
   title: "links have accessible names",

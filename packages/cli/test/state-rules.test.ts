@@ -50,6 +50,30 @@ describe("state rules", () => {
 
       await fixture.write(
         "src/App.tsx",
+        "export function App() { return <Suspense fallback={false}><Dashboard /></Suspense>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, suspenseFallbackUsefulRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return <Suspense fallback={0}><Dashboard /></Suspense>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, suspenseFallbackUsefulRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        "export function App({ fallback }) { return <Suspense fallback={fallback}><Dashboard /></Suspense>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, suspenseFallbackUsefulRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/App.tsx",
         "export function App() { return <Suspense fallback={<Skeleton />}><Dashboard /></Suspense>; }"
       );
       expect(

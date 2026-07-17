@@ -1,15 +1,75 @@
-import { readFile } from "node:fs/promises";
 import type { AuditRule } from "../audit";
 import { fail, pass } from "./rule-result";
-import { findFiles, getProjectSourceFiles } from "./source-files";
+import { getProjectSourceFiles, getProjectStyleFiles } from "./source-files";
 
 const CLASS_VALUE_PATTERN =
   /className\s*=\s*(?:["'`]([^"'`]*outline-none[^"'`]*)["'`]|\{[^}]*["'`]([^"'`]*outline-none[^"'`]*)["'`][^}]*\})/g;
 const FOCUS_REPLACEMENT_PATTERN =
   /focus-visible:(?:ring|outline|border|shadow)|focus:(?:ring|outline|border|shadow)/;
+const CSS_RULE_PATTERN = /([^{}]+)\{([^{}]*)\}/g;
 const CSS_OUTLINE_REMOVAL_PATTERN = /outline\s*:\s*(?:none|0)\s*;/i;
-const CSS_FOCUS_REPLACEMENT_PATTERN =
-  /:focus-visible[^{]*\{[^}]*(?:outline|box-shadow|border)/i;
+const CSS_VISIBLE_PROPERTY_PATTERN =
+  /^(?:border(?:-color|-style|-width)?|box-shadow|outline)$/i;
+const FOCUS_PSEUDO_PATTERN = /:(?:focus-visible|focus-within|focus)\b/;
+const ALL_FOCUS_PSEUDOS_PATTERN = /:(?:focus-visible|focus-within|focus)\b/g;
+
+interface CssRule {
+  body: string;
+  index: number;
+  selectors: string[];
+}
+
+const parseCssRules = (css: string): CssRule[] =>
+  [...css.matchAll(CSS_RULE_PATTERN)].map((match) => ({
+    body: match[2] ?? "",
+    index: match.index,
+    selectors: (match[1] ?? "")
+      .split(",")
+      .map((selector) => selector.trim())
+      .filter(Boolean),
+  }));
+
+const getBaseSelector = (selector: string): string =>
+  selector.replace(ALL_FOCUS_PSEUDOS_PATTERN, "").replace(/\s+/g, " ").trim();
+
+const hasVisibleFocusStyle = (body: string): boolean =>
+  body.split(";").some((declaration) => {
+    const separatorIndex = declaration.indexOf(":");
+
+    if (separatorIndex < 0) {
+      return false;
+    }
+
+    const property = declaration.slice(0, separatorIndex).trim();
+    const value = declaration
+      .slice(separatorIndex + 1)
+      .trim()
+      .toLowerCase();
+
+    return (
+      CSS_VISIBLE_PROPERTY_PATTERN.test(property) &&
+      value !== "" &&
+      value !== "0" &&
+      value !== "none"
+    );
+  });
+
+const hasMatchingFocusReplacement = (
+  removalSelector: string,
+  rules: CssRule[]
+): boolean => {
+  const baseSelector = getBaseSelector(removalSelector);
+
+  return rules.some(
+    (rule) =>
+      hasVisibleFocusStyle(rule.body) &&
+      rule.selectors.some(
+        (selector) =>
+          FOCUS_PSEUDO_PATTERN.test(selector) &&
+          getBaseSelector(selector) === baseSelector
+      )
+  );
+};
 
 const focusVisibleNotSuppressedRule: AuditRule = {
   adapters: ["core"],
@@ -39,24 +99,34 @@ const focusVisibleNotSuppressedRule: AuditRule = {
       }
     }
 
-    const cssPaths = await findFiles(project.rootDir, [
-      "app/**/*.css",
-      "src/**/*.css",
-      "styles/**/*.css",
-    ]);
+    const styleFiles = await getProjectStyleFiles(project);
 
-    for (const cssPath of cssPaths) {
-      const css = await readFile(cssPath, "utf8");
+    for (const file of styleFiles) {
+      const rules = parseCssRules(file.content);
 
-      if (
-        CSS_OUTLINE_REMOVAL_PATTERN.test(css) &&
-        !CSS_FOCUS_REPLACEMENT_PATTERN.test(css)
-      ) {
-        return fail(
-          "CSS removes focus outlines without a :focus-visible replacement.",
-          "Provide a visible :focus-visible style before removing user-agent outlines.",
-          { filePath: cssPath }
+      for (const rule of rules) {
+        if (!CSS_OUTLINE_REMOVAL_PATTERN.test(rule.body)) {
+          continue;
+        }
+
+        const selectorsWithoutReplacement = rule.selectors.filter(
+          (selector) =>
+            !(
+              hasVisibleFocusStyle(rule.body) ||
+              hasMatchingFocusReplacement(selector, rules)
+            )
         );
+
+        if (selectorsWithoutReplacement.length > 0) {
+          return fail(
+            `CSS removes focus outlines from ${selectorsWithoutReplacement.join(", ")} without a matching visible replacement.`,
+            "Provide a visible focus-visible style for the same selector before removing user-agent outlines.",
+            {
+              filePath: file.path,
+              line: file.content.slice(0, rule.index).split("\n").length,
+            }
+          );
+        }
       }
     }
 

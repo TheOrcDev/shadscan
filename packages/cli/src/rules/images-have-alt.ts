@@ -1,13 +1,13 @@
 import { isJsxElement } from "typescript";
 import {
+  getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
-  hasJsxAttribute,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, pass } from "./rule-result";
+import { advisory, fail, pass } from "./rule-result";
 
 const IMAGE_TAGS = new Set(["Image", "img"]);
 
@@ -21,6 +21,7 @@ const imagesHaveAltRule: AuditRule = {
   run: async ({ project }) => {
     const files = await parseProjectSourceFiles(project);
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ file, node }) => {
       if (failure || isJsxElement(node)) {
@@ -33,7 +34,19 @@ const imagesHaveAltRule: AuditRule = {
         return;
       }
 
-      if (hasJsxAttribute(node, "alt")) {
+      const alt = getJsxAttributeValue(node, "alt");
+
+      if (alt.kind === "static" && typeof alt.value === "string") {
+        return;
+      }
+
+      if (alt.kind === "dynamic") {
+        uncertainResult ??= advisory(
+          "Image uses dynamic alternative text that cannot be verified statically.",
+          'Ensure it always resolves to meaningful text or "" for a decorative image.',
+          file.filePath,
+          getLineNumber(file, node)
+        );
         return;
       }
 
@@ -44,7 +57,11 @@ const imagesHaveAltRule: AuditRule = {
       );
     });
 
-    return failure ?? pass("No images without alternative text were found.");
+    return (
+      failure ??
+      uncertainResult ??
+      pass("No images without alternative text were found.")
+    );
   },
   severity: "error",
   title: "images have alternative text",

@@ -6,19 +6,22 @@ import {
   isJsxFragment,
   isJsxSelfClosingElement,
   isJsxText,
+  isNoSubstitutionTemplateLiteral,
+  isNumericLiteral,
   isStringLiteral,
   type JsxAttribute,
   type JsxOpeningLikeElement,
   SyntaxKind,
 } from "typescript";
 import {
+  type EvidenceState,
   getJsxTagName,
   getLineNumber,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
-import { fail, notApplicable, pass } from "./rule-result";
+import { advisory, fail, notApplicable, pass } from "./rule-result";
 
 const getOpeningElement = (
   node:
@@ -49,36 +52,52 @@ const fragmentHasContent = (
     return isJsxElement(child) || isJsxSelfClosingElement(child);
   });
 
-const hasUsefulFallback = (attribute: JsxAttribute): boolean => {
+const getFallbackState = (attribute: JsxAttribute): EvidenceState => {
   const initializer = attribute.initializer;
 
   if (!initializer) {
-    return false;
+    return "invalid";
   }
 
   if (isStringLiteral(initializer)) {
-    return initializer.text.trim().length > 0;
+    return initializer.text.trim().length > 0 ? "valid" : "invalid";
   }
 
   if (!(isJsxExpression(initializer) && initializer.expression)) {
-    return false;
+    return "invalid";
   }
 
   const expression = initializer.expression;
 
-  if (expression.kind === SyntaxKind.NullKeyword) {
-    return false;
+  if (
+    expression.kind === SyntaxKind.FalseKeyword ||
+    expression.kind === SyntaxKind.NullKeyword ||
+    expression.kind === SyntaxKind.TrueKeyword ||
+    isNumericLiteral(expression)
+  ) {
+    return "invalid";
   }
 
   if (isIdentifier(expression) && expression.text === "undefined") {
-    return false;
+    return "invalid";
+  }
+
+  if (
+    isStringLiteral(expression) ||
+    isNoSubstitutionTemplateLiteral(expression)
+  ) {
+    return expression.text.trim().length > 0 ? "valid" : "invalid";
   }
 
   if (isJsxFragment(expression)) {
-    return fragmentHasContent(expression);
+    return fragmentHasContent(expression) ? "valid" : "invalid";
   }
 
-  return true;
+  if (isJsxElement(expression) || isJsxSelfClosingElement(expression)) {
+    return "valid";
+  }
+
+  return "unknown";
 };
 
 const suspenseFallbackUsefulRule: AuditRule = {
@@ -92,6 +111,7 @@ const suspenseFallbackUsefulRule: AuditRule = {
     const files = await parseProjectSourceFiles(project);
     let suspenseCount = 0;
     let failure: AuditRuleResult | null = null;
+    let uncertainResult: AuditRuleResult | null = null;
 
     visitJsxNodes(files, ({ file, node }) => {
       if (failure || !isJsxElement(node)) {
@@ -106,8 +126,21 @@ const suspenseFallbackUsefulRule: AuditRule = {
 
       suspenseCount += 1;
       const fallbackAttribute = getFallbackAttribute(openingElement);
+      const fallbackState = fallbackAttribute
+        ? getFallbackState(fallbackAttribute)
+        : "invalid";
 
-      if (fallbackAttribute && hasUsefulFallback(fallbackAttribute)) {
+      if (fallbackState === "valid") {
+        return;
+      }
+
+      if (fallbackState === "unknown") {
+        uncertainResult ??= advisory(
+          "Suspense boundary uses a dynamic fallback that cannot be verified statically.",
+          "Ensure the fallback always resolves to visible loading UI.",
+          file.filePath,
+          getLineNumber(file, openingElement)
+        );
         return;
       }
 
@@ -129,7 +162,10 @@ const suspenseFallbackUsefulRule: AuditRule = {
       return notApplicable("No Suspense boundaries were found.");
     }
 
-    return pass(`All ${suspenseCount} Suspense fallbacks contain useful UI.`);
+    return (
+      uncertainResult ??
+      pass(`All ${suspenseCount} Suspense fallbacks contain useful UI.`)
+    );
   },
   severity: "warning",
   title: "Suspense fallbacks are useful",
