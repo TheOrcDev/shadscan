@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { glob } from "tinyglobby";
 import {
   createSourceFile,
   forEachChild,
@@ -20,6 +18,7 @@ import {
   type SourceFile,
 } from "typescript";
 import type { ProjectDiscovery } from "./discovery";
+import { getProjectSourceFiles } from "./rules/source-files";
 
 interface ParsedSourceFile {
   content: string;
@@ -33,33 +32,28 @@ interface JsxNodeVisit {
   node: JsxElement | JsxOpeningLikeElement;
 }
 
-const TSX_PATTERNS = [
-  "app/**/*.{jsx,tsx}",
-  "src/**/*.{jsx,tsx}",
-  "components/**/*.{jsx,tsx}",
-  "lib/**/*.{jsx,tsx}",
-];
 const UPPERCASE_COMPONENT_PATTERN = /^[A-Z]/;
+const JSX_FILE_PATTERN = /\.[jt]sx$/;
+const parsedSourceFileCache = new WeakMap<
+  ProjectDiscovery,
+  Promise<ParsedSourceFile[]>
+>();
 
-const parseProjectSourceFiles = async (
+const loadParsedSourceFiles = async (
   project: ProjectDiscovery
 ): Promise<ParsedSourceFile[]> => {
-  const filePaths = await glob(TSX_PATTERNS, {
-    absolute: true,
-    cwd: project.rootDir,
-    deep: 8,
-    ignore: ["**/.next/**", "**/dist/**", "**/node_modules/**"],
-  });
+  const sourceFiles = (await getProjectSourceFiles(project)).filter((file) =>
+    JSX_FILE_PATTERN.test(file.path)
+  );
   const files: ParsedSourceFile[] = [];
 
-  for (const filePath of filePaths) {
-    const content = await readFile(filePath, "utf8");
+  for (const file of sourceFiles) {
     files.push({
-      content,
-      filePath,
+      content: file.content,
+      filePath: file.path,
       sourceFile: createSourceFile(
-        filePath,
-        content,
+        file.path,
+        file.content,
         ScriptTarget.Latest,
         true,
         ScriptKind.TSX
@@ -67,6 +61,20 @@ const parseProjectSourceFiles = async (
     });
   }
 
+  return files;
+};
+
+const parseProjectSourceFiles = (
+  project: ProjectDiscovery
+): Promise<ParsedSourceFile[]> => {
+  const cachedFiles = parsedSourceFileCache.get(project);
+
+  if (cachedFiles) {
+    return cachedFiles;
+  }
+
+  const files = loadParsedSourceFiles(project);
+  parsedSourceFileCache.set(project, files);
   return files;
 };
 

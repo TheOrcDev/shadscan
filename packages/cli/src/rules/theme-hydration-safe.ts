@@ -2,10 +2,10 @@ import path from "node:path";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
-  fileExists,
   findSourceMatch,
   getTextLineNumber,
-  readSourceFile,
+  readProjectSourceFile,
+  type SourceFile,
 } from "./source-files";
 
 const HTML_HYDRATION_PATTERN = /<html\b[^>]*\bsuppressHydrationWarning\b/;
@@ -34,21 +34,21 @@ const themeHydrationSafeRule: AuditRule = {
     const layoutCandidates = ["layout.tsx", "layout.jsx"].map((fileName) =>
       path.join(appDir, fileName)
     );
-    let layoutPath: string | null = null;
+    let layout: SourceFile | null = null;
     let hasHydrationSuppression = false;
 
     for (const candidate of layoutCandidates) {
-      if (!(await fileExists(candidate))) {
+      layout = await readProjectSourceFile(project, candidate);
+
+      if (!layout) {
         continue;
       }
 
-      layoutPath = candidate;
-      const layout = await readSourceFile(candidate);
       hasHydrationSuppression = HTML_HYDRATION_PATTERN.test(layout.content);
       break;
     }
 
-    if (!layoutPath) {
+    if (!layout) {
       return notApplicable("No root Next layout file was found.");
     }
 
@@ -60,11 +60,8 @@ const themeHydrationSafeRule: AuditRule = {
     if (hasHydrationSuppression && providerMatch) {
       return pass(
         "Root HTML suppresses expected theme hydration differences and the provider targets the class attribute.",
-        layoutPath,
-        getTextLineNumber(
-          (await readSourceFile(layoutPath)).content,
-          HTML_HYDRATION_PATTERN
-        )
+        layout.path,
+        getTextLineNumber(layout.content, HTML_HYDRATION_PATTERN)
       );
     }
 
@@ -76,7 +73,7 @@ const themeHydrationSafeRule: AuditRule = {
     return fail(
       `Unsafe theme hydration setup; missing ${missing.join(" and ")}.`,
       'Add suppressHydrationWarning to the root html element and configure next-themes with attribute="class".',
-      { filePath: layoutPath }
+      { filePath: layout.path }
     );
   },
   severity: "warning",

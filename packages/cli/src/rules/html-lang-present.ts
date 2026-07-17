@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
-import { fileExists, getTextLineNumber, readSourceFile } from "./source-files";
+import { getTextLineNumber, readProjectSourceFile } from "./source-files";
 
 const HTML_LANG_PATTERN = /<html\b[^>]*\blang=(?:["'][^"']+["']|\{[^}]+\})/;
 
@@ -35,12 +35,13 @@ const htmlLangPresentRule: AuditRule = {
     let documentPath: string | null = null;
 
     for (const candidate of candidates) {
-      if (!(await fileExists(candidate))) {
+      const document = await readProjectSourceFile(project, candidate);
+
+      if (!document) {
         continue;
       }
 
       documentPath = candidate;
-      const document = await readSourceFile(candidate);
       const line = getTextLineNumber(document.content, HTML_LANG_PATTERN);
 
       if (line !== undefined) {

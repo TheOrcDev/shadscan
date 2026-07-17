@@ -1,10 +1,9 @@
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
-  findFiles,
   getProjectSourceFiles,
+  getProjectStyleFiles,
   getTextLineNumber,
-  readSourceFile,
   type SourceFile,
 } from "./source-files";
 
@@ -18,16 +17,7 @@ const getMotionFiles = async (
   project: Parameters<AuditRule["run"]>[0]["project"]
 ): Promise<SourceFile[]> => {
   const sourceFiles = await getProjectSourceFiles(project);
-  const stylePaths = await findFiles(project.rootDir, [
-    "app/**/*.css",
-    "src/**/*.css",
-    "styles/**/*.css",
-  ]);
-  const styleFiles: SourceFile[] = [];
-
-  for (const stylePath of stylePaths) {
-    styleFiles.push(await readSourceFile(stylePath));
-  }
+  const styleFiles = await getProjectStyleFiles(project);
 
   return [...sourceFiles, ...styleFiles].filter(
     (file) => !GENERATED_UI_PATH_PATTERN.test(file.path)

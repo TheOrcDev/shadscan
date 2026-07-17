@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { AuditContext, AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
-import { fileExists, getTextLineNumber, readSourceFile } from "./source-files";
+import { getTextLineNumber, readProjectSourceFile } from "./source-files";
 
 const THEME_PROVIDER_JSX_PATTERN =
   /<(?:ThemeProvider|NextThemesProvider)(?:\s|>)/;
@@ -44,12 +44,13 @@ const themeProviderMountedInShellRule: AuditRule = {
     let existingShellPath: string | null = null;
 
     for (const shellPath of shellCandidates) {
-      if (!(await fileExists(shellPath))) {
+      const shell = await readProjectSourceFile(context.project, shellPath);
+
+      if (!shell) {
         continue;
       }
 
       existingShellPath = shellPath;
-      const shell = await readSourceFile(shellPath);
       const line = getTextLineNumber(shell.content, THEME_PROVIDER_JSX_PATTERN);
 
       if (line !== undefined) {

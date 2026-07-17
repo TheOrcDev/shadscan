@@ -2,10 +2,9 @@ import path from "node:path";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
-  fileExists,
   getProjectSourceFiles,
   getTextLineNumber,
-  readSourceFile,
+  readProjectSourceFile,
 } from "./source-files";
 
 const NEXT_METADATA_EXPORT_PATTERN =
@@ -63,12 +62,12 @@ const metadataTitleDescriptionCompleteRule: AuditRule = {
     }
 
     const indexPath = path.join(project.rootDir, "index.html");
+    const document = await readProjectSourceFile(project, indexPath);
 
-    if (!(await fileExists(indexPath))) {
+    if (!document) {
       return notApplicable("No HTML document entry file was found.");
     }
 
-    const document = await readSourceFile(indexPath);
     const hasTitle = HTML_TITLE_PATTERN.test(document.content);
     const hasDescription = HTML_DESCRIPTION_PATTERN.test(document.content);
 

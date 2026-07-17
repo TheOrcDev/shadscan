@@ -2,10 +2,10 @@ import path from "node:path";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
-  fileExists,
   getProjectSourceFiles,
   getTextLineNumber,
-  readSourceFile,
+  readProjectSourceFile,
+  type SourceFile,
 } from "./source-files";
 
 const TOASTER_JSX_PATTERN = /<(?:Toaster|ToastProvider)(?:\s|>)/;
@@ -50,11 +50,12 @@ const toastProviderMountedRule: AuditRule = {
       rootDir: project.rootDir,
       viteEntry: project.paths.viteEntry,
     });
-    let shell: Awaited<ReturnType<typeof readSourceFile>> | null = null;
+    let shell: SourceFile | null = null;
 
     for (const shellPath of shellPaths) {
-      if (await fileExists(shellPath)) {
-        shell = await readSourceFile(shellPath);
+      shell = await readProjectSourceFile(project, shellPath);
+
+      if (shell) {
         break;
       }
     }

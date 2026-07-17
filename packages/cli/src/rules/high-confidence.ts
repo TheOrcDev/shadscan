@@ -1,25 +1,19 @@
-import { access, readFile } from "node:fs/promises";
 import path from "node:path";
-import { glob } from "tinyglobby";
 import type {
   AuditContext,
   AuditEvidence,
   AuditRule,
   AuditRuleResult,
 } from "../audit";
+import {
+  fileExists,
+  findFiles,
+  findSourceMatch,
+  getProjectSourceFiles,
+  getTextLineNumber,
+  readProjectSourceFile,
+} from "./source-files";
 
-interface SourceFile {
-  content: string;
-  path: string;
-}
-
-const SOURCE_PATTERNS = [
-  "app/**/*.{js,jsx,ts,tsx}",
-  "src/**/*.{js,jsx,ts,tsx}",
-  "components/**/*.{js,jsx,ts,tsx}",
-  "lib/**/*.{js,jsx,ts,tsx}",
-  "index.html",
-];
 const THEME_PROVIDER_PATTERN = /(<ThemeProvider\b|next-themes|useTheme\()/;
 const KEYDOWN_HANDLER_PATTERN = /addEventListener\(["']keydown["']|onKeyDown/;
 const THEME_TOGGLE_PATTERN = /(setTheme\(|classList\.toggle\(["']dark["'])/;
@@ -35,47 +29,6 @@ const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
 const TOAST_PATTERN =
   /(<Toaster\b|<ToastProvider\b|from\s+["']sonner["']|useToast\()/;
-
-const fileExists = async (filePath: string): Promise<boolean> => {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const getLineNumber = (
-  content: string,
-  pattern: RegExp
-): number | undefined => {
-  const match = pattern.exec(content);
-
-  if (!match || match.index < 0) {
-    return;
-  }
-
-  return content.slice(0, match.index).split("\n").length;
-};
-
-const getSourceFiles = async (context: AuditContext): Promise<SourceFile[]> => {
-  const files = await glob(SOURCE_PATTERNS, {
-    absolute: true,
-    cwd: context.project.rootDir,
-    deep: 8,
-    ignore: ["**/.next/**", "**/dist/**", "**/node_modules/**"],
-  });
-  const sourceFiles: SourceFile[] = [];
-
-  for (const filePath of files) {
-    sourceFiles.push({
-      content: await readFile(filePath, "utf8"),
-      path: filePath,
-    });
-  }
-
-  return sourceFiles;
-};
 
 const evidence = (
   message: string,
@@ -112,30 +65,14 @@ const fail = (
 const findFirstSourceMatch = async (
   context: AuditContext,
   pattern: RegExp
-): Promise<{ file: SourceFile; line: number | undefined } | null> => {
-  const files = await getSourceFiles(context);
-
-  for (const file of files) {
-    const line = getLineNumber(file.content, pattern);
-
-    if (line !== undefined) {
-      return { file, line };
-    }
-  }
-
-  return null;
-};
+): ReturnType<typeof findSourceMatch> =>
+  findSourceMatch(context.project, pattern);
 
 const hasAnyFile = async (
   rootDir: string,
   patterns: string[]
 ): Promise<string | null> => {
-  const matches = await glob(patterns, {
-    absolute: true,
-    cwd: rootDir,
-    deep: 4,
-    ignore: ["**/.next/**", "**/dist/**", "**/node_modules/**"],
-  });
+  const matches = await findFiles(rootDir, patterns, 4);
 
   return matches[0] ?? null;
 };
@@ -217,7 +154,7 @@ const themeHotkeyPresentRule: AuditRule = {
   id: "theme-hotkey-present",
   maxScore: 5,
   run: async (context) => {
-    const files = await getSourceFiles(context);
+    const files = await getProjectSourceFiles(context.project);
 
     for (const file of files) {
       const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(file.content);
@@ -229,7 +166,7 @@ const themeHotkeyPresentRule: AuditRule = {
         return pass(
           "Dark-mode keyboard shortcut found and typing targets are guarded.",
           file.path,
-          getLineNumber(file.content, KEYDOWN_HANDLER_PATTERN)
+          getTextLineNumber(file.content, KEYDOWN_HANDLER_PATTERN)
         );
       }
     }
@@ -268,15 +205,22 @@ const metadataConfiguredRule: AuditRule = {
     const indexHtmlPath = path.join(context.project.rootDir, "index.html");
 
     if (await fileExists(indexHtmlPath)) {
-      const content = await readFile(indexHtmlPath, "utf8");
-      const hasTitle = HTML_TITLE_PATTERN.test(content);
-      const hasDescription = HTML_DESCRIPTION_PATTERN.test(content);
+      const document = await readProjectSourceFile(
+        context.project,
+        indexHtmlPath
+      );
+      const hasTitle = document
+        ? HTML_TITLE_PATTERN.test(document.content)
+        : false;
+      const hasDescription = document
+        ? HTML_DESCRIPTION_PATTERN.test(document.content)
+        : false;
 
       if (hasTitle && hasDescription) {
         return pass(
           "Document title and description meta tag found.",
           indexHtmlPath,
-          getLineNumber(content, HTML_TITLE_PATTERN)
+          getTextLineNumber(document?.content ?? "", HTML_TITLE_PATTERN)
         );
       }
     }
@@ -315,13 +259,16 @@ const faviconPresentRule: AuditRule = {
     const indexHtmlPath = path.join(rootDir, "index.html");
 
     if (await fileExists(indexHtmlPath)) {
-      const content = await readFile(indexHtmlPath, "utf8");
+      const document = await readProjectSourceFile(
+        context.project,
+        indexHtmlPath
+      );
 
-      if (FAVICON_LINK_PATTERN.test(content)) {
+      if (document && FAVICON_LINK_PATTERN.test(document.content)) {
         return pass(
           "Favicon link found in index.html.",
           indexHtmlPath,
-          getLineNumber(content, FAVICON_LINK_PATTERN)
+          getTextLineNumber(document.content, FAVICON_LINK_PATTERN)
         );
       }
     }

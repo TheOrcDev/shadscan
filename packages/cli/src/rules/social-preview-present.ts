@@ -2,11 +2,10 @@ import path from "node:path";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
-  fileExists,
   findFiles,
   getProjectSourceFiles,
   getTextLineNumber,
-  readSourceFile,
+  readProjectSourceFile,
 } from "./source-files";
 
 const NEXT_SOCIAL_METADATA_PATTERN =
@@ -58,12 +57,12 @@ const socialPreviewPresentRule: AuditRule = {
     }
 
     const indexPath = path.join(project.rootDir, "index.html");
+    const document = await readProjectSourceFile(project, indexPath);
 
-    if (!(await fileExists(indexPath))) {
+    if (!document) {
       return notApplicable("No HTML document entry file was found.");
     }
 
-    const document = await readSourceFile(indexPath);
     const line = getTextLineNumber(document.content, HTML_SOCIAL_IMAGE_PATTERN);
 
     if (line !== undefined) {
