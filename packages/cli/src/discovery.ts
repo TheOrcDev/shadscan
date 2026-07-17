@@ -8,6 +8,7 @@ type JsonObject = Record<string, unknown>;
 type FrameworkAdapter = "next-app-router" | "vite-react" | "generic-react";
 
 type Confidence = "high" | "medium" | "low";
+type ProjectDiscoveryErrorCode = "PROJECT_NOT_FOUND" | "UNSUPPORTED_PROJECT";
 
 interface FrameworkDiscovery {
   adapter: FrameworkAdapter;
@@ -49,8 +50,14 @@ interface ProjectDiscovery {
 }
 
 class ProjectDiscoveryError extends Error {
-  constructor(message: string) {
+  readonly code: ProjectDiscoveryErrorCode;
+
+  constructor(
+    message: string,
+    code: ProjectDiscoveryErrorCode = "PROJECT_NOT_FOUND"
+  ) {
     super(message);
+    this.code = code;
     this.name = "ProjectDiscoveryError";
   }
 }
@@ -269,6 +276,14 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
   const packageJsonPath = path.join(rootDir, "package.json");
   const packageJson = await readJson(packageJsonPath);
   const dependencies = getDependencies(packageJson);
+
+  if (!dependencies.react) {
+    throw new ProjectDiscoveryError(
+      "The nearest package does not declare React; run Shadscan from a React application package.",
+      "UNSUPPORTED_PROJECT"
+    );
+  }
+
   const warnings: string[] = [];
   const componentsJsonPath = path.join(rootDir, "components.json");
   let shadcnConfig: JsonObject | undefined;
@@ -333,5 +348,10 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
   };
 };
 
-export type { Confidence, FrameworkAdapter, ProjectDiscovery };
+export type {
+  Confidence,
+  FrameworkAdapter,
+  ProjectDiscovery,
+  ProjectDiscoveryErrorCode,
+};
 export { discoverProject, ProjectDiscoveryError };

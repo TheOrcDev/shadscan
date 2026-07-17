@@ -170,7 +170,7 @@ describe("runAudit", () => {
     ]);
   });
 
-  it("weights category scores and normalizes active categories to 100", async () => {
+  it("weights scored findings without letting advisories affect the denominator", async () => {
     const rootDir = await createReactFixture();
 
     const report = await runAudit(rootDir, {
@@ -199,8 +199,11 @@ describe("runAudit", () => {
       "fail",
       "advisory",
     ]);
-    expect(report.score).toBe(67);
-    expect(report.grade).toBe("D");
+    expect(report.score).toBe(50);
+    expect(report.grade).toBe("F");
+    expect(
+      report.categories.find((category) => category.id === "states")?.applicable
+    ).toBe(false);
     expect(report.agentHandoff.suggestedSkills).toEqual([
       "shadscan",
       "diagnose",
@@ -226,6 +229,9 @@ describe("runAudit", () => {
         status: "advisory",
       },
     ]);
+    expect(report.agentHandoff.actionables[0]?.acceptanceCriteria[0]).toBe(
+      "The Shadscan finding `interaction-fail` reports pass when rerun with the same ruleset and category scope."
+    );
   });
 
   it("does not let low-confidence failures reduce the main score", async () => {
@@ -243,7 +249,8 @@ describe("runAudit", () => {
 
     expect(report.findings[0]?.status).toBe("advisory");
     expect(report.findings[0]?.impactsScore).toBe(false);
-    expect(report.score).toBe(100);
+    expect(report.score).toBeNull();
+    expect(report.grade).toBeNull();
   });
 
   it("keeps zero-point rules outside score calculations", async () => {
@@ -263,7 +270,7 @@ describe("runAudit", () => {
     expect(report.categories.every((category) => !category.applicable)).toBe(
       true
     );
-    expect(report.score).toBe(100);
+    expect(report.score).toBeNull();
   });
 
   it("filters rules by adapter", async () => {
@@ -314,10 +321,40 @@ describe("runAudit", () => {
     ]);
     expect(report.score).toBe(100);
   });
+
+  it("rounds the overall weighted score only once", async () => {
+    const rootDir = await createReactFixture();
+    const categories = ["foundation", "interaction", "states"] as const;
+    const rules = categories.flatMap((category) => [
+      createRule({
+        category,
+        id: `${category}-pass`,
+        run: () => ({ status: "pass" }),
+      }),
+      createRule({
+        category,
+        id: `${category}-fail-one`,
+        run: () => ({ status: "fail" }),
+      }),
+      createRule({
+        category,
+        id: `${category}-fail-two`,
+        run: () => ({ status: "fail" }),
+      }),
+    ]);
+
+    const report = await runAudit(rootDir, { rules });
+
+    expect(report.score).toBe(33);
+    const activeCategoryScore = report.categories
+      .filter((category) => category.applicable)
+      .reduce((total, category) => total + category.score, 0);
+    expect(activeCategoryScore).toBeCloseTo(20, 10);
+  });
 });
 
 describe("createAuditReport", () => {
-  it("returns full credit when no rules apply", () => {
+  it("returns an unassessed result when no scored rules apply", () => {
     const project: ProjectDiscovery = {
       dependencies: {},
       framework: {
@@ -355,7 +392,9 @@ describe("createAuditReport", () => {
       project,
     });
 
-    expect(report.score).toBe(100);
+    expect(report.score).toBeNull();
+    expect(report.grade).toBeNull();
+    expect(report.agentHandoff.goal).toContain("score is unassessed");
     expect(report.categories.every((category) => !category.applicable)).toBe(
       true
     );

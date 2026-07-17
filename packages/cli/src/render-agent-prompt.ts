@@ -9,8 +9,11 @@ const PRIORITY_ORDER = {
   P2: 2,
 } as const;
 
+const UNSAFE_EMBEDDED_JSON_PATTERN =
+  /[<>&\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+
 const escapeBoundaryCharacters = (value: string): string =>
-  value.replace(/[<>&]/g, (character) => {
+  value.replace(UNSAFE_EMBEDDED_JSON_PATTERN, (character) => {
     if (character === "<") {
       return "\\u003c";
     }
@@ -19,7 +22,15 @@ const escapeBoundaryCharacters = (value: string): string =>
       return "\\u003e";
     }
 
-    return "\\u0026";
+    if (character === "&") {
+      return "\\u0026";
+    }
+
+    const codePoint = character.codePointAt(0);
+
+    return codePoint === undefined
+      ? ""
+      : `\\u${codePoint.toString(16).padStart(4, "0")}`;
   });
 
 const sortEvidence = (evidence: AuditEvidence[]): AuditEvidence[] =>

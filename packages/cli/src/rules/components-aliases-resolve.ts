@@ -1,10 +1,39 @@
-import { access, readFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import path from "node:path";
-import { parse } from "jsonc-parser";
+import {
+  type CompilerOptions,
+  getParsedCommandLineOfConfigFile,
+  type ParseConfigFileHost,
+  sys,
+} from "typescript";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 
-type JsonObject = Record<string, unknown>;
+type CompilerOptionsWithPathsBase = CompilerOptions & {
+  pathsBasePath?: string;
+};
+
+const MODULE_CANDIDATE_SUFFIXES = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mts",
+  ".cts",
+  ".mjs",
+  ".cjs",
+  ".json",
+  "/index.ts",
+  "/index.tsx",
+  "/index.js",
+  "/index.jsx",
+] as const;
+
+const parseConfigHost: ParseConfigFileHost = {
+  ...sys,
+  onUnRecoverableConfigFileDiagnostic: () => undefined,
+};
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -19,6 +48,7 @@ const getPathMappings = async (
   rootDir: string,
   tsconfigPath: string | null
 ): Promise<{
+  basePath: string;
   configPath: string;
   mappings: Record<string, string[]>;
 } | null> => {
@@ -28,71 +58,79 @@ const getPathMappings = async (
     return null;
   }
 
-  const parsedConfig: unknown = parse(await readFile(configPath, "utf8"));
+  const parsedConfig = getParsedCommandLineOfConfigFile(
+    configPath,
+    {},
+    parseConfigHost
+  );
+  const options = parsedConfig?.options as
+    | CompilerOptionsWithPathsBase
+    | undefined;
+  const configuredBasePath =
+    options?.baseUrl ?? options?.pathsBasePath ?? path.dirname(configPath);
 
-  if (
-    !parsedConfig ||
-    typeof parsedConfig !== "object" ||
-    Array.isArray(parsedConfig)
-  ) {
-    return { configPath, mappings: {} };
-  }
-
-  const config = parsedConfig as JsonObject;
-  const compilerOptions = config.compilerOptions;
-
-  if (
-    !compilerOptions ||
-    typeof compilerOptions !== "object" ||
-    Array.isArray(compilerOptions)
-  ) {
-    return { configPath, mappings: {} };
-  }
-
-  const paths = (compilerOptions as JsonObject).paths;
-
-  if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
-    return { configPath, mappings: {} };
-  }
-
-  const mappings: Record<string, string[]> = {};
-
-  for (const [key, value] of Object.entries(paths)) {
-    if (
-      Array.isArray(value) &&
-      value.every((item) => typeof item === "string")
-    ) {
-      mappings[key] = value;
-    }
-  }
-
-  return { configPath, mappings };
+  return {
+    basePath: path.resolve(configuredBasePath),
+    configPath,
+    mappings: options?.paths ?? {},
+  };
 };
 
-const mappingMatchesAlias = (mapping: string, alias: string): boolean => {
+const getMappingCapture = (mapping: string, alias: string): string | null => {
   const wildcardIndex = mapping.indexOf("*");
 
   if (wildcardIndex === -1) {
-    return mapping === alias;
+    return mapping === alias ? "" : null;
   }
 
   const prefix = mapping.slice(0, wildcardIndex);
   const suffix = mapping.slice(wildcardIndex + 1);
 
-  return alias.startsWith(prefix) && alias.endsWith(suffix);
-};
-
-const isResolvableAlias = (
-  alias: string,
-  mappings: Record<string, string[]>
-): boolean => {
-  if (alias.startsWith("./") || alias.startsWith("../")) {
-    return true;
+  if (!(alias.startsWith(prefix) && alias.endsWith(suffix))) {
+    return null;
   }
 
-  return Object.keys(mappings).some((mapping) =>
-    mappingMatchesAlias(mapping, alias)
-  );
+  return alias.slice(prefix.length, alias.length - suffix.length || undefined);
+};
+
+const targetExists = async (targetPath: string): Promise<boolean> => {
+  for (const suffix of MODULE_CANDIDATE_SUFFIXES) {
+    if (await fileExists(`${targetPath}${suffix}`)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const isResolvableAlias = async (
+  alias: string,
+  rootDir: string,
+  pathMappings: NonNullable<Awaited<ReturnType<typeof getPathMappings>>>
+): Promise<boolean> => {
+  if (alias.startsWith("./") || alias.startsWith("../")) {
+    return targetExists(path.resolve(rootDir, alias));
+  }
+
+  for (const [mapping, targets] of Object.entries(pathMappings.mappings)) {
+    const capture = getMappingCapture(mapping, alias);
+
+    if (capture === null) {
+      continue;
+    }
+
+    for (const target of targets) {
+      const mappedTarget = target.replace("*", capture);
+
+      if (
+        await targetExists(path.resolve(pathMappings.basePath, mappedTarget))
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 };
 
 const componentsAliasesResolveRule: AuditRule = {
@@ -125,9 +163,15 @@ const componentsAliasesResolveRule: AuditRule = {
       );
     }
 
-    const unresolvedAliases = aliases.filter(
-      ([, alias]) => !isResolvableAlias(alias, pathMappings.mappings)
-    );
+    const unresolvedAliases: typeof aliases = [];
+
+    for (const aliasEntry of aliases) {
+      if (
+        !(await isResolvableAlias(aliasEntry[1], project.rootDir, pathMappings))
+      ) {
+        unresolvedAliases.push(aliasEntry);
+      }
+    }
 
     if (unresolvedAliases.length > 0) {
       const names = unresolvedAliases
@@ -135,14 +179,14 @@ const componentsAliasesResolveRule: AuditRule = {
         .join(", ");
 
       return fail(
-        `Unresolved shadcn aliases: ${names}.`,
-        "Add matching compilerOptions.paths entries or change the aliases in components.json.",
+        `Shadcn aliases without existing targets: ${names}.`,
+        "Add matching compilerOptions.paths entries that point to existing files or directories, or change the aliases in components.json.",
         { filePath: pathMappings.configPath }
       );
     }
 
     return pass(
-      `All ${aliases.length} shadcn aliases match configured path mappings.`,
+      `All ${aliases.length} shadcn aliases resolve to existing configured targets.`,
       pathMappings.configPath
     );
   },

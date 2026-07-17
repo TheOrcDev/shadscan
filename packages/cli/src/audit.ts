@@ -18,7 +18,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 1 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 2 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -159,14 +159,14 @@ interface AuditReport {
   engineVersion: string;
   findings: AuditFinding[];
   framework: ProjectDiscovery["framework"];
-  grade: AuditGrade;
+  grade: AuditGrade | null;
   maxScore: 100;
   packageManager: ProjectDiscovery["packageManager"];
   packageName: string | null;
   rulesetVersion: string;
   schemaVersion: typeof AUDIT_REPORT_SCHEMA_VERSION;
   scope: ScanScope;
-  score: number;
+  score: number | null;
   shadcn: Pick<
     ProjectDiscovery["shadcn"],
     "confidence" | "configPath" | "style"
@@ -269,13 +269,13 @@ const AuditReportSchema = z.object({
     adapter: z.enum(["generic-react", "next-app-router", "vite-react"]),
     evidence: z.array(z.string()),
   }),
-  grade: z.enum(["A", "B", "C", "D", "F"]),
+  grade: z.enum(["A", "B", "C", "D", "F"]).nullable(),
   maxScore: z.literal(100),
   packageManager: z.enum(["bun", "npm", "pnpm", "unknown", "yarn"]),
   packageName: z.string().nullable(),
   rulesetVersion: z.string().min(1),
   schemaVersion: z.literal(AUDIT_REPORT_SCHEMA_VERSION),
-  score: z.number().min(0).max(100),
+  score: z.number().min(0).max(100).nullable(),
   scope: z.object({
     categories: z.array(AuditCategorySchema).min(1),
   }),
@@ -437,7 +437,7 @@ const getCategoryScores = (findings: AuditFinding[]): AuditCategoryScore[] =>
       (finding) => finding.category === category
     );
     const scoredFindings = categoryFindings.filter(
-      (finding) => finding.status !== "not-applicable"
+      (finding) => finding.impactsScore
     );
     const rawMaxScore = scoredFindings.reduce(
       (total, finding) => total + finding.maxScore,
@@ -456,13 +456,13 @@ const getCategoryScores = (findings: AuditFinding[]): AuditCategoryScore[] =>
       id: category,
       maxScore: applicable ? weight : 0,
       percentage: ratio === null ? null : Math.round(ratio * 100),
-      score: ratio === null ? 0 : Math.round(ratio * weight),
+      score: ratio === null ? 0 : ratio * weight,
       title: CATEGORY_DETAILS[category].title,
       weight,
     };
   });
 
-const getTotalScore = (categories: AuditCategoryScore[]): number => {
+const getTotalScore = (categories: AuditCategoryScore[]): number | null => {
   const applicableCategories = categories.filter(
     (category) => category.applicable
   );
@@ -472,7 +472,7 @@ const getTotalScore = (categories: AuditCategoryScore[]): number => {
   );
 
   if (activeWeight === 0) {
-    return 100;
+    return null;
   }
 
   const weightedScore = applicableCategories.reduce(
@@ -505,7 +505,7 @@ const getActionableSummary = (finding: AuditFinding): string => {
 
 const getActionableAcceptanceCriteria = (finding: AuditFinding): string[] => {
   const criteria = [
-    `The Shadscan finding \`${finding.id}\` reports pass or no longer appears as ${finding.status}.`,
+    `The Shadscan finding \`${finding.id}\` reports pass when rerun with the same ruleset and category scope.`,
   ];
 
   if (finding.remediation) {
@@ -555,9 +555,9 @@ const createAgentHandoff = ({
   score,
 }: {
   findings: AuditFinding[];
-  grade: AuditGrade;
+  grade: AuditGrade | null;
   project: ProjectDiscovery;
-  score: number;
+  score: number | null;
 }): AgentHandoff => {
   const packageName = project.packageName ?? "the target app";
   const actionables = findings
@@ -598,10 +598,17 @@ const createAgentHandoff = ({
         left.findingId.localeCompare(right.findingId)
       );
     });
-  const goal =
-    actionables.length === 0
+  const goal = (() => {
+    if (score === null) {
+      return actionables.length === 0
+        ? `${packageName}'s Shadscan score is unassessed because no score-impacting rules applied; preserve the existing UI and verify the scan scope.`
+        : `${packageName}'s Shadscan score is unassessed; address the agent-ready findings and rerun the same scope.`;
+    }
+
+    return actionables.length === 0
       ? `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}); no missing fundamentals were found.`
       : `Raise ${packageName}'s Shadscan score from ${score}/100 (${grade}) by addressing agent-ready UI audit findings.`;
+  })();
   const configPath = project.shadcn.configPath
     ? (getProjectRelativePath(project.rootDir, project.shadcn.configPath) ??
       "outside project")
@@ -647,7 +654,7 @@ const createAuditReport = ({
   const normalizedFindings = normalizeFindingPaths(findings, project.rootDir);
   const categories = getCategoryScores(normalizedFindings);
   const score = getTotalScore(categories);
-  const grade = getGrade(score);
+  const grade = score === null ? null : getGrade(score);
   const report: AuditReport = {
     agentHandoff: createAgentHandoff({
       findings: normalizedFindings,

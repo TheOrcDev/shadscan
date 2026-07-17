@@ -1,14 +1,17 @@
-import { ProjectDiscoveryError } from "./discovery";
+import {
+  ProjectDiscoveryError,
+  type ProjectDiscoveryErrorCode,
+} from "./discovery";
 
 interface CliFailure {
-  code: "AUDIT_FAILED" | "INVALID_PROJECT_METADATA" | "PROJECT_NOT_FOUND";
+  code: "AUDIT_FAILED" | "INVALID_PROJECT_METADATA" | ProjectDiscoveryErrorCode;
   message: string;
 }
 
 const normalizeCliFailure = (error: unknown): CliFailure => {
   if (error instanceof ProjectDiscoveryError) {
     return {
-      code: "PROJECT_NOT_FOUND",
+      code: error.code,
       message: error.message,
     };
   }

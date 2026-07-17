@@ -20,6 +20,10 @@ describe("foundation rules", () => {
         "tsconfig.json",
         JSON.stringify({ compilerOptions: { paths: { "@/*": ["./*"] } } })
       );
+      await fixture.write(
+        "components/Button.tsx",
+        "export function Button() { return <button />; }"
+      );
 
       expect(
         (await runRule(fixture.rootDir, componentsAliasesResolveRule)).status
@@ -38,6 +42,61 @@ describe("foundation rules", () => {
       expect(finding.evidence[0]?.message).toContain(
         "components (@/components)"
       );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("resolves inherited path mappings only when their targets exist", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components.json",
+        JSON.stringify({
+          aliases: {
+            ui: "@/components/ui",
+            utils: "@/lib/utils",
+          },
+        })
+      );
+      await fixture.write(
+        "config/tsconfig.base.json",
+        JSON.stringify({
+          compilerOptions: { paths: { "@/*": ["../src/*"] } },
+        })
+      );
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({ extends: "./config/tsconfig.base.json" })
+      );
+      await fixture.write(
+        "src/components/ui/Button.tsx",
+        "export function Button() { return <button />; }"
+      );
+      await fixture.write(
+        "src/lib/utils.ts",
+        "export const cn = (...values: string[]) => values.join(' ');"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, componentsAliasesResolveRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "config/tsconfig.base.json",
+        JSON.stringify({
+          compilerOptions: { paths: { "@/*": ["../missing/*"] } },
+        })
+      );
+
+      const finding = await runRule(
+        fixture.rootDir,
+        componentsAliasesResolveRule
+      );
+
+      expect(finding.status).toBe("fail");
+      expect(finding.evidence[0]?.message).toContain("ui (@/components/ui)");
     } finally {
       await fixture.cleanup();
     }

@@ -153,6 +153,20 @@ describe("discoverProject", () => {
     expect(project.framework.evidence).toContain("react dependency found");
   });
 
+  it("rejects packages that do not declare React", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        express: "5.1.0",
+      },
+    });
+
+    await expect(discoverProject(rootDir)).rejects.toMatchObject({
+      code: "UNSUPPORTED_PROJECT",
+      name: "ProjectDiscoveryError",
+    });
+  });
+
   it("continues with low confidence when components.json is missing", async () => {
     const rootDir = await createFixture();
     await writePackageJson(rootDir, {

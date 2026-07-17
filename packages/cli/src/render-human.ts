@@ -6,6 +6,24 @@ interface RenderHumanReportOptions {
 
 const BAR_WIDTH = 16;
 
+const isUnsafeTerminalCodePoint = (codePoint: number): boolean =>
+  codePoint <= 0x1f ||
+  (codePoint >= 0x7f && codePoint <= 0x9f) ||
+  (codePoint >= 0x20_28 && codePoint <= 0x20_2e) ||
+  (codePoint >= 0x20_66 && codePoint <= 0x20_69);
+
+const sanitizeTerminalText = (value: string): string =>
+  Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0);
+
+    return codePoint !== undefined && isUnsafeTerminalCodePoint(codePoint)
+      ? " "
+      : character;
+  }).join("");
+
+const formatCategoryScore = (score: number): string =>
+  Number.isInteger(score) ? String(score) : score.toFixed(1);
+
 const getCategoryBar = (percentage: number | null): string => {
   if (percentage === null) {
     return "-".repeat(BAR_WIDTH);
@@ -29,7 +47,7 @@ const renderEvidence = (finding: AuditFinding): string[] =>
       ? ` (${evidence.filePath}${evidence.line ? `:${evidence.line}` : ""})`
       : "";
 
-    return `  Evidence: ${evidence.message}${location}`;
+    return `  Evidence: ${sanitizeTerminalText(evidence.message)}${sanitizeTerminalText(location)}`;
   });
 
 const getActionableFindings = (report: AuditReport): AuditFinding[] =>
@@ -37,14 +55,70 @@ const getActionableFindings = (report: AuditReport): AuditFinding[] =>
     (finding) => finding.status === "fail" || finding.status === "advisory"
   );
 
+const renderCategories = (report: AuditReport): string[] =>
+  report.categories.map((category) => {
+    const score = category.applicable
+      ? `${formatCategoryScore(category.score)}/${category.maxScore}`
+      : "n/a";
+    const percentage =
+      category.percentage === null ? "n/a" : `${category.percentage}%`;
+
+    return `  ${category.title}: [${getCategoryBar(category.percentage)}] ${score} (${percentage})`;
+  });
+
+const renderFindings = (
+  report: AuditReport,
+  options: RenderHumanReportOptions
+): string[] => {
+  const actionableFindings = getActionableFindings(report);
+
+  if (actionableFindings.length === 0) {
+    return ["", "No missing fundamentals found."];
+  }
+
+  const lines = ["", "Findings:"];
+
+  for (const finding of actionableFindings) {
+    lines.push(
+      "",
+      `${getFindingLabel(finding)}: ${sanitizeTerminalText(finding.title)}`,
+      ...renderEvidence(finding)
+    );
+
+    if (finding.remediation) {
+      lines.push(`  Fix: ${sanitizeTerminalText(finding.remediation)}`);
+    }
+
+    if (options.includeRoast && finding.roast) {
+      lines.push(`  ${sanitizeTerminalText(finding.roast)}`);
+    }
+  }
+
+  return lines;
+};
+
+const renderWarnings = (report: AuditReport): string[] => {
+  if (report.warnings.length === 0) {
+    return [];
+  }
+
+  return [
+    "",
+    "Warnings:",
+    ...report.warnings.map((warning) => `  ${sanitizeTerminalText(warning)}`),
+  ];
+};
+
 const renderAgentHandoff = (report: AuditReport): string[] => {
   const lines = [
     "",
     "Agent handoff:",
-    `  Goal: ${report.agentHandoff.goal}`,
-    `  Suggested skills: ${report.agentHandoff.suggestedSkills.join(", ")}`,
+    `  Goal: ${sanitizeTerminalText(report.agentHandoff.goal)}`,
+    `  Suggested skills: ${report.agentHandoff.suggestedSkills.map(sanitizeTerminalText).join(", ")}`,
     "  Context:",
-    ...report.agentHandoff.context.map((context) => `    - ${context}`),
+    ...report.agentHandoff.context.map(
+      (context) => `    - ${sanitizeTerminalText(context)}`
+    ),
     "  Actionables:",
   ];
 
@@ -56,9 +130,9 @@ const renderAgentHandoff = (report: AuditReport): string[] => {
 
   for (const [index, actionable] of report.agentHandoff.actionables.entries()) {
     lines.push(
-      `    ${index + 1}. [${actionable.priority}] ${actionable.title}`,
-      `       Finding: ${actionable.findingId} (${actionable.status}, ${actionable.confidence} confidence, ${actionable.category})`,
-      `       Summary: ${actionable.summary}`
+      `    ${index + 1}. [${actionable.priority}] ${sanitizeTerminalText(actionable.title)}`,
+      `       Finding: ${sanitizeTerminalText(actionable.findingId)} (${actionable.status}, ${actionable.confidence} confidence, ${actionable.category})`,
+      `       Summary: ${sanitizeTerminalText(actionable.summary)}`
     );
 
     if (actionable.scoreImpact > 0) {
@@ -66,10 +140,14 @@ const renderAgentHandoff = (report: AuditReport): string[] => {
     }
 
     if (actionable.suggestedFix) {
-      lines.push(`       Fix: ${actionable.suggestedFix}`);
+      lines.push(
+        `       Fix: ${sanitizeTerminalText(actionable.suggestedFix)}`
+      );
     }
 
-    lines.push(`       Acceptance: ${actionable.acceptanceCriteria.join(" ")}`);
+    lines.push(
+      `       Acceptance: ${actionable.acceptanceCriteria.map(sanitizeTerminalText).join(" ")}`
+    );
   }
 
   return lines;
@@ -88,61 +166,19 @@ const renderHumanReport = (
   options: RenderHumanReportOptions
 ): string => {
   const lines: string[] = [
-    `Your Shadscan score: ${report.score}/100`,
-    `Grade: ${report.grade}`,
+    `Your Shadscan score: ${report.score === null ? "unassessed" : `${report.score}/100`}`,
+    `Grade: ${report.grade ?? "n/a"}`,
     "Shadscan has entered the chat.",
     "",
     `Adapter: ${report.framework.adapter}`,
-    `Package: ${report.packageName ?? "unknown"}`,
+    `Package: ${sanitizeTerminalText(report.packageName ?? "unknown")}`,
     "",
     "Categories:",
+    ...renderCategories(report),
+    ...renderFindings(report, options),
+    ...renderAgentHandoff(report),
+    ...renderWarnings(report),
   ];
-
-  for (const category of report.categories) {
-    const score = category.applicable
-      ? `${category.score}/${category.maxScore}`
-      : "n/a";
-    const percentage =
-      category.percentage === null ? "n/a" : `${category.percentage}%`;
-    lines.push(
-      `  ${category.title}: [${getCategoryBar(category.percentage)}] ${score} (${percentage})`
-    );
-  }
-
-  const actionableFindings = getActionableFindings(report);
-
-  lines.push("");
-
-  if (actionableFindings.length === 0) {
-    lines.push("No missing fundamentals found.");
-  } else {
-    lines.push("Findings:");
-
-    for (const finding of actionableFindings) {
-      lines.push("");
-      lines.push(`${getFindingLabel(finding)}: ${finding.title}`);
-      lines.push(...renderEvidence(finding));
-
-      if (finding.remediation) {
-        lines.push(`  Fix: ${finding.remediation}`);
-      }
-
-      if (options.includeRoast && finding.roast) {
-        lines.push(`  ${finding.roast}`);
-      }
-    }
-  }
-
-  lines.push(...renderAgentHandoff(report));
-
-  if (report.warnings.length > 0) {
-    lines.push("");
-    lines.push("Warnings:");
-
-    for (const warning of report.warnings) {
-      lines.push(`  ${warning}`);
-    }
-  }
 
   return `${lines.join("\n")}\n`;
 };

@@ -1,11 +1,13 @@
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import packageJson from "../package.json";
-import { createProgram } from "../src/cli";
+import { createProgram, scoreFailsThreshold } from "../src/cli";
 import { normalizeCliFailure } from "../src/cli-error";
 import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
 
 const captureOutput = async (args: string[]): Promise<string> => {
+  const previousCwd = process.cwd();
   let output = "";
   const write = vi
     .spyOn(process.stdout, "write")
@@ -15,9 +17,11 @@ const captureOutput = async (args: string[]): Promise<string> => {
     });
 
   try {
+    process.chdir(path.resolve(import.meta.dirname, "../../.."));
     await createProgram().parseAsync(["node", "shadscan", ...args]);
     return output;
   } finally {
+    process.chdir(previousCwd);
     write.mockRestore();
   }
 };
@@ -62,6 +66,13 @@ describe("CLI contract", () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it("fails score gates when a scan is unassessed", () => {
+    expect(scoreFailsThreshold(null, 0)).toBe(true);
+    expect(scoreFailsThreshold(null, 100)).toBe(true);
+    expect(scoreFailsThreshold(90, 90)).toBe(false);
+    expect(scoreFailsThreshold(89, 90)).toBe(true);
+  });
+
   it("rejects conflicting output selectors", async () => {
     const program = createProgram().exitOverride();
     program.configureOutput({
@@ -89,6 +100,17 @@ describe("CLI contract", () => {
     ).toEqual({
       code: "PROJECT_NOT_FOUND",
       message: "No package.json found.",
+    });
+    expect(
+      normalizeCliFailure(
+        new ProjectDiscoveryError(
+          "The nearest package does not declare React.",
+          "UNSUPPORTED_PROJECT"
+        )
+      )
+    ).toEqual({
+      code: "UNSUPPORTED_PROJECT",
+      message: "The nearest package does not declare React.",
     });
     expect(
       normalizeCliFailure(new SyntaxError("private parser detail"))

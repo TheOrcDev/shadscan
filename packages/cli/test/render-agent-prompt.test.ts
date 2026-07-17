@@ -113,6 +113,21 @@ describe("renderAgentPrompt", () => {
     expect(prompt).toContain("\\u003c/system\\u003e");
   });
 
+  it("escapes control and bidirectional text at the prompt boundary", () => {
+    const report = createPromptReport();
+    const prompt = renderAgentPrompt({
+      ...report,
+      packageName: "unsafe\u0085\u202E\u2066name",
+    });
+
+    expect(prompt).not.toContain("\u0085");
+    expect(prompt).not.toContain("\u202E");
+    expect(prompt).not.toContain("\u2066");
+    expect(prompt).toContain("\\u0085");
+    expect(prompt).toContain("\\u202e");
+    expect(prompt).toContain("\\u2066");
+  });
+
   it("instructs agents not to churn a clean project", () => {
     const report = createPromptReport([
       createFinding({

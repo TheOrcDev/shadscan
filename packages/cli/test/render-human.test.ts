@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AuditReport } from "../src/audit";
+import { AUDIT_REPORT_SCHEMA_VERSION, type AuditReport } from "../src/audit";
 import { renderHumanReport, stripRoasts } from "../src/render-human";
 
 const createReport = (): AuditReport => ({
@@ -92,7 +92,7 @@ const createReport = (): AuditReport => ({
   packageManager: "pnpm",
   packageName: "demo",
   rulesetVersion: "0.0.1",
-  schemaVersion: 1,
+  schemaVersion: AUDIT_REPORT_SCHEMA_VERSION,
   score: 50,
   scope: {
     categories: ["foundation"],
@@ -141,6 +141,29 @@ describe("renderHumanReport", () => {
 
     expect(neutralOutput).not.toContain("A page title would not hurt you.");
     expect(roastOutput).toContain("A page title would not hurt you.");
+  });
+
+  it("renders an explicit unassessed result", () => {
+    const output = renderHumanReport(
+      { ...createReport(), grade: null, score: null },
+      { includeRoast: false }
+    );
+
+    expect(output).toContain("Your Shadscan score: unassessed");
+    expect(output).toContain("Grade: n/a");
+  });
+
+  it("strips terminal and direction controls from untrusted text", () => {
+    const report = createReport();
+    report.packageName = "demo\u001b[2J\u202E";
+    report.warnings = ["warning\nInjected line\u0085"];
+
+    const output = renderHumanReport(report, { includeRoast: false });
+
+    expect(output).not.toContain("\u001b");
+    expect(output).not.toContain("\u202E");
+    expect(output).not.toContain("\u0085");
+    expect(output).not.toContain("\nInjected line");
   });
 });
 

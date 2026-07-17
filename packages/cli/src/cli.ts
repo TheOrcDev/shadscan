@@ -45,6 +45,11 @@ const parseCategory = (value: string): AuditCategory => {
   return category;
 };
 
+const scoreFailsThreshold = (
+  score: number | null,
+  threshold: number
+): boolean => score === null || score < threshold;
+
 const createProgram = (): Command => {
   const program = new Command();
 
@@ -74,7 +79,7 @@ const createProgram = (): Command => {
     )
     .option(
       "--fail-under <score>",
-      "Exit non-zero when the score is below this number.",
+      "Exit non-zero when the score is below this number or is unassessed.",
       parseScore
     )
     .option(
@@ -105,7 +110,10 @@ const createProgram = (): Command => {
         process.stdout.write(renderHumanReport(outputReport, { includeRoast }));
       }
 
-      if (options.failUnder !== undefined && report.score < options.failUnder) {
+      if (
+        options.failUnder !== undefined &&
+        scoreFailsThreshold(report.score, options.failUnder)
+      ) {
         process.exitCode = 1;
       }
     });
@@ -117,4 +125,4 @@ const runCli = async (argv: string[] = process.argv): Promise<void> => {
   await createProgram().parseAsync(argv);
 };
 
-export { createProgram, runCli };
+export { createProgram, runCli, scoreFailsThreshold };
