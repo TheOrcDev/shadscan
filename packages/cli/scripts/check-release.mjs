@@ -56,7 +56,7 @@ const main = async () => {
     undefined,
     "The CLI package must be publishable."
   );
-  assert.deepEqual(manifest.bin, { shadscan: "./dist/cli.js" });
+  assert.deepEqual(manifest.bin, { shadscan: "dist/cli.js" });
   assert.ok(manifest.files.includes("dist"), "The tarball must include dist.");
   assert.ok(
     manifest.files.includes("LICENSE"),
