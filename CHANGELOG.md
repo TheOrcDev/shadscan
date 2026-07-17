@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.1 - 2026-07-18
+
 ### Added
 
 - Deterministic audits across 55 rules and six weighted categories.

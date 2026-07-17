@@ -2,12 +2,10 @@
 
 Audit a React shadcn app for missing UI fundamentals.
 
-The npm package is not published yet. From a checkout of the repository:
+Run the release candidate from npm's `next` channel:
 
 ```bash
-pnpm install
-pnpm cli:build
-node packages/cli/dist/cli.js /path/to/shadcn-app
+npx --yes shadscan@next /path/to/shadcn-app
 ```
 
 Useful flags:
@@ -27,7 +25,7 @@ prioritized actionables. JSON consumers can read this from `agentHandoff`.
 To hand the audit directly to an agent:
 
 ```bash
-node packages/cli/dist/cli.js /path/to/shadcn-app --prompt
+npx --yes shadscan@next /path/to/shadcn-app --prompt
 ```
 
 Prompt output is deterministic, neutral, repository-relative Markdown. It asks
@@ -52,3 +50,7 @@ return `1`. The complete command contract is maintained at
   <https://github.com/TheOrcDev/headless-shadcn/blob/main/docs/rules.md>.
 
 The first release is read-only. It does not edit project files.
+
+## License
+
+MIT
