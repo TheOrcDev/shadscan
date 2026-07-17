@@ -1,4 +1,5 @@
 import { accessibilityRules } from "./accessibility";
+import { asyncActionPendingStateRule } from "./async-action-pending-state";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
@@ -37,6 +38,7 @@ const defaultRules = [
   emptyStatePresentRule,
   errorStateRetryPresentRule,
   notFoundRecoveryPresentRule,
+  asyncActionPendingStateRule,
   ...accessibilityRules,
 ];
 

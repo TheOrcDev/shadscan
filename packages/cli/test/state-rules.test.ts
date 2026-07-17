@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { asyncActionPendingStateRule } from "../src/rules/async-action-pending-state";
 import { emptyStatePresentRule } from "../src/rules/empty-state-present";
 import { errorStateRetryPresentRule } from "../src/rules/error-state-retry-present";
 import { notFoundRecoveryPresentRule } from "../src/rules/not-found-recovery-present";
@@ -130,6 +131,30 @@ describe("state rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires async actions to communicate and guard pending state", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/form.tsx",
+        "export function Form() { return <form onSubmit={save}><Button>Save</Button></form>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, asyncActionPendingStateRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/form.tsx",
+        'export function Form() { const { isPending } = useFormStatus(); return <form action={save}><Button disabled={isPending}>{isPending ? "Saving..." : "Save"}</Button></form>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, asyncActionPendingStateRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
