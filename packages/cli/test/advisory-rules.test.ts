@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
+import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("browser-sensitive advisory rules", () => {
@@ -21,6 +22,30 @@ describe("browser-sensitive advisory rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, headingStructureSaneRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("advises when an app shell has no responsive source evidence", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <main className="p-4">Content</main>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, responsiveShellPresentRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <main className="p-4 md:grid">Content</main>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, responsiveShellPresentRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
