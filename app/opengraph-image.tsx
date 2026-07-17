@@ -75,7 +75,7 @@ export default function OpenGraphImage() {
             width: "auto",
           }}
         >
-          pnpm dlx shadscan
+          Static audit. No AI required.
         </div>
       </div>
     </div>,

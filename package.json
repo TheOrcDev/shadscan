@@ -56,10 +56,13 @@
     "cli:test": "pnpm --filter shadscan test",
     "cli:pack:dry-run": "npm pack ./packages/cli --dry-run",
     "cli:smoke": "pnpm --filter shadscan smoke",
+    "docs:rules": "pnpm --filter shadscan docs:rules",
+    "docs:check": "pnpm --filter shadscan docs:rules:check",
     "pretest:api": "pnpm cli:build",
     "test:api": "vitest run test/shadscan-api",
     "api:keygen": "node scripts/generate-api-key.mjs",
-    "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js --fail-under 100"
+    "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js --fail-under 100",
+    "audit:dependencies": "pnpm audit --prod --audit-level moderate"
   },
   "type": "module",
   "version": "0.0.1",

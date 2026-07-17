@@ -97,7 +97,7 @@ export default function Page() {
                     <span className="size-2 rounded-full bg-[oklch(0.72_0.18_150)]" />
                   </div>
                   <div className="font-mono text-muted-foreground text-xs">
-                    pnpm dlx shadscan
+                    node packages/cli/dist/cli.js .
                   </div>
                 </div>
 
@@ -184,10 +184,10 @@ export default function Page() {
                       className="size-4 text-primary"
                       weight="bold"
                     />
-                    Install
+                    Run from source
                   </div>
                   <pre className="overflow-x-auto bg-foreground p-4 text-background text-sm">
-                    <code>pnpm dlx shadscan --fail-under 80</code>
+                    <code>node packages/cli/dist/cli.js /path/to/app</code>
                   </pre>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button asChild>

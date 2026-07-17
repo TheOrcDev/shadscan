@@ -4,14 +4,14 @@
   "description": "Audit React shadcn apps for missing UI fundamentals.",
   "license": "UNLICENSED",
   "type": "module",
-  "homepage": "https://github.com/TheOrcDev/shadscan#readme",
+  "homepage": "https://github.com/TheOrcDev/headless-shadcn#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TheOrcDev/shadscan.git",
+    "url": "git+https://github.com/TheOrcDev/headless-shadcn.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/TheOrcDev/shadscan/issues"
+    "url": "https://github.com/TheOrcDev/headless-shadcn/issues"
   },
   "keywords": [
     "shadcn",
@@ -43,6 +43,8 @@
   "scripts": {
     "dev": "tsx src/bin.ts",
     "build": "tsup",
+    "docs:rules": "node --import tsx scripts/generate-rule-catalog.ts",
+    "docs:rules:check": "node --import tsx scripts/generate-rule-catalog.ts --check",
     "prepack": "pnpm build",
     "smoke": "node scripts/smoke-package.mjs",
     "test": "vitest run",

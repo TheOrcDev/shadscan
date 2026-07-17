@@ -6,26 +6,31 @@ If the command menu, theme toggle, keyboard shortcuts, empty states, loading sta
 
 ## Usage
 
+Shadscan is currently a source preview; the npm package is not published yet.
+From a repository checkout:
+
 ```bash
-pnpm dlx shadscan
+pnpm install
+pnpm cli:build
+node packages/cli/dist/cli.js /path/to/shadcn-app
 ```
 
 CI gate:
 
 ```bash
-pnpm dlx shadscan --fail-under 80
+node packages/cli/dist/cli.js /path/to/shadcn-app --fail-under 80
 ```
 
 Machine-readable output:
 
 ```bash
-pnpm dlx shadscan --json
+node packages/cli/dist/cli.js /path/to/shadcn-app --json
 ```
 
 Paste-ready agent prompt:
 
 ```bash
-pnpm dlx shadscan --prompt
+node packages/cli/dist/cli.js /path/to/shadcn-app --prompt
 ```
 
 For explicit output selection, use `--format human`, `--format json`, or
@@ -60,18 +65,10 @@ only the paste-ready remediation prompt.
 
 ## Current Checks
 
-- shadcn `components.json`
-- theme provider
-- dark-mode keyboard shortcut
-- metadata/head basics
-- favicon/app icon
-- Next `not-found.tsx`
-- app error boundary
-- toast setup
-- icon-only button labels
-- non-semantic click targets
-- form labels
-- dialog/sheet titles
+The bundled ruleset currently contains 55 deterministic checks across
+Foundation, Interaction, States, Accessibility, Forms and Data Entry, and
+Production Polish. See the generated [rule catalog](docs/rules.md) for every
+rule ID, confidence level, score behavior, description, and supported adapter.
 
 ## Local Development
 
@@ -81,6 +78,8 @@ pnpm cli:test
 pnpm cli:build
 pnpm test:api
 pnpm audit:self
+pnpm audit:dependencies
+pnpm docs:check
 pnpm check
 pnpm typecheck
 pnpm build
@@ -98,8 +97,12 @@ pnpm cli:test
 pnpm cli:build
 pnpm test:api
 pnpm audit:self
+pnpm audit:dependencies
+pnpm docs:check
 pnpm cli:pack:dry-run
 pnpm cli:smoke
 ```
 
-The package is not published yet. Choose and add a real license before publishing publicly.
+The package is not published yet. Public npm release remains blocked until the
+repository owner chooses and adds a license; the source docs intentionally do
+not advertise `pnpm dlx shadscan` before that release exists.

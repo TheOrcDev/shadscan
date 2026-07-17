@@ -35,6 +35,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check formatting and lint
         run: pnpm check
+      - name: Check generated rule catalog
+        run: pnpm docs:check
+      - name: Audit production dependencies
+        run: pnpm audit:dependencies
       - name: Typecheck CLI
         run: pnpm --filter shadscan typecheck
       - name: Typecheck site and API

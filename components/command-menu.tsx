@@ -21,7 +21,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 
-const INSTALL_COMMAND = "pnpm dlx shadscan --fail-under 80";
+const SOURCE_COMMAND = "node packages/cli/dist/cli.js /path/to/app";
 const REPOSITORY_URL = "https://github.com/TheOrcDev/headless-shadcn";
 
 function CommandMenu() {
@@ -57,13 +57,13 @@ function CommandMenu() {
     window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer");
   };
 
-  const copyInstallCommand = async () => {
+  const copySourceCommand = async () => {
     try {
-      await navigator.clipboard.writeText(INSTALL_COMMAND);
+      await navigator.clipboard.writeText(SOURCE_COMMAND);
       setOpen(false);
-      toast.success("Install command copied");
+      toast.success("Source command copied");
     } catch {
-      toast.error("Could not copy the install command");
+      toast.error("Could not copy the source command");
     }
   };
 
@@ -105,9 +105,9 @@ function CommandMenu() {
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="CLI">
-              <CommandItem onSelect={copyInstallCommand}>
+              <CommandItem onSelect={copySourceCommand}>
                 <ClipboardText weight="bold" />
-                Copy install command
+                Copy source command
               </CommandItem>
             </CommandGroup>
           </CommandList>

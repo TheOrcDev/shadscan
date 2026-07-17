@@ -8,6 +8,7 @@ export type {
   AuditFinding,
   AuditGrade,
   AuditReport,
+  AuditRuleAdapter,
   AuditRuleStatus,
   AuditSeverity,
   ScanScope,
@@ -25,5 +26,7 @@ export {
   AGENT_PROMPT_VERSION,
   renderAgentPrompt,
 } from "./render-agent-prompt";
+export type { RuleCatalogEntry } from "./rule-catalog";
+export { RULE_CATALOG } from "./rule-catalog";
 export type { ScanOptions } from "./scan";
 export { BUNDLED_RULESET_VERSION, scanProject } from "./scan";

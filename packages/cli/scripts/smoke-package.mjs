@@ -110,6 +110,16 @@ try {
   assert.ok(report.score < 100);
   assert.ok(!jsonResult.stdout.includes(temporaryRoot));
 
+  const explicitPathResult = await run(
+    executable,
+    [consumerDirectory, "--json"],
+    { cwd: packDirectory }
+  );
+  assert.equal(
+    JSON.parse(explicitPathResult.stdout).packageName,
+    "shadscan-smoke-consumer"
+  );
+
   const categoryResult = await run(
     executable,
     ["--json", "--category", "accessibility"],
@@ -140,8 +150,8 @@ try {
   await writeFile(
     importCheckPath,
     [
-      'import { AUDIT_REPORT_SCHEMA_VERSION, scanProject } from "shadscan";',
-      'if (AUDIT_REPORT_SCHEMA_VERSION !== 2 || typeof scanProject !== "function") {',
+      'import { AUDIT_REPORT_SCHEMA_VERSION, RULE_CATALOG, scanProject } from "shadscan";',
+      'if (AUDIT_REPORT_SCHEMA_VERSION !== 2 || RULE_CATALOG.length !== 55 || typeof scanProject !== "function") {',
       '  throw new Error("The installed library exports are incomplete.");',
       "}",
       "",
