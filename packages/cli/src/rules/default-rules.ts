@@ -11,6 +11,7 @@ import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
 import { formButtonsHaveExplicitTypeRule } from "./form-buttons-have-explicit-type";
 import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { groupedControlsHaveLegendRule } from "./grouped-controls-have-legend";
+import { headingStructureSaneRule } from "./heading-structure-sane";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { iframesHaveTitleRule } from "./iframes-have-title";
@@ -69,6 +70,7 @@ const defaultRules = [
   groupedControlsHaveLegendRule,
   formButtonsHaveExplicitTypeRule,
   personalDataAutocompletePresentRule,
+  headingStructureSaneRule,
   ...accessibilityRules,
 ];
 
