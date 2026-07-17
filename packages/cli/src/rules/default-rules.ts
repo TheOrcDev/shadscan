@@ -1,4 +1,5 @@
 import { accessibilityRules } from "./accessibility";
+import { animationsRespectReducedMotionRule } from "./animations-respect-reduced-motion";
 import { asyncActionPendingStateRule } from "./async-action-pending-state";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
@@ -75,6 +76,7 @@ const defaultRules = [
   headingStructureSaneRule,
   responsiveShellPresentRule,
   destructiveActionsConfirmedRule,
+  animationsRespectReducedMotionRule,
   ...accessibilityRules,
 ];
 

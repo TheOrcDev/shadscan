@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { animationsRespectReducedMotionRule } from "../src/rules/animations-respect-reduced-motion";
 import { destructiveActionsConfirmedRule } from "../src/rules/destructive-actions-confirmed";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
@@ -71,6 +72,32 @@ describe("browser-sensitive advisory rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("advises when animated UI has no reduced-motion strategy", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/card.tsx",
+        'export function Card() { return <div className="animate-pulse">Loading</div>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, animationsRespectReducedMotionRule))
+          .status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/card.tsx",
+        'export function Card() { return <div className="animate-pulse motion-reduce:animate-none">Loading</div>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, animationsRespectReducedMotionRule))
+          .status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
