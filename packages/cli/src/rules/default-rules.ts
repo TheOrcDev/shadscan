@@ -6,6 +6,7 @@ import { componentsAliasesResolveRule } from "./components-aliases-resolve";
 import { customControlsHaveLabelsRule } from "./custom-controls-have-labels";
 import { emptyStatePresentRule } from "./empty-state-present";
 import { errorStateRetryPresentRule } from "./error-state-retry-present";
+import { fieldErrorsRenderedRule } from "./field-errors-rendered";
 import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
 import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { highConfidenceRules } from "./high-confidence";
@@ -59,6 +60,7 @@ const defaultRules = [
   noNestedInteractiveControlsRule,
   statusMessagesAnnouncedRule,
   validationWiredToFormRule,
+  fieldErrorsRenderedRule,
   ...accessibilityRules,
 ];
 
