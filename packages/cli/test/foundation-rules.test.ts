@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { componentsAliasesResolveRule } from "../src/rules/components-aliases-resolve";
+import { themeHydrationSafeRule } from "../src/rules/theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "../src/rules/theme-provider-mounted-in-shell";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
@@ -68,6 +69,40 @@ describe("foundation rules", () => {
 
       expect(
         (await runRule(fixture.rootDir, themeProviderMountedInShellRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("checks Next theme hydration safeguards", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      "next-themes": "0.4.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <html suppressHydrationWarning><body>{children}</body></html>; }"
+      );
+      await fixture.write(
+        "components/theme-provider.tsx",
+        'export function ThemeProvider({ children }) { return <NextThemesProvider attribute="class">{children}</NextThemesProvider>; }'
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, themeHydrationSafeRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <html><body>{children}</body></html>; }"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, themeHydrationSafeRule)).status
       ).toBe("fail");
     } finally {
       await fixture.cleanup();
