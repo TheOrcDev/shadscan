@@ -284,7 +284,8 @@ const normalizeFinding = (
   const confidence = result.confidence ?? rule.confidence;
   const advisoryFail = result.status === "fail" && confidence === "low";
   const status: AuditRuleStatus = advisoryFail ? "advisory" : result.status;
-  const impactsScore = status !== "advisory" && status !== "not-applicable";
+  const impactsScore =
+    rule.maxScore > 0 && status !== "advisory" && status !== "not-applicable";
   const maxScore = status === "not-applicable" ? 0 : rule.maxScore;
   const score = (() => {
     if (status === "pass" || status === "advisory") {

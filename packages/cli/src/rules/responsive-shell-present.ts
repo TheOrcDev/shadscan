@@ -16,7 +16,7 @@ const responsiveShellPresentRule: AuditRule = {
   description:
     "Looks for responsive breakpoint behavior in the application's top-level shell.",
   id: "responsive-shell-present",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const files = await getProjectSourceFiles(project);
     const shellFile = files.find(

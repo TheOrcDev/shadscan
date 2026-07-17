@@ -23,7 +23,7 @@ const keyboardNavigationWorksRule: AuditRule = {
   description:
     "Looks for proven keyboard behavior behind composite widgets such as menus, tabs, and listboxes.",
   id: "keyboard-navigation-works",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const files = (await getProjectSourceFiles(project)).filter(
       (file) => !GENERATED_UI_PATH_PATTERN.test(file.path)

@@ -12,6 +12,25 @@ import { responsiveShellPresentRule } from "../src/rules/responsive-shell-presen
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("browser-sensitive advisory rules", () => {
+  it("keeps every browser-sensitive rule score-neutral", () => {
+    const browserSensitiveRules = [
+      headingStructureSaneRule,
+      responsiveShellPresentRule,
+      destructiveActionsConfirmedRule,
+      animationsRespectReducedMotionRule,
+      publicAppSeoFilesPresentRule,
+      dialogFocusTrapWorksRule,
+      keyboardNavigationWorksRule,
+      colorContrastPassesRule,
+      pointerTargetSizePassesRule,
+      mobileOverflowAbsentRule,
+    ];
+
+    expect(browserSensitiveRules.every((rule) => rule.maxScore === 0)).toBe(
+      true
+    );
+  });
+
   it("advises on an obvious heading-level skip without reducing score", async () => {
     const fixture = await createRuleFixture();
 

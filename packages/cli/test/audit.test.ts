@@ -167,6 +167,26 @@ describe("runAudit", () => {
     expect(report.score).toBe(100);
   });
 
+  it("keeps zero-point rules outside score calculations", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          id: "score-neutral-rule",
+          maxScore: 0,
+          run: () => ({ status: "pass" }),
+        }),
+      ],
+    });
+
+    expect(report.findings[0]?.impactsScore).toBe(false);
+    expect(report.categories.every((category) => !category.applicable)).toBe(
+      true
+    );
+    expect(report.score).toBe(100);
+  });
+
   it("filters rules by adapter", async () => {
     const rootDir = await createReactFixture();
 

@@ -17,7 +17,7 @@ const mobileOverflowAbsentRule: AuditRule = {
   description:
     "Marks responsive layouts for rendered horizontal-overflow verification.",
   id: "mobile-overflow-absent",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const sourceFiles = await getProjectSourceFiles(project);
 

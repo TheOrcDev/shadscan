@@ -17,7 +17,7 @@ const colorContrastPassesRule: AuditRule = {
   description:
     "Marks styled color pairs for computed browser contrast verification.",
   id: "color-contrast-passes",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const sourceFiles = await getProjectSourceFiles(project);
     const styleFiles = await getProjectStyleFiles(project);

@@ -41,7 +41,7 @@ const animationsRespectReducedMotionRule: AuditRule = {
   description:
     "Looks for a reduced-motion strategy when application animations or transitions are present.",
   id: "animations-respect-reduced-motion",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const files = await getMotionFiles(project);
     const animatedFile = files.find((file) =>

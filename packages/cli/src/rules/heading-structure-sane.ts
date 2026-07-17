@@ -23,7 +23,7 @@ const headingStructureSaneRule: AuditRule = {
   description:
     "Looks for obvious heading-level skips and multiple primary headings in individual source files.",
   id: "heading-structure-sane",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const files = await parseProjectSourceFiles(project);
     const headingsByFile = new Map<string, HeadingOccurrence[]>();

@@ -15,7 +15,7 @@ const destructiveActionsConfirmedRule: AuditRule = {
   description:
     "Looks for confirmation or undo affordances around destructive actions.",
   id: "destructive-actions-confirmed",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const files = (await getProjectSourceFiles(project)).filter(
       (file) => !GENERATED_UI_PATH_PATTERN.test(file.path)

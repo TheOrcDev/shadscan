@@ -22,7 +22,7 @@ const publicAppSeoFilesPresentRule: AuditRule = {
   description:
     "Looks for robots and sitemap files in web apps that appear publicly indexable.",
   id: "public-app-seo-files-present",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const sourceFiles = await getProjectSourceFiles(project);
     const privateIndexingFile = sourceFiles.find((file) =>

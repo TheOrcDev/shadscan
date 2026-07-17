@@ -51,7 +51,7 @@ const pointerTargetSizePassesRule: AuditRule = {
   description:
     "Marks interactive controls for rendered pointer-target size verification.",
   id: "pointer-target-size-passes",
-  maxScore: 1,
+  maxScore: 0,
   run: async ({ project }) => {
     const files = (await parseProjectSourceFiles(project)).filter(
       (file) => !GENERATED_UI_PATH_PATTERN.test(file.filePath)
