@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { animationsRespectReducedMotionRule } from "../src/rules/animations-respect-reduced-motion";
 import { destructiveActionsConfirmedRule } from "../src/rules/destructive-actions-confirmed";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
+import { publicAppSeoFilesPresentRule } from "../src/rules/public-app-seo-files-present";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
@@ -98,6 +99,34 @@ describe("browser-sensitive advisory rules", () => {
       expect(
         (await runRule(fixture.rootDir, animationsRespectReducedMotionRule))
           .status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("advises when an indexable app lacks robots or sitemap files", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.0.0",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write("app/page.tsx", "export default function Page() {}");
+      await fixture.write(
+        "app/robots.ts",
+        "export default function robots() { return { rules: { allow: '/' } }; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, publicAppSeoFilesPresentRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "app/sitemap.ts",
+        "export default function sitemap() { return [{ url: 'https://example.com' }]; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, publicAppSeoFilesPresentRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
