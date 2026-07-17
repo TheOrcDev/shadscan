@@ -7,6 +7,7 @@ import {
   TerminalWindow,
   WarningCircle,
 } from "@phosphor-icons/react/ssr";
+import { CommandMenu } from "@/components/command-menu";
 import { Button } from "@/components/ui/button";
 
 const reportRows = [
@@ -42,6 +43,8 @@ const categories = [
   ["Interaction", "11/20"],
   ["States", "6/20"],
   ["Accessibility", "20/20"],
+  ["Forms", "4/10"],
+  ["Production Polish", "3/10"],
 ] as const;
 
 const checks = [
@@ -63,16 +66,11 @@ export default function Page() {
               </span>
               Shadscan
             </div>
-            <div className="hidden items-center gap-2 text-muted-foreground text-xs sm:flex">
-              <kbd className="rounded-sm border bg-background px-1.5 py-0.5 font-mono">
-                d
-              </kbd>
-              <span>theme toggle dogfooded</span>
-            </div>
+            <CommandMenu />
           </header>
 
-          <div className="grid flex-1 content-center gap-8">
-            <div className="max-w-4xl">
+          <div className="grid min-w-0 flex-1 content-center gap-8">
+            <div className="min-w-0 max-w-4xl">
               <p className="mb-3 flex items-center gap-2 text-muted-foreground text-sm">
                 <Gauge className="size-4 text-primary" weight="bold" />
                 UI audit CLI for shadcn apps
@@ -87,10 +85,10 @@ export default function Page() {
               </p>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
               <section
                 aria-label="Sample Shadscan audit report"
-                className="overflow-hidden border bg-card shadow-sm"
+                className="min-w-0 overflow-hidden border bg-card shadow-sm"
               >
                 <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
                   <div className="flex items-center gap-2 font-mono text-xs">
@@ -161,7 +159,7 @@ export default function Page() {
                 </div>
               </section>
 
-              <aside className="grid gap-4">
+              <aside className="grid min-w-0 grid-cols-1 gap-4">
                 <div className="border bg-card p-5">
                   <div className="mb-4 flex items-center gap-2 font-medium">
                     <Lightning className="size-4 text-primary" weight="bold" />
@@ -199,7 +197,9 @@ export default function Page() {
                       </a>
                     </Button>
                     <Button asChild variant="outline">
-                      <a href="https://github.com/TheOrcDev/shadscan">GitHub</a>
+                      <a href="https://github.com/TheOrcDev/headless-shadcn">
+                        GitHub
+                      </a>
                     </Button>
                   </div>
                 </div>

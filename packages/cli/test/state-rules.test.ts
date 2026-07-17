@@ -204,7 +204,19 @@ describe("state rules", () => {
 
       await fixture.write(
         "app/layout.tsx",
-        "export default function Layout({ children }) { return <html><body>{children}<Toaster /></body></html>; }"
+        'import { Toaster } from "@/components/toaster"; export default function Layout({ children }) { return <html><body>{children}<Toaster /></body></html>; }'
+      );
+      await fixture.write(
+        "components/toaster.tsx",
+        'export function Toaster() { return <div aria-live="polite" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, toastProviderMountedRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/layout.tsx",
+        'import { Toaster } from "sonner"; export default function Layout({ children }) { return <html><body>{children}<Toaster /></body></html>; }'
       );
       expect(
         (await runRule(fixture.rootDir, toastProviderMountedRule)).status

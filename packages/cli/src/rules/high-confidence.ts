@@ -27,8 +27,14 @@ const HTML_DESCRIPTION_PATTERN = /<meta\s+name=["']description["']/;
 const FAVICON_LINK_PATTERN = /<link\s+rel=["'](?:icon|shortcut icon)["']/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
-const TOAST_PATTERN =
-  /(<Toaster\b|<ToastProvider\b|from\s+["']sonner["']|useToast\()/;
+const TOAST_IMPORT_PATTERN =
+  /from\s+["'](?:sonner|react-hot-toast|@radix-ui\/react-toast)["']/;
+const TOAST_MOUNT_PATTERN = /<(?:Toaster|ToastProvider|Sonner)(?:\s|>)/;
+const TOAST_DEPENDENCIES = [
+  "@radix-ui/react-toast",
+  "react-hot-toast",
+  "sonner",
+] as const;
 
 const evidence = (
   message: string,
@@ -354,26 +360,26 @@ const toastProviderPresentRule: AuditRule = {
   id: "toast-provider-present",
   maxScore: 3,
   run: async (context) => {
-    const hasToastDependency =
-      Boolean(context.project.dependencies.sonner) ||
-      Boolean(context.project.dependencies["@radix-ui/react-toast"]);
-    const match = await findFirstSourceMatch(context, TOAST_PATTERN);
+    const hasToastDependency = TOAST_DEPENDENCIES.some(
+      (dependency) => context.project.dependencies[dependency]
+    );
+    const importMatch = await findFirstSourceMatch(
+      context,
+      TOAST_IMPORT_PATTERN
+    );
+    const mountMatch = await findFirstSourceMatch(context, TOAST_MOUNT_PATTERN);
 
-    if (match) {
+    if (hasToastDependency && importMatch && mountMatch) {
       return pass(
-        "Toast provider or toaster usage found.",
-        match.file.path,
-        match.line
+        "Recognized toast runtime and mounted provider usage found.",
+        mountMatch.file.path,
+        mountMatch.line
       );
     }
 
-    if (hasToastDependency) {
-      return pass("Toast dependency found.", context.project.paths.packageJson);
-    }
-
     return fail(
-      "No toast setup was found.",
-      "Mount a toaster/provider so async success and failure feedback has somewhere to appear.",
+      "No verifiable toast runtime and mounted provider were found.",
+      "Install and import a recognized toast runtime, then mount its toaster/provider so async feedback has somewhere to appear.",
       "Somewhere, a save button clicked successfully and nobody knew."
     );
   },

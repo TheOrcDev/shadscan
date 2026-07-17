@@ -253,6 +253,27 @@ describe("runAudit", () => {
     expect(report.grade).toBeNull();
   });
 
+  it("keeps a perfect-score handoff neutral when only advisories remain", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({ id: "passing-rule" }),
+        createRule({
+          confidence: "low",
+          id: "advisory-rule",
+          run: () => ({ confidence: "low", status: "fail" }),
+        }),
+      ],
+    });
+
+    expect(report.score).toBe(100);
+    expect(report.agentHandoff.goal).toContain(
+      "while verifying the score-neutral advisories"
+    );
+    expect(report.agentHandoff.goal).not.toContain("Raise");
+  });
+
   it("keeps zero-point rules outside score calculations", async () => {
     const rootDir = await createReactFixture();
 

@@ -3,7 +3,8 @@ import { Geist, Geist_Mono, Roboto } from "next/font/google";
 
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/toaster";
+import { Toaster } from "@/components/ui/sonner";
+import { getSiteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
 const geistHeading = Geist({
@@ -22,8 +23,29 @@ const fontMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shadscan",
+  alternates: {
+    canonical: "/",
+  },
   description: "The CLI that audits a shadcn app for missing UI fundamentals.",
+  metadataBase: getSiteUrl(),
+  openGraph: {
+    description:
+      "Audit command menus, UI states, accessibility basics, metadata, and more with deterministic evidence.",
+    siteName: "Shadscan",
+    title: "Shadscan",
+    type: "website",
+    url: "/",
+  },
+  title: {
+    default: "Shadscan",
+    template: "%s | Shadscan",
+  },
+  twitter: {
+    card: "summary_large_image",
+    description:
+      "Audit command menus, UI states, accessibility basics, metadata, and more with deterministic evidence.",
+    title: "Shadscan",
+  },
 };
 
 export default function RootLayout({

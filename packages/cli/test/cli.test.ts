@@ -5,8 +5,12 @@ import { createProgram, scoreFailsThreshold } from "../src/cli";
 import { normalizeCliFailure } from "../src/cli-error";
 import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
+import { createRuleFixture } from "./rule-fixture";
 
-const captureOutput = async (args: string[]): Promise<string> => {
+const captureOutput = async (
+  args: string[],
+  cwd = path.resolve(import.meta.dirname, "../../..")
+): Promise<string> => {
   const previousCwd = process.cwd();
   let output = "";
   const write = vi
@@ -17,7 +21,7 @@ const captureOutput = async (args: string[]): Promise<string> => {
     });
 
   try {
-    process.chdir(path.resolve(import.meta.dirname, "../../.."));
+    process.chdir(cwd);
     await createProgram().parseAsync(["node", "shadscan", ...args]);
     return output;
   } finally {
@@ -62,8 +66,17 @@ describe("CLI contract", () => {
     expect(prompt).toContain("<shadscan-data");
     expect(prompt).not.toContain('"roast"');
 
-    await captureOutput(["--prompt", "--fail-under", "100"]);
-    expect(process.exitCode).toBe(1);
+    const fixture = await createRuleFixture();
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        "export const App = () => <main>Fixture</main>;\n"
+      );
+      await captureOutput(["--prompt", "--fail-under", "100"], fixture.rootDir);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      await fixture.cleanup();
+    }
   });
 
   it("fails score gates when a scan is unassessed", () => {

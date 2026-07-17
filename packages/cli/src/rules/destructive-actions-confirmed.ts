@@ -7,6 +7,7 @@ const DESTRUCTIVE_ACTION_PATTERN =
 const CONFIRMATION_OR_UNDO_PATTERN =
   /\b(?:AlertDialog|ConfirmDialog|ConfirmationDialog|Undo)\b|(?:window\.)?confirm\s*\(/i;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+const UI_SOURCE_PATH_PATTERN = /\.(?:jsx|tsx)$/;
 
 const destructiveActionsConfirmedRule: AuditRule = {
   adapters: ["core"],
@@ -18,7 +19,9 @@ const destructiveActionsConfirmedRule: AuditRule = {
   maxScore: 0,
   run: async ({ project }) => {
     const files = (await getProjectSourceFiles(project)).filter(
-      (file) => !GENERATED_UI_PATH_PATTERN.test(file.path)
+      (file) =>
+        UI_SOURCE_PATH_PATTERN.test(file.path) &&
+        !GENERATED_UI_PATH_PATTERN.test(file.path)
     );
     const destructiveFile = files.find((file) =>
       DESTRUCTIVE_ACTION_PATTERN.test(file.content)

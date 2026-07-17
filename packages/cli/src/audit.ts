@@ -605,9 +605,17 @@ const createAgentHandoff = ({
         : `${packageName}'s Shadscan score is unassessed; address the agent-ready findings and rerun the same scope.`;
     }
 
+    const hasScoreImpactingActionables = actionables.some(
+      (actionable) => actionable.scoreImpact > 0
+    );
+
+    if (hasScoreImpactingActionables) {
+      return `Raise ${packageName}'s Shadscan score from ${score}/100 (${grade}) by addressing agent-ready UI audit findings.`;
+    }
+
     return actionables.length === 0
       ? `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}); no missing fundamentals were found.`
-      : `Raise ${packageName}'s Shadscan score from ${score}/100 (${grade}) by addressing agent-ready UI audit findings.`;
+      : `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}) while verifying the score-neutral advisories.`;
   })();
   const configPath = project.shadcn.configPath
     ? (getProjectRelativePath(project.rootDir, project.shadcn.configPath) ??

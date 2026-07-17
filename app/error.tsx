@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 
 export default function ErrorBoundary({
-  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -17,7 +16,7 @@ export default function ErrorBoundary({
           Audit interrupted
         </h1>
         <p className="mt-3 text-muted-foreground leading-7">
-          {error.message || "The app hit an unexpected state."}
+          The app hit an unexpected state. Try the audit again.
         </p>
         <Button className="mt-5" onClick={reset} type="button">
           Try again

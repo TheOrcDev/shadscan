@@ -223,6 +223,31 @@ describe("high confidence rules", () => {
     expect(report.score).toBeLessThan(100);
   });
 
+  it("rejects placeholder toaster components without runtime provenance", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir, { includeToastDependency: true });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/layout.tsx",
+      'import { Toaster } from "@/components/toaster"; export default function Layout() { return <html><body><Toaster /></body></html>; }'
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/toaster.tsx",
+      'export function Toaster() { return <div aria-live="polite" />; }'
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "toast-provider-present")
+        ?.status
+    ).toBe("fail");
+  });
+
   it("supports Vite metadata and favicon detection", async () => {
     const rootDir = await createFixture();
     await writeFixtureFile(

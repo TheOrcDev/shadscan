@@ -103,6 +103,22 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("ignores destructive method names in non-UI source", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/archive.ts",
+        "export const abortArchive = (archive: { destroy: () => void }) => archive.destroy();"
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("not-applicable");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("advises when animated UI has no reduced-motion strategy", async () => {
     const fixture = await createRuleFixture();
 
