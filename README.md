@@ -99,6 +99,7 @@ pnpm cli:build
 pnpm test:api
 pnpm audit:self
 pnpm cli:pack:dry-run
+pnpm cli:smoke
 ```
 
 The package is not published yet. Choose and add a real license before publishing publicly.

@@ -44,6 +44,7 @@
     "dev": "tsx src/bin.ts",
     "build": "tsup",
     "prepack": "pnpm build",
+    "smoke": "node scripts/smoke-package.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
