@@ -60,6 +60,20 @@ describe("CLI contract", () => {
     });
   });
 
+  it("scans an explicit project path", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      const report = JSON.parse(
+        await captureOutput([fixture.rootDir, "--json"])
+      ) as { packageName: string | null };
+
+      expect(report.packageName).toBe("expanded-rule-fixture");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("keeps prompt output neutral and fail-under semantics intact", async () => {
     const prompt = await captureOutput(["--prompt", "--roast"]);
 

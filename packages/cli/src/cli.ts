@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Command, InvalidArgumentError, Option } from "commander";
 import packageJson from "../package.json";
 import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
@@ -57,6 +58,7 @@ const createProgram = (): Command => {
     .name("shadscan")
     .description("Audit a React shadcn app for missing UI fundamentals.")
     .version(VERSION)
+    .argument("[path]", "Project directory to scan.", ".")
     .addOption(
       new Option(
         "--format <format>",
@@ -89,34 +91,42 @@ const createProgram = (): Command => {
     )
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
-    .action(async (options: CliOptions, command: Command) => {
-      const outputFormat = resolveOutputFormat(options);
-      const roastWasSpecified = command.getOptionValueSource("roast") === "cli";
-      const includeRoast =
-        outputFormat !== "prompt" &&
-        (roastWasSpecified
-          ? options.roast !== false
-          : outputFormat === "human" && !process.env.CI);
-      const report = await scanProject(process.cwd(), {
-        category: options.category,
-      });
-      const outputReport = includeRoast ? report : stripRoasts(report);
+    .action(
+      async (projectPath: string, options: CliOptions, command: Command) => {
+        const outputFormat = resolveOutputFormat(options);
+        const roastWasSpecified =
+          command.getOptionValueSource("roast") === "cli";
+        const includeRoast =
+          outputFormat !== "prompt" &&
+          (roastWasSpecified
+            ? options.roast !== false
+            : outputFormat === "human" && !process.env.CI);
+        const report = await scanProject(
+          path.resolve(process.cwd(), projectPath),
+          {
+            category: options.category,
+          }
+        );
+        const outputReport = includeRoast ? report : stripRoasts(report);
 
-      if (outputFormat === "json") {
-        process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
-      } else if (outputFormat === "prompt") {
-        process.stdout.write(renderAgentPrompt(outputReport));
-      } else {
-        process.stdout.write(renderHumanReport(outputReport, { includeRoast }));
-      }
+        if (outputFormat === "json") {
+          process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
+        } else if (outputFormat === "prompt") {
+          process.stdout.write(renderAgentPrompt(outputReport));
+        } else {
+          process.stdout.write(
+            renderHumanReport(outputReport, { includeRoast })
+          );
+        }
 
-      if (
-        options.failUnder !== undefined &&
-        scoreFailsThreshold(report.score, options.failUnder)
-      ) {
-        process.exitCode = 1;
+        if (
+          options.failUnder !== undefined &&
+          scoreFailsThreshold(report.score, options.failUnder)
+        ) {
+          process.exitCode = 1;
+        }
       }
-    });
+    );
 
   return program;
 };
