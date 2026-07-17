@@ -5,6 +5,7 @@ import { iframesHaveTitleRule } from "../src/rules/iframes-have-title";
 import { imagesHaveAltRule } from "../src/rules/images-have-alt";
 import { linksHaveAccessibleNamesRule } from "../src/rules/links-have-accessible-names";
 import { navLandmarksHaveNamesRule } from "../src/rules/nav-landmarks-have-names";
+import { noNestedInteractiveControlsRule } from "../src/rules/no-nested-interactive-controls";
 import { noPositiveTabindexRule } from "../src/rules/no-positive-tabindex";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
@@ -174,6 +175,30 @@ describe("expanded accessibility rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, navLandmarksHaveNamesRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects nested interactive controls while allowing asChild", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <a href="/"><button>Home</button></a>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <Button asChild><Link href="/">Home</Link></Button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
