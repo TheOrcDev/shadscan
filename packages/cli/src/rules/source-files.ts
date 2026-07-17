@@ -65,6 +65,19 @@ const getProjectSourceFiles = async (
   return sourceFiles;
 };
 
+const getProjectStyleFiles = async (
+  project: ProjectDiscovery
+): Promise<SourceFile[]> => {
+  const filePaths = await findFiles(project.rootDir, ["**/*.css"]);
+  const styleFiles: SourceFile[] = [];
+
+  for (const filePath of filePaths) {
+    styleFiles.push(await readSourceFile(filePath));
+  }
+
+  return styleFiles;
+};
+
 const findSourceMatch = async (
   project: ProjectDiscovery,
   pattern: RegExp
@@ -118,6 +131,7 @@ export {
   findSourceMatch,
   getAppRelativePatterns,
   getProjectSourceFiles,
+  getProjectStyleFiles,
   getTextLineNumber,
   readSourceFile,
 };

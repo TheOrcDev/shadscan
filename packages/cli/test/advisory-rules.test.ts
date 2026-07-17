@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { animationsRespectReducedMotionRule } from "../src/rules/animations-respect-reduced-motion";
+import { colorContrastPassesRule } from "../src/rules/color-contrast-passes";
 import { destructiveActionsConfirmedRule } from "../src/rules/destructive-actions-confirmed";
 import { dialogFocusTrapWorksRule } from "../src/rules/dialog-focus-trap-works";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
@@ -178,6 +179,22 @@ describe("browser-sensitive advisory rules", () => {
       expect(
         (await runRule(fixture.rootDir, keyboardNavigationWorksRule)).status
       ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("routes styled color contrast to browser verification", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/banner.tsx",
+        'export function Banner() { return <p className="bg-primary text-white">Saved</p>; }'
+      );
+      const finding = await runRule(fixture.rootDir, colorContrastPassesRule);
+      expect(finding.status).toBe("advisory");
+      expect(finding.impactsScore).toBe(false);
     } finally {
       await fixture.cleanup();
     }

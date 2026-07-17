@@ -1,6 +1,7 @@
 import { accessibilityRules } from "./accessibility";
 import { animationsRespectReducedMotionRule } from "./animations-respect-reduced-motion";
 import { asyncActionPendingStateRule } from "./async-action-pending-state";
+import { colorContrastPassesRule } from "./color-contrast-passes";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
@@ -83,6 +84,7 @@ const defaultRules = [
   publicAppSeoFilesPresentRule,
   dialogFocusTrapWorksRule,
   keyboardNavigationWorksRule,
+  colorContrastPassesRule,
   ...accessibilityRules,
 ];
 
