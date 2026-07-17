@@ -27,6 +27,7 @@ import { suspenseFallbackUsefulRule } from "./suspense-fallback-useful";
 import { themeHydrationSafeRule } from "./theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "./theme-provider-mounted-in-shell";
 import { toastProviderMountedRule } from "./toast-provider-mounted";
+import { validationWiredToFormRule } from "./validation-wired-to-form";
 
 const defaultRules = [
   ...highConfidenceRules,
@@ -57,6 +58,7 @@ const defaultRules = [
   navLandmarksHaveNamesRule,
   noNestedInteractiveControlsRule,
   statusMessagesAnnouncedRule,
+  validationWiredToFormRule,
   ...accessibilityRules,
 ];
 
