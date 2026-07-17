@@ -2,6 +2,7 @@ import { accessibilityRules } from "./accessibility";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
+import { emptyStatePresentRule } from "./empty-state-present";
 import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
 import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { highConfidenceRules } from "./high-confidence";
@@ -31,6 +32,7 @@ const defaultRules = [
   focusVisibleNotSuppressedRule,
   routeLoadingBoundaryPresentRule,
   suspenseFallbackUsefulRule,
+  emptyStatePresentRule,
   ...accessibilityRules,
 ];
 

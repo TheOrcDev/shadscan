@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { emptyStatePresentRule } from "../src/rules/empty-state-present";
 import { routeLoadingBoundaryPresentRule } from "../src/rules/route-loading-boundary-present";
 import { suspenseFallbackUsefulRule } from "../src/rules/suspense-fallback-useful";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -49,6 +50,30 @@ describe("state rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, suspenseFallbackUsefulRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires empty states for recognizable data collections", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/projects.tsx",
+        "export function Projects({ projects }) { return <ul>{projects.map((project) => <li>{project.name}</li>)}</ul>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/projects.tsx",
+        "export function Projects({ projects }) { if (projects.length === 0) return <Empty>No projects yet</Empty>; return <ul>{projects.map((project) => <li>{project.name}</li>)}</ul>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
