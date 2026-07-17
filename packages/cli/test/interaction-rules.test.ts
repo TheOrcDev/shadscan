@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { commandMenuHotkeyPresentRule } from "../src/rules/command-menu-hotkey-present";
 import { commandMenuPresentRule } from "../src/rules/command-menu-present";
 import { globalHotkeysAreSafeRule } from "../src/rules/global-hotkeys-are-safe";
+import { mobileNavPresentRule } from "../src/rules/mobile-nav-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("interaction rules", () => {
@@ -109,6 +110,34 @@ describe("interaction rules", () => {
       expect(
         (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
       ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires mobile navigation when app-level navigation exists", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components/site-nav.tsx",
+        `
+          export function SiteNav() {
+            return <><nav className="hidden md:flex">Desktop</nav><Sheet><SheetTrigger className="md:hidden" aria-label="Open navigation"><Menu /></SheetTrigger><SheetContent>Mobile</SheetContent></Sheet></>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "components/site-nav.tsx",
+        'export function SiteNav() { return <nav><a href="/">Home</a></nav>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
     } finally {
       await fixture.cleanup();
     }
