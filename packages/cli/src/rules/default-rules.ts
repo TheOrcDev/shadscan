@@ -1,4 +1,5 @@
 import { accessibilityRules } from "./accessibility";
+import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
@@ -17,6 +18,7 @@ const defaultRules = [
   metadataTitleDescriptionCompleteRule,
   socialPreviewPresentRule,
   noStarterCopyRule,
+  commandMenuPresentRule,
   ...accessibilityRules,
 ];
 
