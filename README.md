@@ -98,7 +98,7 @@ pnpm cli:test
 pnpm cli:build
 pnpm test:api
 pnpm audit:self
-pnpm --filter shadscan pack --dry-run
+pnpm cli:pack:dry-run
 ```
 
 The package is not published yet. Choose and add a real license before publishing publicly.
