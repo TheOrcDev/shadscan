@@ -10,6 +10,7 @@ import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
 import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
+import { iframesHaveTitleRule } from "./iframes-have-title";
 import { imagesHaveAltRule } from "./images-have-alt";
 import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
@@ -49,6 +50,7 @@ const defaultRules = [
   linksHaveAccessibleNamesRule,
   customControlsHaveLabelsRule,
   noPositiveTabindexRule,
+  iframesHaveTitleRule,
   ...accessibilityRules,
 ];
 

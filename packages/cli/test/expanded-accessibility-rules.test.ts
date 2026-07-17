@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { customControlsHaveLabelsRule } from "../src/rules/custom-controls-have-labels";
 import { htmlLangPresentRule } from "../src/rules/html-lang-present";
+import { iframesHaveTitleRule } from "../src/rules/iframes-have-title";
 import { imagesHaveAltRule } from "../src/rules/images-have-alt";
 import { linksHaveAccessibleNamesRule } from "../src/rules/links-have-accessible-names";
 import { noPositiveTabindexRule } from "../src/rules/no-positive-tabindex";
@@ -124,6 +125,30 @@ describe("expanded accessibility rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, noPositiveTabindexRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires meaningful iframe titles", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <iframe src="/report" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, iframesHaveTitleRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <iframe src="/report" title="Quarterly report" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, iframesHaveTitleRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
