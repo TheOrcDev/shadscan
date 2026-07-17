@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { componentsAliasesResolveRule } from "../src/rules/components-aliases-resolve";
+import { metadataTitleDescriptionCompleteRule } from "../src/rules/metadata-title-description-complete";
 import { themeHydrationSafeRule } from "../src/rules/theme-hydration-safe";
 import { themeProviderMountedInShellRule } from "../src/rules/theme-provider-mounted-in-shell";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -103,6 +104,41 @@ describe("foundation rules", () => {
 
       expect(
         (await runRule(fixture.rootDir, themeHydrationSafeRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires complete title and description metadata", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        `
+          export const metadata = {
+            title: "Acme dashboard",
+            description: "Manage Acme projects",
+          };
+          export default function Layout({ children }) { return <html>{children}</html>; }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
+          .status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/layout.tsx",
+        'export const metadata = { title: "Acme" }; export default function Layout() { return <html />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
+          .status
       ).toBe("fail");
     } finally {
       await fixture.cleanup();
