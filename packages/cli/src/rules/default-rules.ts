@@ -2,6 +2,7 @@ import { accessibilityRules } from "./accessibility";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
 import { componentsAliasesResolveRule } from "./components-aliases-resolve";
+import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
@@ -21,6 +22,7 @@ const defaultRules = [
   noStarterCopyRule,
   commandMenuPresentRule,
   commandMenuHotkeyPresentRule,
+  globalHotkeysAreSafeRule,
   ...accessibilityRules,
 ];
 

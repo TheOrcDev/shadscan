@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { commandMenuHotkeyPresentRule } from "../src/rules/command-menu-hotkey-present";
 import { commandMenuPresentRule } from "../src/rules/command-menu-present";
+import { globalHotkeysAreSafeRule } from "../src/rules/global-hotkeys-are-safe";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("interaction rules", () => {
@@ -67,6 +68,47 @@ describe("interaction rules", () => {
       expect(
         (await runRule(fixture.rootDir, commandMenuHotkeyPresentRule)).status
       ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects unsafe bare-key global shortcuts", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          useEffect(() => {
+            const onKeyDown = (event) => {
+              if (event.key === "d") setTheme("dark");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          useEffect(() => {
+            const onKeyDown = (event) => {
+              if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName) || event.target.isContentEditable) return;
+              if (event.key === "d") setTheme("dark");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("pass");
     } finally {
       await fixture.cleanup();
     }
