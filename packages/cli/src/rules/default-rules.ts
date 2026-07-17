@@ -24,6 +24,7 @@ import { noNestedInteractiveControlsRule } from "./no-nested-interactive-control
 import { noPositiveTabindexRule } from "./no-positive-tabindex";
 import { noStarterCopyRule } from "./no-starter-copy";
 import { notFoundRecoveryPresentRule } from "./not-found-recovery-present";
+import { personalDataAutocompletePresentRule } from "./personal-data-autocomplete-present";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
 import { socialPreviewPresentRule } from "./social-preview-present";
 import { statusMessagesAnnouncedRule } from "./status-messages-announced";
@@ -67,6 +68,7 @@ const defaultRules = [
   invalidFieldsAssociatedWithErrorsRule,
   groupedControlsHaveLegendRule,
   formButtonsHaveExplicitTypeRule,
+  personalDataAutocompletePresentRule,
   ...accessibilityRules,
 ];
 

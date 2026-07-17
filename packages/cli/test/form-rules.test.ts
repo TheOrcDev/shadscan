@@ -3,6 +3,7 @@ import { fieldErrorsRenderedRule } from "../src/rules/field-errors-rendered";
 import { formButtonsHaveExplicitTypeRule } from "../src/rules/form-buttons-have-explicit-type";
 import { groupedControlsHaveLegendRule } from "../src/rules/grouped-controls-have-legend";
 import { invalidFieldsAssociatedWithErrorsRule } from "../src/rules/invalid-fields-associated-with-errors";
+import { personalDataAutocompletePresentRule } from "../src/rules/personal-data-autocomplete-present";
 import { validationWiredToFormRule } from "../src/rules/validation-wired-to-form";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
@@ -123,6 +124,32 @@ describe("form rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, formButtonsHaveExplicitTypeRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires personal-data fields to declare autocomplete purposes", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/profile.tsx",
+        'export function Profile() { return <Input name="email" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/profile.tsx",
+        'export function Profile() { return <Input name="email" autoComplete="email" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
