@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { componentsAliasesResolveRule } from "../src/rules/components-aliases-resolve";
+import { themeProviderMountedInShellRule } from "../src/rules/theme-provider-mounted-in-shell";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("foundation rules", () => {
@@ -33,6 +34,41 @@ describe("foundation rules", () => {
       expect(finding.evidence[0]?.message).toContain(
         "components (@/components)"
       );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires the theme provider to be mounted in the app shell", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      "next-themes": "0.4.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        `
+          import { ThemeProvider } from "@/components/theme-provider";
+          export default function Layout({ children }: { children: React.ReactNode }) {
+            return <html><body><ThemeProvider>{children}</ThemeProvider></body></html>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, themeProviderMountedInShellRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <html><body>{children}</body></html>; }"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, themeProviderMountedInShellRule)).status
+      ).toBe("fail");
     } finally {
       await fixture.cleanup();
     }
