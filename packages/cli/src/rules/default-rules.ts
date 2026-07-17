@@ -20,6 +20,7 @@ import { htmlLangPresentRule } from "./html-lang-present";
 import { iframesHaveTitleRule } from "./iframes-have-title";
 import { imagesHaveAltRule } from "./images-have-alt";
 import { invalidFieldsAssociatedWithErrorsRule } from "./invalid-fields-associated-with-errors";
+import { keyboardNavigationWorksRule } from "./keyboard-navigation-works";
 import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
 import { mobileNavPresentRule } from "./mobile-nav-present";
@@ -81,6 +82,7 @@ const defaultRules = [
   animationsRespectReducedMotionRule,
   publicAppSeoFilesPresentRule,
   dialogFocusTrapWorksRule,
+  keyboardNavigationWorksRule,
   ...accessibilityRules,
 ];
 

@@ -3,6 +3,7 @@ import { animationsRespectReducedMotionRule } from "../src/rules/animations-resp
 import { destructiveActionsConfirmedRule } from "../src/rules/destructive-actions-confirmed";
 import { dialogFocusTrapWorksRule } from "../src/rules/dialog-focus-trap-works";
 import { headingStructureSaneRule } from "../src/rules/heading-structure-sane";
+import { keyboardNavigationWorksRule } from "../src/rules/keyboard-navigation-works";
 import { publicAppSeoFilesPresentRule } from "../src/rules/public-app-seo-files-present";
 import { responsiveShellPresentRule } from "../src/rules/responsive-shell-present";
 import { createRuleFixture, runRule } from "./rule-fixture";
@@ -152,6 +153,30 @@ describe("browser-sensitive advisory rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, dialogFocusTrapWorksRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("advises when a composite widget has no keyboard-aware primitive", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/view-picker.tsx",
+        'export function ViewPicker() { return <div role="listbox"><div>Grid</div></div>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, keyboardNavigationWorksRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/view-picker.tsx",
+        'import { Tabs } from "@/components/ui/tabs"; export function ViewPicker() { return <Tabs />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, keyboardNavigationWorksRule)).status
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
