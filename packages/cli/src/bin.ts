@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { runCli } from "./cli";
 import { normalizeCliFailure } from "./cli-error";
 import { wantsJsonOutput } from "./output-format";

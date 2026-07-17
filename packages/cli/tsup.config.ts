@@ -1,13 +1,11 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  banner: {
-    js: "#!/usr/bin/env node",
-  },
   clean: true,
   dts: true,
   entry: {
     cli: "src/bin.ts",
+    index: "src/index.ts",
   },
   format: ["esm"],
   platform: "node",
