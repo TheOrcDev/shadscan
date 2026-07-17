@@ -32,15 +32,16 @@
     "README.md"
   ],
   "scripts": {
-    "dev": "tsx src/cli.ts",
+    "dev": "tsx src/bin.ts",
     "build": "tsup",
+    "prepack": "pnpm build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix"
   },
   "dependencies": {
-    "commander": "14.0.2",
+    "commander": "13.1.0",
     "jsonc-parser": "3.3.1",
     "picocolors": "1.1.1",
     "tinyglobby": "0.2.15",

@@ -1,9 +1,10 @@
 import { Command, InvalidArgumentError } from "commander";
+import packageJson from "../package.json";
 import { AUDIT_CATEGORIES, type RunAuditOptions, runAudit } from "./audit";
 import { renderHumanReport, stripRoasts } from "./render-human";
 import { defaultRules } from "./rules/default-rules";
 
-const VERSION = "0.0.1";
+const VERSION = packageJson.version;
 
 interface CliOptions {
   category?: RunAuditOptions["category"];
@@ -84,9 +85,5 @@ const createProgram = (): Command => {
 const runCli = async (argv: string[] = process.argv): Promise<void> => {
   await createProgram().parseAsync(argv);
 };
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  await runCli();
-}
 
 export { createProgram, runCli };

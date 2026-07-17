@@ -6,7 +6,9 @@ export default defineConfig({
   },
   clean: true,
   dts: true,
-  entry: ["src/cli.ts"],
+  entry: {
+    cli: "src/bin.ts",
+  },
   format: ["esm"],
   platform: "node",
   sourcemap: true,
