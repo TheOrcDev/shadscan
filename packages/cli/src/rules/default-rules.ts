@@ -9,6 +9,7 @@ import { errorStateRetryPresentRule } from "./error-state-retry-present";
 import { fieldErrorsRenderedRule } from "./field-errors-rendered";
 import { focusVisibleNotSuppressedRule } from "./focus-visible-not-suppressed";
 import { globalHotkeysAreSafeRule } from "./global-hotkeys-are-safe";
+import { groupedControlsHaveLegendRule } from "./grouped-controls-have-legend";
 import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { iframesHaveTitleRule } from "./iframes-have-title";
@@ -63,6 +64,7 @@ const defaultRules = [
   validationWiredToFormRule,
   fieldErrorsRenderedRule,
   invalidFieldsAssociatedWithErrorsRule,
+  groupedControlsHaveLegendRule,
   ...accessibilityRules,
 ];
 
