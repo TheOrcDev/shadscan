@@ -103,6 +103,26 @@ const targetExists = async (targetPath: string): Promise<boolean> => {
   return false;
 };
 
+const mappingTargetExists = async (
+  target: string,
+  basePath: string,
+  capture: string
+): Promise<boolean> => {
+  const wildcardIndex = target.indexOf("*");
+
+  if (wildcardIndex === -1) {
+    return targetExists(path.resolve(basePath, target));
+  }
+
+  const mappedTarget = target.replace("*", capture);
+  if (await targetExists(path.resolve(basePath, mappedTarget))) {
+    return true;
+  }
+
+  const targetRoot = target.slice(0, wildcardIndex);
+  return fileExists(path.resolve(basePath, targetRoot));
+};
+
 const isResolvableAlias = async (
   alias: string,
   rootDir: string,
@@ -120,11 +140,7 @@ const isResolvableAlias = async (
     }
 
     for (const target of targets) {
-      const mappedTarget = target.replace("*", capture);
-
-      if (
-        await targetExists(path.resolve(pathMappings.basePath, mappedTarget))
-      ) {
+      if (await mappingTargetExists(target, pathMappings.basePath, capture)) {
         return true;
       }
     }
@@ -179,14 +195,14 @@ const componentsAliasesResolveRule: AuditRule = {
         .join(", ");
 
       return fail(
-        `Shadcn aliases without existing targets: ${names}.`,
-        "Add matching compilerOptions.paths entries that point to existing files or directories, or change the aliases in components.json.",
+        `Shadcn aliases without resolvable mapping roots: ${names}.`,
+        "Add matching compilerOptions.paths entries whose mapping roots exist, or change the aliases in components.json.",
         { filePath: pathMappings.configPath }
       );
     }
 
     return pass(
-      `All ${aliases.length} shadcn aliases resolve to existing configured targets.`,
+      `All ${aliases.length} shadcn aliases have resolvable configured mapping roots.`,
       pathMappings.configPath
     );
   },

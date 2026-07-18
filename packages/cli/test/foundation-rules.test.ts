@@ -102,6 +102,35 @@ describe("foundation rules", () => {
     }
   });
 
+  it("accepts unused shadcn aliases covered by an existing wildcard root", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components.json",
+        JSON.stringify({
+          aliases: {
+            hooks: "@/hooks",
+          },
+        })
+      );
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({ compilerOptions: { paths: { "@/*": ["./*"] } } })
+      );
+      await fixture.write(
+        "app/page.tsx",
+        "export default function Page() { return <main />; }"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, componentsAliasesResolveRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("requires the theme provider to be mounted in the app shell", async () => {
     const fixture = await createRuleFixture({
       next: "16.2.6",

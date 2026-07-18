@@ -13,6 +13,8 @@ stable releases published under `latest`.
   whose data-table component owns the empty-state branch.
 - Reduced-motion checks now ignore stylesheet import names until application
   source actually uses an animation, transition, keyframe, or motion component.
+- Shadcn wildcard aliases now validate their configured mapping roots without
+  requiring unused destination directories such as `@/hooks` to exist yet.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories
