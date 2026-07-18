@@ -4,9 +4,44 @@ import { commandMenuPresentRule } from "../src/rules/command-menu-present";
 import { focusVisibleNotSuppressedRule } from "../src/rules/focus-visible-not-suppressed";
 import { globalHotkeysAreSafeRule } from "../src/rules/global-hotkeys-are-safe";
 import { mobileNavPresentRule } from "../src/rules/mobile-nav-present";
+import {
+  getResponsiveVisibilityFromClassNames,
+  isSmallScreenVisibility,
+  responsiveVisibilitiesOverlap,
+} from "../src/rules/responsive-visibility";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("interaction rules", () => {
+  it("models a bounded set of responsive display classes", () => {
+    const overlapCases: [string[] | null, string[], boolean | null][] = [
+      [["hidden", "lg:flex"], ["lg:hidden"], false],
+      [["max-lg:hidden"], ["lg:hidden"], false],
+      [["md:hidden"], ["lg:hidden"], true],
+      [[], ["lg:hidden"], true],
+      [null, ["lg:hidden"], null],
+    ];
+
+    for (const [leftClasses, rightClasses, expected] of overlapCases) {
+      const left = getResponsiveVisibilityFromClassNames(leftClasses);
+      const right = getResponsiveVisibilityFromClassNames(rightClasses);
+      expect(responsiveVisibilitiesOverlap(left, right)).toBe(expected);
+    }
+
+    expect(
+      isSmallScreenVisibility(
+        getResponsiveVisibilityFromClassNames(["lg:hidden"])
+      )
+    ).toBe(true);
+    expect(
+      isSmallScreenVisibility(
+        getResponsiveVisibilityFromClassNames(["hidden", "lg:flex"])
+      )
+    ).toBe(false);
+    expect(
+      isSmallScreenVisibility(getResponsiveVisibilityFromClassNames(null))
+    ).toBe(false);
+  });
+
   it("requires a complete app-level command menu composition", async () => {
     const fixture = await createRuleFixture();
 
@@ -199,6 +234,103 @@ describe("interaction rules", () => {
       await fixture.write(
         "components/site-nav.tsx",
         'export function SiteNav() { return <nav><a href="/">Home</a></nav>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("recognizes correlated state-controlled mobile navigation", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components/site-nav.tsx",
+        `
+          export function SiteNav() {
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            return (
+              <>
+                <NavigationMenu className="max-lg:hidden" />
+                <Button
+                  className="lg:hidden"
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                >
+                  <span className="sr-only">Open main menu</span>
+                </Button>
+                <div className={cn("lg:hidden", isMenuOpen ? "visible" : "invisible")}>
+                  <nav><a href="/one">One</a></nav>
+                </div>
+              </>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects disconnected or incomplete custom mobile navigation", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components/site-nav.tsx",
+        `
+          export function SiteNav() {
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            const [isOtherOpen, setIsOtherOpen] = useState(false);
+            return <>
+              <nav className="max-lg:hidden"><a href="/">Home</a></nav>
+              <button className="lg:hidden" aria-label="Open menu" onClick={() => setIsOtherOpen(!isOtherOpen)} />
+              <div className={cn("lg:hidden", isMenuOpen ? "block" : "hidden")}>
+                <nav><a href="/one">One</a></nav>
+              </div>
+            </>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "components/site-nav.tsx",
+        `
+          export function SiteNav() {
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            return <>
+              <nav className="max-lg:hidden"><a href="/">Home</a></nav>
+              <button className="lg:hidden" aria-label="Open menu" onClick={() => setIsMenuOpen(!isMenuOpen)} />
+              <div className={cn("lg:hidden", isMenuOpen ? "block" : "hidden")}><p>No links</p></div>
+            </>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "components/site-nav.tsx",
+        `
+          export function SiteNav() {
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            return <>
+              <nav><a href="/">Home</a></nav>
+              <button aria-label="Open menu" onClick={() => setIsMenuOpen(!isMenuOpen)} />
+              <div className={isMenuOpen ? "block" : "hidden"}><nav><a href="/one">One</a></nav></div>
+            </>;
+          }
+        `
       );
       expect(
         (await runRule(fixture.rootDir, mobileNavPresentRule)).status

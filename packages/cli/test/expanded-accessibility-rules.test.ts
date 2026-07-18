@@ -222,6 +222,52 @@ describe("expanded accessibility rules", () => {
     }
   });
 
+  it("compares names only for navigation landmarks that can coexist", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/Navbar.tsx",
+        `
+          export function Navbar() {
+            const [open, setOpen] = useState(false);
+            return <>
+              <NavigationMenu className="max-lg:hidden" />
+              <div className={cn("lg:hidden", open ? "visible" : "invisible")}>
+                <nav><a href="/account">Account</a></nav>
+              </div>
+            </>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, navLandmarksHaveNamesRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/Navbar.tsx",
+        `
+          export function Navbar({ navClass }) {
+            return <><nav className={navClass}>Primary</nav><nav>Account</nav></>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, navLandmarksHaveNamesRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/Navbar.tsx",
+        "export function Navbar() { return <><NavigationMenu /><NavigationMenu /></>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, navLandmarksHaveNamesRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("rejects nested interactive controls while allowing asChild", async () => {
     const fixture = await createRuleFixture();
 

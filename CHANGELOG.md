@@ -8,6 +8,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Navigation checks now recognize correlated custom mobile panels and compare
+  landmark names only when responsive visibility allows them to coexist.
 - Next metadata checks now honor root-to-leaf inheritance, and loading checks
   target runtime-dynamic routes instead of every async page or event handler.
 - Toast setup checks now recognize mounted local wrappers backed by the
