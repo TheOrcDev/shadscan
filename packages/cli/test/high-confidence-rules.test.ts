@@ -166,6 +166,49 @@ describe("high confidence rules", () => {
     );
   });
 
+  it("recognizes a theme hotkey guarded by a local predicate", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir);
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "components/theme-provider.tsx",
+      `
+        "use client";
+        import { useEffect } from "react";
+        import { useTheme } from "next-themes";
+
+        function isTypingTarget(target: EventTarget | null) {
+          if (!(target instanceof HTMLElement)) return false;
+          return target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+        }
+
+        export function ThemeHotkey() {
+          const { resolvedTheme, setTheme } = useTheme();
+          useEffect(() => {
+            function onKeyDown(event: KeyboardEvent) {
+              if (event.key.toLowerCase() !== "d") return;
+              if (isTypingTarget(event.target)) return;
+              setTheme(resolvedTheme === "dark" ? "light" : "dark");
+            }
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, [resolvedTheme, setTheme]);
+          return null;
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "theme-hotkey-present")
+        ?.status
+    ).toBe("pass");
+  });
+
   it("reports missing Next fundamentals with evidence and remediation", async () => {
     const rootDir = await createFixture();
     await writeNextPackage(rootDir);

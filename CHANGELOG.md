@@ -6,6 +6,11 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- Theme shortcut and global hotkey checks now recognize verified local
+  typing-target guard predicates instead of reporting safe shortcuts as missing.
+
 ## 0.1.0-rc.1 - 2026-07-18
 
 ### Added

@@ -18,12 +18,11 @@ import {
 } from "../ast";
 import type { AuditRule } from "../audit";
 import { fail, pass } from "./rule-result";
+import { nodeHasTypingTargetGuard } from "./typing-target-guard";
 
 const BARE_KEY_PATTERN =
   /(?:key\.toLowerCase\(\)|key)\s*(?:===|!==)\s*["'][a-z]["']/i;
 const MODIFIER_PATTERN = /(?:metaKey|ctrlKey|altKey)/;
-const TYPING_TARGET_PATTERN =
-  /(?:INPUT|TEXTAREA|SELECT|isContentEditable|closest\(\s*["'][^"']*(?:input|textarea|select))/i;
 const ABORT_SIGNAL_PATTERN = /\bsignal\s*:/;
 
 interface GlobalKeydownListener {
@@ -169,7 +168,7 @@ const getUnsafeBareKey = (
 ): Node | null => {
   const handlerText = handler.getText(file.sourceFile);
 
-  if (TYPING_TARGET_PATTERN.test(handlerText)) {
+  if (nodeHasTypingTargetGuard(file, handler)) {
     return null;
   }
 

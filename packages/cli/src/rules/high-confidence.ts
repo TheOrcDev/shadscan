@@ -13,13 +13,13 @@ import {
   getTextLineNumber,
   readProjectSourceFile,
 } from "./source-files";
+import { sourceScopeHasTypingTargetGuard } from "./typing-target-guard";
 
 const THEME_PROVIDER_PATTERN = /(<ThemeProvider\b|next-themes|useTheme\()/;
 const KEYDOWN_HANDLER_PATTERN = /addEventListener\(["']keydown["']|onKeyDown/;
 const THEME_TOGGLE_PATTERN = /(setTheme\(|classList\.toggle\(["']dark["'])/;
 const D_KEY_PATTERN =
   /key\.toLowerCase\(\)\s*!==\s*["']d["']|key\s*===\s*["']d["']/;
-const TYPING_TARGET_PATTERN = /(INPUT|TEXTAREA|SELECT|isContentEditable)/;
 const NEXT_METADATA_PATTERN =
   /export\s+(const\s+metadata|async\s+function\s+generateMetadata|function\s+generateMetadata)/;
 const HTML_TITLE_PATTERN = /<title>[^<]+<\/title>/;
@@ -169,7 +169,7 @@ const themeHotkeyPresentRule: AuditRule = {
       const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(scope.content);
       const togglesTheme = THEME_TOGGLE_PATTERN.test(scope.content);
       const checksDKey = D_KEY_PATTERN.test(scope.content);
-      const ignoresTypingTargets = TYPING_TARGET_PATTERN.test(scope.content);
+      const ignoresTypingTargets = sourceScopeHasTypingTargetGuard(scope);
 
       if (hasKeyHandler && togglesTheme && checksDKey && ignoresTypingTargets) {
         return pass(

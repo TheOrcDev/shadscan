@@ -111,6 +111,70 @@ describe("interaction rules", () => {
       expect(
         (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
       ).toBe("pass");
+
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          function isTypingTarget(target: EventTarget | null) {
+            if (!(target instanceof HTMLElement)) return false;
+            return target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+          }
+
+          useEffect(() => {
+            const onKeyDown = (event) => {
+              if (event.key.toLowerCase() !== "d") return;
+              if (isTypingTarget(event.target)) return;
+              setTheme("dark");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          function isTypingTarget() {
+            return false;
+          }
+
+          useEffect(() => {
+            const onKeyDown = (event) => {
+              if (event.key === "d" && !isTypingTarget(event.target)) setTheme("dark");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          function isTypingTarget(target: EventTarget | null) {
+            return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+          }
+
+          useEffect(() => {
+            const onKeyDown = (event) => {
+              if (isTypingTarget(event.target) && event.shiftKey) return;
+              if (event.key === "d") setTheme("dark");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("fail");
     } finally {
       await fixture.cleanup();
     }
