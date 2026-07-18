@@ -213,6 +213,23 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("does not treat animation stylesheet imports as rendered motion", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/globals.css",
+        '@import "tailwindcss";\n@import "tw-animate-css";'
+      );
+      expect(
+        (await runRule(fixture.rootDir, animationsRespectReducedMotionRule))
+          .status
+      ).toBe("not-applicable");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("advises when an indexable app lacks robots or sitemap files", async () => {
     const fixture = await createRuleFixture({
       next: "16.0.0",

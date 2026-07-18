@@ -11,6 +11,8 @@ stable releases published under `latest`.
 - Empty-state checks now require actual query calls or mapped collection data,
   avoiding false failures from `nuqs` URL state, static table markup, and pages
   whose data-table component owns the empty-state branch.
+- Reduced-motion checks now ignore stylesheet import names until application
+  source actually uses an animation, transition, keyframe, or motion component.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories

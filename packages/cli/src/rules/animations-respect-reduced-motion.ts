@@ -12,6 +12,12 @@ const ANIMATION_PATTERN =
 const REDUCED_MOTION_PATTERN =
   /motion-(?:reduce|safe):|prefers-reduced-motion|useReducedMotion\s*\(|<MotionConfig\b|reducedMotion\s*=/i;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+const STYLESHEET_IMPORT_PATTERN = /^\s*@import\b[^;]*(?:;|$)/gim;
+
+const stripStylesheetImports = (content: string): string =>
+  content.replace(STYLESHEET_IMPORT_PATTERN, (statement) =>
+    statement.replace(/[^\n]/g, " ")
+  );
 
 const getMotionFiles = async (
   project: Parameters<AuditRule["run"]>[0]["project"]
@@ -19,9 +25,12 @@ const getMotionFiles = async (
   const sourceFiles = await getProjectSourceFiles(project);
   const styleFiles = await getProjectStyleFiles(project);
 
-  return [...sourceFiles, ...styleFiles].filter(
-    (file) => !GENERATED_UI_PATH_PATTERN.test(file.path)
-  );
+  return [...sourceFiles, ...styleFiles]
+    .filter((file) => !GENERATED_UI_PATH_PATTERN.test(file.path))
+    .map((file) => ({
+      ...file,
+      content: stripStylesheetImports(file.content),
+    }));
 };
 
 const animationsRespectReducedMotionRule: AuditRule = {
