@@ -26,13 +26,19 @@ const writeFixtureFile = async (
 
 const writeNextPackage = async (
   rootDir: string,
-  options: { includeToastDependency?: boolean } = {}
+  options: {
+    includeToastDependency?: boolean;
+    toastDependency?: "radix-ui" | "sonner";
+  } = {}
 ): Promise<void> => {
+  const toastDependency =
+    options.toastDependency ??
+    (options.includeToastDependency ? "sonner" : undefined);
   const dependencies = {
     next: "16.2.6",
     "next-themes": "0.4.6",
     react: "19.2.4",
-    ...(options.includeToastDependency ? { sonner: "2.0.0" } : {}),
+    ...(toastDependency ? { [toastDependency]: "2.0.0" } : {}),
   };
 
   await writeFixtureFile(
@@ -62,6 +68,25 @@ const writeComponentsJson = async (rootDir: string): Promise<void> => {
         style: "new-york",
         tailwind: {
           css: "app/globals.css",
+        },
+      },
+      null,
+      2
+    )}\n`
+  );
+};
+
+const writeAliasTsconfig = async (rootDir: string): Promise<void> => {
+  await writeFixtureFile(
+    rootDir,
+    "tsconfig.json",
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@/*": ["./*"],
+          },
         },
       },
       null,
@@ -279,6 +304,77 @@ describe("high confidence rules", () => {
       rootDir,
       "components/toaster.tsx",
       'export function Toaster() { return <div aria-live="polite" />; }'
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "toast-provider-present")
+        ?.status
+    ).toBe("fail");
+  });
+
+  it("recognizes a mounted Radix umbrella toast wrapper", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir, { toastDependency: "radix-ui" });
+    await writeComponentsJson(rootDir);
+    await writeAliasTsconfig(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/layout.tsx",
+      `
+        import { Toaster } from "@/components/ui/toaster";
+        export default function Layout({ children }: { children: React.ReactNode }) {
+          return <html><body>{children}<Toaster /></body></html>;
+        }
+      `
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/ui/toaster.tsx",
+      `
+        import { ToastProvider, ToastViewport } from "@/components/ui/toast";
+        export function Toaster() {
+          return <ToastProvider><ToastViewport /></ToastProvider>;
+        }
+      `
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/ui/toast.tsx",
+      `
+        import { Toast as ToastPrimitives } from "radix-ui";
+        export const ToastProvider = ToastPrimitives.Provider;
+        export const ToastViewport = ToastPrimitives.Viewport;
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "toast-provider-present")
+        ?.status
+    ).toBe("pass");
+  });
+
+  it("rejects unrelated Radix umbrella imports in toast-like wrappers", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir, { toastDependency: "radix-ui" });
+    await writeComponentsJson(rootDir);
+    await writeAliasTsconfig(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/layout.tsx",
+      'import { Toaster } from "@/components/toaster"; export default function Layout() { return <html><body><Toaster /></body></html>; }'
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/toaster.tsx",
+      'import { Accordion } from "radix-ui"; export function Toaster() { return <div>{String(Accordion)}</div>; }'
     );
 
     const report = await runAudit(rootDir, {

@@ -225,4 +225,86 @@ describe("state rules", () => {
       await fixture.cleanup();
     }
   });
+
+  it("follows a mounted toaster to Radix umbrella primitives", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      "radix-ui": "1.6.0",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({
+          compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+        })
+      );
+      await fixture.write(
+        "app/layout.tsx",
+        'import { Toaster } from "@/components/ui/toaster"; export default function Layout({ children }) { return <html><body>{children}<Toaster /></body></html>; }'
+      );
+      await fixture.write(
+        "components/ui/toaster.tsx",
+        'import { ToastProvider, ToastViewport } from "@/components/ui/toast"; export function Toaster() { return <ToastProvider><ToastViewport /></ToastProvider>; }'
+      );
+      await fixture.write(
+        "components/ui/toast.tsx",
+        'import { Toast as ToastPrimitives } from "radix-ui"; export const ToastProvider = ToastPrimitives.Provider; export const ToastViewport = ToastPrimitives.Viewport;'
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, toastProviderMountedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("accepts direct Radix providers and terminates cyclic wrappers", async () => {
+    const directFixture = await createRuleFixture({
+      "@radix-ui/react-toast": "1.2.0",
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await directFixture.write(
+        "app/layout.tsx",
+        'import * as Toast from "@radix-ui/react-toast"; export default function Layout({ children }) { return <html><body><Toast.Provider>{children}<Toast.Viewport /></Toast.Provider></body></html>; }'
+      );
+      expect(
+        (await runRule(directFixture.rootDir, toastProviderMountedRule)).status
+      ).toBe("pass");
+    } finally {
+      await directFixture.cleanup();
+    }
+
+    const cyclicFixture = await createRuleFixture({
+      next: "16.2.6",
+      "radix-ui": "1.6.0",
+      react: "19.2.4",
+    });
+
+    try {
+      await cyclicFixture.write(
+        "app/layout.tsx",
+        'import { Toaster } from "../components/toaster"; export default function Layout() { return <html><body><Toaster /></body></html>; }'
+      );
+      await cyclicFixture.write(
+        "components/toaster.tsx",
+        'import { ToastLayer } from "./toast-layer"; export function Toaster() { return <ToastLayer />; } export const ToastRoot = () => null;'
+      );
+      await cyclicFixture.write(
+        "components/toast-layer.tsx",
+        'import { ToastRoot } from "./toaster"; export function ToastLayer() { return <ToastRoot />; }'
+      );
+
+      expect(
+        (await runRule(cyclicFixture.rootDir, toastProviderMountedRule)).status
+      ).toBe("fail");
+    } finally {
+      await cyclicFixture.cleanup();
+    }
+  });
 });

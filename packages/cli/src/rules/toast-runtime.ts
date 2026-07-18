@@ -1,0 +1,540 @@
+import path from "node:path";
+import {
+  type CompilerOptions,
+  createSourceFile,
+  forEachChild,
+  getParsedCommandLineOfConfigFile,
+  isIdentifier,
+  isImportDeclaration,
+  isJsxOpeningElement,
+  isJsxSelfClosingElement,
+  isNamedImports,
+  isNamespaceImport,
+  isStringLiteral,
+  type Node,
+  type ParseConfigFileHost,
+  resolveModuleName,
+  ScriptKind,
+  ScriptTarget,
+  sys,
+  type SourceFile as TypeScriptSourceFile,
+} from "typescript";
+import type { ProjectDiscovery } from "../discovery";
+import {
+  getProjectSourceFiles,
+  readProjectSourceFile,
+  type SourceFile,
+} from "./source-files";
+
+interface ImportBinding {
+  importedName: string;
+  localName: string;
+}
+
+interface ImportReference {
+  bindings: ImportBinding[];
+  line: number;
+  moduleName: string;
+}
+
+interface ToastEvidence {
+  filePath: string;
+  line: number;
+}
+
+interface ToastRuntimeEvidence extends ToastEvidence {
+  moduleName: string;
+}
+
+interface ToastRuntimeAnalysis {
+  hasDependency: boolean;
+  mount: (ToastEvidence & { componentName: string }) | null;
+  runtime: ToastRuntimeEvidence | null;
+  shell: SourceFile | null;
+}
+
+interface ParsedProjectFile {
+  file: SourceFile;
+  sourceFile: TypeScriptSourceFile;
+}
+
+const MAX_LOCAL_IMPORT_DEPTH = 3;
+const SCRIPT_FILE_PATTERN = /\.[cm]?[jt]sx?$/;
+const TOAST_NAME_PATTERN = /(?:sonner|toast)/i;
+const TOAST_DEPENDENCIES = [
+  "@radix-ui/react-toast",
+  "radix-ui",
+  "react-hot-toast",
+  "sonner",
+] as const;
+const MODULE_CANDIDATE_SUFFIXES = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mts",
+  ".cts",
+  ".mjs",
+  ".cjs",
+  "/index.ts",
+  "/index.tsx",
+  "/index.js",
+  "/index.jsx",
+] as const;
+const analysisCache = new WeakMap<
+  ProjectDiscovery,
+  Promise<ToastRuntimeAnalysis>
+>();
+
+const parseConfigHost: ParseConfigFileHost = {
+  ...sys,
+  onUnRecoverableConfigFileDiagnostic: () => undefined,
+};
+
+const getScriptKind = (filePath: string): ScriptKind => {
+  if (filePath.endsWith(".tsx")) {
+    return ScriptKind.TSX;
+  }
+
+  if (filePath.endsWith(".jsx")) {
+    return ScriptKind.JSX;
+  }
+
+  return filePath.endsWith(".ts") ? ScriptKind.TS : ScriptKind.JS;
+};
+
+const parseSourceFile = (file: SourceFile): ParsedProjectFile => ({
+  file,
+  sourceFile: createSourceFile(
+    file.path,
+    file.content,
+    ScriptTarget.Latest,
+    true,
+    getScriptKind(file.path)
+  ),
+});
+
+const getLineNumber = (sourceFile: TypeScriptSourceFile, node: Node): number =>
+  sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+
+const walkNodes = (node: Node, visitor: (node: Node) => unknown): void => {
+  if (visitor(node) === false) {
+    return;
+  }
+
+  forEachChild(node, (child) => {
+    walkNodes(child, visitor);
+  });
+};
+
+const getImportReferences = (
+  sourceFile: TypeScriptSourceFile
+): ImportReference[] => {
+  const references: ImportReference[] = [];
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !(
+        isImportDeclaration(statement) &&
+        isStringLiteral(statement.moduleSpecifier)
+      )
+    ) {
+      continue;
+    }
+
+    const bindings: ImportBinding[] = [];
+    const importClause = statement.importClause;
+
+    if (importClause?.name) {
+      bindings.push({
+        importedName: "default",
+        localName: importClause.name.text,
+      });
+    }
+
+    const namedBindings = importClause?.namedBindings;
+
+    if (namedBindings && isNamespaceImport(namedBindings)) {
+      bindings.push({ importedName: "*", localName: namedBindings.name.text });
+    } else if (namedBindings && isNamedImports(namedBindings)) {
+      for (const element of namedBindings.elements) {
+        bindings.push({
+          importedName: element.propertyName?.text ?? element.name.text,
+          localName: element.name.text,
+        });
+      }
+    }
+
+    references.push({
+      bindings,
+      line: getLineNumber(sourceFile, statement),
+      moduleName: statement.moduleSpecifier.text,
+    });
+  }
+
+  return references;
+};
+
+const getReferencedIdentifiers = (
+  sourceFile: TypeScriptSourceFile
+): Set<string> => {
+  const identifiers = new Set<string>();
+
+  walkNodes(sourceFile, (node) => {
+    if (isImportDeclaration(node)) {
+      return false;
+    }
+
+    if (isIdentifier(node)) {
+      identifiers.add(node.text);
+    }
+
+    return true;
+  });
+
+  return identifiers;
+};
+
+const getRenderedBindings = (
+  sourceFile: TypeScriptSourceFile
+): Map<string, number> => {
+  const renderedBindings = new Map<string, number>();
+
+  walkNodes(sourceFile, (node) => {
+    if (!(isJsxOpeningElement(node) || isJsxSelfClosingElement(node))) {
+      return;
+    }
+
+    const rootName = node.tagName.getText(sourceFile).split(".")[0];
+
+    if (rootName) {
+      renderedBindings.set(rootName, getLineNumber(sourceFile, node));
+    }
+  });
+
+  return renderedBindings;
+};
+
+const isWithinRoot = (rootDir: string, candidatePath: string): boolean => {
+  const relativePath = path.relative(rootDir, candidatePath);
+
+  return (
+    relativePath !== ".." &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath)
+  );
+};
+
+const getCompilerOptions = (project: ProjectDiscovery): CompilerOptions => {
+  if (!project.paths.tsconfig) {
+    return {};
+  }
+
+  return (
+    getParsedCommandLineOfConfigFile(
+      project.paths.tsconfig,
+      {},
+      parseConfigHost
+    )?.options ?? {}
+  );
+};
+
+const getSourceCandidate = (
+  candidatePath: string,
+  filesByPath: Map<string, ParsedProjectFile>
+): ParsedProjectFile | null => {
+  for (const suffix of MODULE_CANDIDATE_SUFFIXES) {
+    const candidate = filesByPath.get(
+      path.resolve(`${candidatePath}${suffix}`)
+    );
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
+const resolveLocalImport = (
+  moduleName: string,
+  containingFile: string,
+  project: ProjectDiscovery,
+  compilerOptions: CompilerOptions,
+  filesByPath: Map<string, ParsedProjectFile>
+): ParsedProjectFile | null => {
+  const resolvedFileName = resolveModuleName(
+    moduleName,
+    containingFile,
+    compilerOptions,
+    sys
+  ).resolvedModule?.resolvedFileName;
+
+  if (
+    resolvedFileName &&
+    isWithinRoot(project.rootDir, resolvedFileName) &&
+    !resolvedFileName.includes(`${path.sep}node_modules${path.sep}`)
+  ) {
+    const resolvedFile = filesByPath.get(path.resolve(resolvedFileName));
+
+    if (resolvedFile) {
+      return resolvedFile;
+    }
+  }
+
+  if (moduleName.startsWith(".")) {
+    return getSourceCandidate(
+      path.resolve(path.dirname(containingFile), moduleName),
+      filesByPath
+    );
+  }
+
+  if (moduleName.startsWith("@/")) {
+    return getSourceCandidate(
+      path.resolve(project.rootDir, moduleName.slice(2)),
+      filesByPath
+    );
+  }
+
+  return null;
+};
+
+const isRuntimeImport = (
+  reference: ImportReference,
+  referencedIdentifiers: Set<string>,
+  project: ProjectDiscovery
+): boolean => {
+  if (!project.dependencies[reference.moduleName]) {
+    return false;
+  }
+
+  const usedBindings = reference.bindings.filter((binding) =>
+    referencedIdentifiers.has(binding.localName)
+  );
+
+  if (reference.moduleName === "radix-ui") {
+    return usedBindings.some((binding) => binding.importedName === "Toast");
+  }
+
+  if (reference.moduleName === "@radix-ui/react-toast") {
+    return usedBindings.some((binding) =>
+      ["*", "Provider", "ToastProvider", "Viewport"].includes(
+        binding.importedName
+      )
+    );
+  }
+
+  if (
+    reference.moduleName === "sonner" ||
+    reference.moduleName === "react-hot-toast"
+  ) {
+    return usedBindings.some((binding) => binding.importedName === "Toaster");
+  }
+
+  return false;
+};
+
+const findRuntimeThroughLocalImports = (
+  currentFile: ParsedProjectFile,
+  project: ProjectDiscovery,
+  compilerOptions: CompilerOptions,
+  filesByPath: Map<string, ParsedProjectFile>,
+  visitedFiles: Set<string>,
+  depth: number
+): ToastRuntimeEvidence | null => {
+  const currentPath = path.resolve(currentFile.file.path);
+
+  if (visitedFiles.has(currentPath)) {
+    return null;
+  }
+
+  visitedFiles.add(currentPath);
+  const imports = getImportReferences(currentFile.sourceFile);
+  const referencedIdentifiers = getReferencedIdentifiers(
+    currentFile.sourceFile
+  );
+
+  for (const reference of imports) {
+    if (isRuntimeImport(reference, referencedIdentifiers, project)) {
+      return {
+        filePath: currentFile.file.path,
+        line: reference.line,
+        moduleName: reference.moduleName,
+      };
+    }
+  }
+
+  if (depth >= MAX_LOCAL_IMPORT_DEPTH) {
+    return null;
+  }
+
+  for (const reference of imports) {
+    const importIsUsed = reference.bindings.some((binding) =>
+      referencedIdentifiers.has(binding.localName)
+    );
+
+    if (!importIsUsed) {
+      continue;
+    }
+
+    const localFile = resolveLocalImport(
+      reference.moduleName,
+      currentFile.file.path,
+      project,
+      compilerOptions,
+      filesByPath
+    );
+
+    if (!localFile) {
+      continue;
+    }
+
+    const runtime = findRuntimeThroughLocalImports(
+      localFile,
+      project,
+      compilerOptions,
+      filesByPath,
+      visitedFiles,
+      depth + 1
+    );
+
+    if (runtime) {
+      return runtime;
+    }
+  }
+
+  return null;
+};
+
+const getShellPaths = (project: ProjectDiscovery): string[] => {
+  if (project.paths.appDir) {
+    return ["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
+      (fileName) => path.join(project.paths.appDir ?? "", fileName)
+    );
+  }
+
+  if (project.paths.viteEntry) {
+    return [project.paths.viteEntry];
+  }
+
+  return ["src/main.tsx", "src/main.jsx", "src/App.tsx", "src/App.jsx"].map(
+    (fileName) => path.join(project.rootDir, fileName)
+  );
+};
+
+const readShell = async (
+  project: ProjectDiscovery
+): Promise<SourceFile | null> => {
+  for (const shellPath of getShellPaths(project)) {
+    const shell = await readProjectSourceFile(project, shellPath);
+
+    if (shell) {
+      return shell;
+    }
+  }
+
+  return null;
+};
+
+const runToastRuntimeAnalysis = async (
+  project: ProjectDiscovery
+): Promise<ToastRuntimeAnalysis> => {
+  const hasDependency = TOAST_DEPENDENCIES.some(
+    (dependency) => project.dependencies[dependency]
+  );
+  const shell = await readShell(project);
+
+  if (!(hasDependency && shell && SCRIPT_FILE_PATTERN.test(shell.path))) {
+    return { hasDependency, mount: null, runtime: null, shell };
+  }
+
+  const sourceFiles = await getProjectSourceFiles(project);
+  const parsedFiles = sourceFiles
+    .filter((file) => SCRIPT_FILE_PATTERN.test(file.path))
+    .map(parseSourceFile);
+  const filesByPath = new Map(
+    parsedFiles.map((file) => [path.resolve(file.file.path), file])
+  );
+  const parsedShell =
+    filesByPath.get(path.resolve(shell.path)) ?? parseSourceFile(shell);
+  const renderedBindings = getRenderedBindings(parsedShell.sourceFile);
+  const compilerOptions = getCompilerOptions(project);
+
+  for (const reference of getImportReferences(parsedShell.sourceFile)) {
+    for (const binding of reference.bindings) {
+      const mountLine = renderedBindings.get(binding.localName);
+      const isToastMount =
+        TOAST_NAME_PATTERN.test(binding.localName) ||
+        TOAST_NAME_PATTERN.test(binding.importedName);
+
+      if (!(mountLine && isToastMount)) {
+        continue;
+      }
+
+      const mount = {
+        componentName: binding.localName,
+        filePath: shell.path,
+        line: mountLine,
+      };
+      const shellIdentifiers = getReferencedIdentifiers(parsedShell.sourceFile);
+
+      if (isRuntimeImport(reference, shellIdentifiers, project)) {
+        return {
+          hasDependency,
+          mount,
+          runtime: {
+            filePath: shell.path,
+            line: reference.line,
+            moduleName: reference.moduleName,
+          },
+          shell,
+        };
+      }
+
+      const localFile = resolveLocalImport(
+        reference.moduleName,
+        shell.path,
+        project,
+        compilerOptions,
+        filesByPath
+      );
+
+      if (!localFile) {
+        continue;
+      }
+
+      const runtime = findRuntimeThroughLocalImports(
+        localFile,
+        project,
+        compilerOptions,
+        filesByPath,
+        new Set<string>(),
+        1
+      );
+
+      if (runtime) {
+        return { hasDependency, mount, runtime, shell };
+      }
+    }
+  }
+
+  return { hasDependency, mount: null, runtime: null, shell };
+};
+
+const analyzeToastRuntime = (
+  project: ProjectDiscovery
+): Promise<ToastRuntimeAnalysis> => {
+  const cachedAnalysis = analysisCache.get(project);
+
+  if (cachedAnalysis) {
+    return cachedAnalysis;
+  }
+
+  const analysis = runToastRuntimeAnalysis(project);
+  analysisCache.set(project, analysis);
+  return analysis;
+};
+
+export type { ToastRuntimeAnalysis };
+export { analyzeToastRuntime };

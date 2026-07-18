@@ -8,6 +8,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Toast setup checks now recognize mounted local wrappers backed by the
+  `radix-ui` Toast export while continuing to reject placeholder toasters.
 - Theme shortcut and global hotkey checks now recognize verified local
   typing-target guard predicates instead of reporting safe shortcuts as missing.
 

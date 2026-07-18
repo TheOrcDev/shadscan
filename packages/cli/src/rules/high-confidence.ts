@@ -13,6 +13,7 @@ import {
   getTextLineNumber,
   readProjectSourceFile,
 } from "./source-files";
+import { analyzeToastRuntime } from "./toast-runtime";
 import { sourceScopeHasTypingTargetGuard } from "./typing-target-guard";
 
 const THEME_PROVIDER_PATTERN = /(<ThemeProvider\b|next-themes|useTheme\()/;
@@ -27,14 +28,6 @@ const HTML_DESCRIPTION_PATTERN = /<meta\s+name=["']description["']/;
 const FAVICON_LINK_PATTERN = /<link\s+rel=["'](?:icon|shortcut icon)["']/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
-const TOAST_IMPORT_PATTERN =
-  /from\s+["'](?:sonner|react-hot-toast|@radix-ui\/react-toast)["']/;
-const TOAST_MOUNT_PATTERN = /<(?:Toaster|ToastProvider|Sonner)(?:\s|>)/;
-const TOAST_DEPENDENCIES = [
-  "@radix-ui/react-toast",
-  "react-hot-toast",
-  "sonner",
-] as const;
 
 const evidence = (
   message: string,
@@ -360,25 +353,25 @@ const toastProviderPresentRule: AuditRule = {
   id: "toast-provider-present",
   maxScore: 3,
   run: async (context) => {
-    const hasToastDependency = TOAST_DEPENDENCIES.some(
-      (dependency) => context.project.dependencies[dependency]
-    );
-    const importMatch = await findFirstSourceMatch(
-      context,
-      TOAST_IMPORT_PATTERN
-    );
-    const mountMatch = await findFirstSourceMatch(context, TOAST_MOUNT_PATTERN);
+    const analysis = await analyzeToastRuntime(context.project);
 
-    if (hasToastDependency && importMatch && mountMatch) {
+    if (analysis.mount && analysis.runtime) {
       return pass(
-        "Recognized toast runtime and mounted provider usage found.",
-        mountMatch.file.path,
-        mountMatch.line
+        `Mounted ${analysis.mount.componentName} reaches the ${analysis.runtime.moduleName} toast runtime.`,
+        analysis.mount.filePath,
+        analysis.mount.line
+      );
+    }
+
+    if (!analysis.hasDependency) {
+      return fail(
+        "No recognized toast runtime dependency was found.",
+        "Install a toast runtime such as Sonner or Radix Toast, then mount its provider from the app shell."
       );
     }
 
     return fail(
-      "No verifiable toast runtime and mounted provider were found.",
+      "No mounted toast provider with verifiable runtime provenance was found.",
       "Install and import a recognized toast runtime, then mount its toaster/provider so async feedback has somewhere to appear.",
       "Somewhere, a save button clicked successfully and nobody knew."
     );
