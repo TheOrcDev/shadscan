@@ -15,6 +15,8 @@ stable releases published under `latest`.
   source actually uses an animation, transition, keyframe, or motion component.
 - Shadcn wildcard aliases now validate their configured mapping roots without
   requiring unused destination directories such as `@/hooks` to exist yet.
+- Async-action checks now recognize parenthesized pending-state branches and
+  loading feedback supplied by `toast.promise`.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories

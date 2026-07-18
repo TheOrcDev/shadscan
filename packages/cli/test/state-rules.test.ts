@@ -342,6 +342,27 @@ describe("state rules", () => {
       expect(
         (await runRule(fixture.rootDir, asyncActionPendingStateRule)).status
       ).toBe("pass");
+
+      await fixture.write(
+        "src/form.tsx",
+        'export function Form() { const [loading] = useState(false); return <form onSubmit={save}><Button disabled={loading}>{loading ? (<HugeiconsIcon icon={Loading03Icon} />) : ("Save")}</Button></form>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, asyncActionPendingStateRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/form.tsx",
+        'export function Form() { return <form onSubmit={(event) => { event.preventDefault(); toast.promise(save(), { loading: "Saving", success: "Saved", error: "Failed" }); }}><Button>Save</Button></form>; }'
+      );
+      const toastFinding = await runRule(
+        fixture.rootDir,
+        asyncActionPendingStateRule
+      );
+      expect(toastFinding.status).toBe("fail");
+      expect(toastFinding.evidence[0]?.message).toBe(
+        "Async action handling is missing a disabled trigger while pending."
+      );
     } finally {
       await fixture.cleanup();
     }

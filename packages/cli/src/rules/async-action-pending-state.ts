@@ -9,7 +9,9 @@ const PENDING_STATE_PATTERN =
 const DISABLED_PENDING_PATTERN =
   /disabled\s*=\s*\{[^}]*(?:isPending|pending|isSubmitting|isLoading|loading)[^}]*\}/;
 const VISIBLE_PENDING_PATTERN =
-  /<(?:Spinner|Loader\w*)\b|aria-busy\s*=|(?:isPending|pending|isSubmitting|isLoading|loading)\s*\?\s*(?:["'`][^"'`]+["'`]|<)/;
+  /<(?:Spinner|Loader\w*)\b|aria-busy\s*=|(?:isPending|pending|isSubmitting|isLoading|loading)\s*\?\s*(?:\(\s*)*(?:["'`][^"'`]+["'`]|<)/;
+const TOAST_PROMISE_PENDING_PATTERN =
+  /\btoast\.promise\s*\([\s\S]*?\bloading\s*:/;
 
 const asyncActionPendingStateRule: AuditRule = {
   adapters: ["core"],
@@ -34,7 +36,9 @@ const asyncActionPendingStateRule: AuditRule = {
     for (const scope of actionScopes) {
       const hasPendingState = PENDING_STATE_PATTERN.test(scope.content);
       const disablesWhilePending = DISABLED_PENDING_PATTERN.test(scope.content);
-      const showsPendingFeedback = VISIBLE_PENDING_PATTERN.test(scope.content);
+      const showsPendingFeedback =
+        VISIBLE_PENDING_PATTERN.test(scope.content) ||
+        TOAST_PROMISE_PENDING_PATTERN.test(scope.content);
 
       if (hasPendingState && disablesWhilePending && showsPendingFeedback) {
         continue;
