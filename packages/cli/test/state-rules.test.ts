@@ -9,7 +9,7 @@ import { toastProviderMountedRule } from "../src/rules/toast-provider-mounted";
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 describe("state rules", () => {
-  it("requires loading coverage for async Next routes", async () => {
+  it("requires loading coverage for runtime-dynamic Next routes", async () => {
     const fixture = await createRuleFixture({
       next: "16.2.6",
       react: "19.2.4",
@@ -18,7 +18,7 @@ describe("state rules", () => {
     try {
       await fixture.write(
         "app/dashboard/page.tsx",
-        "export default async function Page() { const data = await loadData(); return <main>{data}</main>; }"
+        'export const dynamic = "force-dynamic"; export default async function Page() { const data = await loadData(); return <main>{data}</main>; }'
       );
       expect(
         (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
@@ -31,6 +31,106 @@ describe("state rules", () => {
       expect(
         (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
       ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("distinguishes dynamic rendering from static generation and event handlers", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/blog/[slug]/page.tsx",
+        `
+          export function generateStaticParams() { return [{ slug: "hello" }]; }
+          export default async function Page() {
+            const post = await getPost();
+            return <article>{post.title}</article>;
+          }
+        `
+      );
+      await fixture.write(
+        "app/unsubscribe/page.tsx",
+        `
+          "use client";
+          export default function Page() {
+            async function onClick() { await unsubscribe(); }
+            return <button onClick={onClick}>Unsubscribe</button>;
+          }
+        `
+      );
+      await fixture.write(
+        "app/videos/page.tsx",
+        `
+          export const dynamic = "force-dynamic";
+          export default async function Page() {
+            const videos = await getVideos();
+            return <main>{videos.length}</main>;
+          }
+        `
+      );
+
+      const finding = await runRule(
+        fixture.rootDir,
+        routeLoadingBoundaryPresentRule
+      );
+      expect(finding.status).toBe("fail");
+      expect(finding.evidence[0]?.filePath).toContain("app/videos/page.tsx");
+
+      await fixture.write(
+        "app/videos/loading.tsx",
+        "export default function Loading() { return <p>Loading videos...</p>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("recognizes strong Next runtime-dynamic signals", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/search/page.tsx",
+        "export const revalidate = 0; export default function Page() { return <main />; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/search/page.tsx",
+        'import { headers as getHeaders } from "next/headers"; export default async function Page() { const values = await getHeaders(); return <main>{values.get("host")}</main>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/search/page.tsx",
+        "export default async function Page({ searchParams }) { const query = await searchParams; return <main>{query.q}</main>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/search/page.tsx",
+        "export default async function Page() { const data = await loadData(); return <main>{data}</main>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, routeLoadingBoundaryPresentRule)).status
+      ).toBe("not-applicable");
     } finally {
       await fixture.cleanup();
     }

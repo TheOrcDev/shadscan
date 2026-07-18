@@ -206,6 +206,97 @@ describe("foundation rules", () => {
     }
   });
 
+  it("evaluates Next metadata through the route hierarchy", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        `
+          export const metadata = {
+            title: "Acme",
+            description: "Acme projects",
+          };
+          export default function Layout({ children }) { return <html>{children}</html>; }
+        `
+      );
+      await fixture.write(
+        "app/blog/[slug]/page.tsx",
+        `
+          export async function generateMetadata() {
+            const post = await getPost();
+            return { title: post.title, openGraph: { title: post.title } };
+          }
+          export default function Page() { return <main />; }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
+          .status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/blog/[slug]/page.tsx",
+        `
+          export async function generateMetadata() {
+            return { title: "Blog", description: "" };
+          }
+          export default function Page() { return <main />; }
+        `
+      );
+      const emptyOverride = await runRule(
+        fixture.rootDir,
+        metadataTitleDescriptionCompleteRule
+      );
+      expect(emptyOverride.status).toBe("fail");
+      expect(emptyOverride.evidence[0]?.filePath).toContain(
+        "app/blog/[slug]/page.tsx"
+      );
+
+      await fixture.write(
+        "app/layout.tsx",
+        'export const metadata = { title: "Acme" }; export default function Layout({ children }) { return <html>{children}</html>; }'
+      );
+      const incompleteRoot = await runRule(
+        fixture.rootDir,
+        metadataTitleDescriptionCompleteRule
+      );
+      expect(incompleteRoot.status).toBe("fail");
+      expect(incompleteRoot.evidence[0]?.filePath).toContain("app/layout.tsx");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("supports complete page metadata without a root metadata export", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <html>{children}</html>; }"
+      );
+      await fixture.write(
+        "app/page.tsx",
+        'export const metadata = { title: "Home", description: "Acme home" }; export default function Page() { return <main />; }'
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
+          .status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("detects image-backed social previews", async () => {
     const fixture = await createRuleFixture({
       next: "16.2.6",
