@@ -8,6 +8,10 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Destructive-action advisories now require an interactive action surface and
+  correlate confirmation within the same component flow; overflow advisories
+  now inspect only layout classes, inline styles, and CSS declarations while
+  respecting local overflow containment.
 - Form label checks now ignore generated prop-forwarding primitives and report
   unlabeled `Input`/`Textarea` usage at rendered call sites, including shadcn
   `FormItem` and `FormLabel` composition.

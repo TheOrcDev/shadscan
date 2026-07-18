@@ -103,6 +103,58 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("ignores destructive styling on non-interactive badges", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/equipment.tsx",
+        'export function Equipment() { return <Badge variant="destructive">Coming soon</Badge>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("not-applicable");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("does not correlate unrelated confirmation UI", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/account.tsx",
+        'export function Account() { return <Button variant="destructive">Delete account</Button>; }'
+      );
+      await fixture.write(
+        "src/profile.tsx",
+        "export function Profile() { return <AlertDialog>Confirm profile reset</AlertDialog>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("advisory");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("detects destructive handlers on interactive elements", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/account.tsx",
+        "export function Account() { return <button onClick={deleteAccount}>Close account</button>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("advisory");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("ignores destructive method names in non-UI source", async () => {
     const fixture = await createRuleFixture();
 
@@ -267,6 +319,88 @@ describe("browser-sensitive advisory rules", () => {
       const finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
       expect(finding.status).toBe("advisory");
       expect(finding.evidence[0]?.message).toContain("overflow-prone");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("ignores viewport hints in responsive image sizes", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/project-grid.tsx",
+        'export function ProjectGrid() { return <Image fill sizes="(min-width: 640px) 50vw, 100vw" />; }'
+      );
+      const finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.status).toBe("advisory");
+      expect(finding.evidence[0]?.message).not.toContain("overflow-prone");
+      expect(finding.evidence[0]?.filePath).toBeUndefined();
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("detects static inline and stylesheet width risks", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/dashboard.tsx",
+        'export function Dashboard() { return <div style={{ minWidth: "900px" }}>Content</div>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileOverflowAbsentRule)).evidence[0]
+          ?.message
+      ).toContain("overflow-prone");
+
+      await fixture.write(
+        "src/dashboard.tsx",
+        'export function Dashboard() { return <div className="max-w-full">Content</div>; }'
+      );
+      await fixture.write("src/dashboard.css", ".wide { width: 100vw; }");
+      expect(
+        (await runRule(fixture.rootDir, mobileOverflowAbsentRule)).evidence[0]
+          ?.message
+      ).toContain("overflow-prone");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("ignores viewport widths inside intentional overflow containment", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/spotlight.tsx",
+        `
+          export function Spotlight() {
+            return (
+              <div className="absolute inset-0 overflow-hidden">
+                <div className="absolute h-screen w-screen" />
+              </div>
+            );
+          }
+        `
+      );
+      const finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.evidence[0]?.message).not.toContain("overflow-prone");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("ignores overflow vocabulary outside layout-bearing contexts", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/article.tsx",
+        'export function Article() { return <main className="max-w-screen-lg"><p>Avoid writing width: 100vw in constrained layouts.</p></main>; }'
+      );
+      const finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.evidence[0]?.message).not.toContain("overflow-prone");
     } finally {
       await fixture.cleanup();
     }
