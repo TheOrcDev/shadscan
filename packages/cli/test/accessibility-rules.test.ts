@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runAudit } from "../src/audit";
 import { accessibilityRules } from "../src/rules/accessibility";
+import { customControlsHaveLabelsRule } from "../src/rules/custom-controls-have-labels";
 
 const tempDirs: string[] = [];
 
@@ -35,6 +36,27 @@ const writeFixtureFile = async (
   const absolutePath = path.join(rootDir, filePath);
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, content);
+};
+
+const writeGeneratedFormPrimitives = async (rootDir: string): Promise<void> => {
+  await writeFixtureFile(
+    rootDir,
+    "components/ui/input.tsx",
+    `
+      export function Input(props) {
+        return <input data-slot="input" {...props} />;
+      }
+    `
+  );
+  await writeFixtureFile(
+    rootDir,
+    "components/ui/textarea.tsx",
+    `
+      export function Textarea(props) {
+        return <textarea data-slot="textarea" {...props} />;
+      }
+    `
+  );
 };
 
 afterEach(async () => {
@@ -205,6 +227,185 @@ describe("accessibility rules", () => {
       report.findings.find((finding) => finding.id === "forms-have-labels")
         ?.status
     ).toBe("fail");
+  });
+
+  it("does not report generated pass-through form primitives", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "forms-have-labels")
+        ?.status
+    ).toBe("pass");
+  });
+
+  it("accepts accessible names and explicit labels on form wrappers", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App() {
+          return (
+            <form>
+              <Input aria-label="Email" />
+              <Label htmlFor="bio">Biography</Label>
+              <Textarea id="bio" />
+            </form>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "forms-have-labels")
+        ?.status
+    ).toBe("pass");
+  });
+
+  it("accepts a FormLabel in the nearest shadcn FormItem", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App() {
+          return (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl><Input /></FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "forms-have-labels")
+        ?.status
+    ).toBe("pass");
+  });
+
+  it("requires FormControl for implicit FormLabel association", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App() {
+          return (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <Input />
+            </FormItem>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "forms-have-labels")
+        ?.status
+    ).toBe("fail");
+  });
+
+  it("reports unlabeled form wrappers at their rendered call sites", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/newsletter.tsx",
+      `
+        export function Newsletter() {
+          return (
+            <>
+              <FormItem>
+                <FormControl>
+                  <Input placeholder="Email" name="email" aria-describedby="email-error" />
+                </FormControl>
+                <FormMessage id="email-error" />
+              </FormItem>
+              <FormItem>
+                <FormControl>
+                  <Input placeholder="Username" name="username" />
+                </FormControl>
+              </FormItem>
+            </>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: [...accessibilityRules, customControlsHaveLabelsRule],
+    });
+    const finding = report.findings.find(
+      (candidate) => candidate.id === "forms-have-labels"
+    );
+
+    expect(finding?.status).toBe("fail");
+    expect(finding?.evidence).toHaveLength(2);
+    expect(finding?.evidence.map((item) => item.filePath)).toEqual([
+      "src/newsletter.tsx",
+      "src/newsletter.tsx",
+    ]);
+    expect(finding?.evidence.map((item) => item.line)).toEqual([7, 13]);
+    expect(
+      finding?.evidence.every((item) => item.message.includes("Input"))
+    ).toBe(true);
+    expect(
+      report.findings.find(
+        (candidate) => candidate.id === "custom-controls-have-labels"
+      )?.status
+    ).toBe("pass");
+  });
+
+  it("treats a dynamic FormLabel as advisory", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App({ label }) {
+          return (
+            <FormItem>
+              <FormLabel>{label}</FormLabel>
+              <FormControl><Input /></FormControl>
+            </FormItem>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "forms-have-labels")
+        ?.status
+    ).toBe("advisory");
   });
 
   it("fails dialog content without a title", async () => {

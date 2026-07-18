@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Form label checks now ignore generated prop-forwarding primitives and report
+  unlabeled `Input`/`Textarea` usage at rendered call sites, including shadcn
+  `FormItem` and `FormLabel` composition.
 - Navigation checks now recognize correlated custom mobile panels and compare
   landmark names only when responsive visibility allows them to coexist.
 - Next metadata checks now honor root-to-leaf inheritance, and loading checks

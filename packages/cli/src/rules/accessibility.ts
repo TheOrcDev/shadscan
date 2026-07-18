@@ -1,5 +1,11 @@
-import type { JsxElement, JsxOpeningLikeElement } from "typescript";
-import { isJsxElement, isJsxSelfClosingElement } from "typescript";
+import {
+  isJsxElement,
+  isJsxSelfClosingElement,
+  isJsxSpreadAttribute,
+  type JsxElement,
+  type JsxOpeningLikeElement,
+  type Node,
+} from "typescript";
 import {
   ancestorHasTagName,
   type EvidenceState,
@@ -18,7 +24,18 @@ import {
 import type { AuditEvidence, AuditRule, AuditRuleResult } from "../audit";
 
 const BUTTON_TAGS = new Set(["Button", "button"]);
-const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
+const FORM_CONTROL_TAGS = new Set([
+  "Input",
+  "Textarea",
+  "input",
+  "select",
+  "textarea",
+]);
+const FORM_LABEL_TAGS = new Set(["FormLabel", "Label", "label"]);
+const FORM_WRAPPER_TAGS = new Set(["Input", "Textarea"]);
+const GENERATED_FORM_PRIMITIVE_TAGS = new Set(["input", "textarea"]);
+const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+const MAX_FORM_LABEL_EVIDENCE = 5;
 const NON_SEMANTIC_INTERACTIVE_TAGS = new Set(["div", "span"]);
 const INTERACTIVE_ROLES = new Set([
   "button",
@@ -99,6 +116,154 @@ const getAccessibleNameState = (node: JsxOpeningLikeElement): EvidenceState => {
   }
 
   return states.includes("unknown") ? "unknown" : "invalid";
+};
+
+const getFormAccessibleNameState = (
+  node: JsxOpeningLikeElement
+): EvidenceState => {
+  const states = [
+    getTextAttributeState(node, "aria-label"),
+    getTextAttributeState(node, "aria-labelledby"),
+  ];
+
+  if (states.includes("valid")) {
+    return "valid";
+  }
+
+  return states.includes("unknown") ? "unknown" : "invalid";
+};
+
+const getNearestFormItem = (ancestors: Node[]): JsxElement | null => {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
+
+    if (
+      ancestor &&
+      isJsxElement(ancestor) &&
+      getJsxTagName(ancestor.openingElement) === "FormItem"
+    ) {
+      return ancestor;
+    }
+  }
+
+  return null;
+};
+
+const getFormItemLabelState = (formItem: JsxElement): EvidenceState => {
+  let hasDynamicLabel = false;
+  let hasStaticLabel = false;
+
+  walkNodes(formItem, (node, ancestors) => {
+    if (hasStaticLabel || !isJsxElement(node)) {
+      return;
+    }
+
+    const isInsideNestedFormItem = ancestors.some(
+      (ancestor) =>
+        ancestor !== formItem &&
+        isJsxElement(ancestor) &&
+        getJsxTagName(ancestor.openingElement) === "FormItem"
+    );
+
+    if (
+      isInsideNestedFormItem ||
+      getJsxTagName(node.openingElement) !== "FormLabel"
+    ) {
+      return;
+    }
+
+    const labelState = getAccessibleTextState(node.children);
+
+    if (labelState === "valid") {
+      hasStaticLabel = true;
+    } else if (labelState === "unknown") {
+      hasDynamicLabel = true;
+    }
+  });
+
+  if (hasStaticLabel) {
+    return "valid";
+  }
+
+  return hasDynamicLabel ? "unknown" : "invalid";
+};
+
+const isGeneratedPassThroughFormPrimitive = (
+  filePath: string,
+  openingElement: JsxOpeningLikeElement,
+  tagName: string
+): boolean =>
+  GENERATED_UI_PATH_PATTERN.test(filePath) &&
+  GENERATED_FORM_PRIMITIVE_TAGS.has(tagName) &&
+  openingElement.attributes.properties.some((property) =>
+    isJsxSpreadAttribute(property)
+  );
+
+interface FormControlCandidate {
+  openingElement: JsxOpeningLikeElement;
+  tagName: string;
+}
+
+const getFormControlCandidate = (
+  filePath: string,
+  node: JsxElement | JsxOpeningLikeElement
+): FormControlCandidate | null => {
+  if (!(isJsxElement(node) || isJsxSelfClosingElement(node))) {
+    return null;
+  }
+
+  const openingElement = getOpeningElement(node);
+  const tagName = getJsxTagName(openingElement);
+
+  if (!(tagName && FORM_CONTROL_TAGS.has(tagName))) {
+    return null;
+  }
+
+  if (
+    isGeneratedPassThroughFormPrimitive(filePath, openingElement, tagName) ||
+    getJsxAttribute(openingElement, "type") === "hidden"
+  ) {
+    return null;
+  }
+
+  return { openingElement, tagName };
+};
+
+const getFormControlLabelState = ({
+  ancestors,
+  labelTargets,
+  openingElement,
+}: {
+  ancestors: Node[];
+  labelTargets: Set<string>;
+  openingElement: JsxOpeningLikeElement;
+}): EvidenceState => {
+  const id = getJsxAttribute(openingElement, "id");
+  const isLabeledById =
+    typeof id === "string" && id.trim().length > 0 && labelTargets.has(id);
+  const isWrappedByLabel = [...FORM_LABEL_TAGS].some((tagName) =>
+    ancestorHasTagName(ancestors, tagName)
+  );
+  const accessibleNameState = getFormAccessibleNameState(openingElement);
+  const formItem = ancestorHasTagName(ancestors, "FormControl")
+    ? getNearestFormItem(ancestors)
+    : null;
+  const formItemLabelState = formItem
+    ? getFormItemLabelState(formItem)
+    : "invalid";
+
+  if (
+    isLabeledById ||
+    isWrappedByLabel ||
+    accessibleNameState === "valid" ||
+    formItemLabelState === "valid"
+  ) {
+    return "valid";
+  }
+
+  return accessibleNameState === "unknown" || formItemLabelState === "unknown"
+    ? "unknown"
+    : "invalid";
 };
 
 const getInteractiveRoleState = (
@@ -363,22 +528,22 @@ const formsHaveLabelsRule: AuditRule = {
   category: "accessibility",
   confidence: "high",
   description:
-    "Checks form controls for associated labels or accessible names.",
+    "Checks native form controls and common shadcn field wrappers for associated labels or accessible names.",
   id: "forms-have-labels",
   maxScore: 4,
   run: async ({ project }) => {
     const files = await parseProjectSourceFiles(project);
+    const failures: AuditEvidence[] = [];
     let uncertainResult: AuditRuleResult | null = null;
 
     for (const file of files) {
       const labelTargets = new Set<string>();
-      let failure: AuditRuleResult | null = null;
 
       visitJsxNodes([file], ({ node }) => {
         const openingElement = getOpeningElement(node);
         const tagName = getJsxTagName(openingElement);
 
-        if (tagName === "label") {
+        if (tagName && FORM_LABEL_TAGS.has(tagName)) {
           const htmlFor = getJsxAttribute(openingElement, "htmlFor");
 
           if (typeof htmlFor === "string" && htmlFor.trim().length > 0) {
@@ -388,40 +553,31 @@ const formsHaveLabelsRule: AuditRule = {
       });
 
       visitJsxNodes([file], ({ ancestors, node }) => {
-        if (failure) {
+        if (failures.length >= MAX_FORM_LABEL_EVIDENCE) {
           return;
         }
 
-        const openingElement = getOpeningElement(node);
-        const tagName = getJsxTagName(openingElement);
+        const candidate = getFormControlCandidate(file.filePath, node);
 
-        if (!(tagName && FORM_CONTROL_TAGS.has(tagName))) {
+        if (!candidate) {
           return;
         }
 
-        if (getJsxAttribute(openingElement, "type") === "hidden") {
+        const { openingElement, tagName } = candidate;
+
+        const labelState = getFormControlLabelState({
+          ancestors,
+          labelTargets,
+          openingElement,
+        });
+
+        if (labelState === "valid") {
           return;
         }
 
-        const id = getJsxAttribute(openingElement, "id");
-        const isLabeledById =
-          typeof id === "string" &&
-          id.trim().length > 0 &&
-          labelTargets.has(id);
-        const isWrappedByLabel = ancestorHasTagName(ancestors, "label");
-        const accessibleNameState = getAccessibleNameState(openingElement);
-
-        if (
-          isLabeledById ||
-          isWrappedByLabel ||
-          accessibleNameState === "valid"
-        ) {
-          return;
-        }
-
-        if (accessibleNameState === "unknown") {
+        if (labelState === "unknown") {
           uncertainResult ??= advisory(
-            "Form control uses a dynamic accessible name that cannot be verified statically.",
+            `${tagName} uses a dynamic accessible label that cannot be verified statically.`,
             "Ensure the dynamic label always resolves to meaningful text.",
             file.filePath,
             getLineNumber(file, openingElement)
@@ -429,17 +585,23 @@ const formsHaveLabelsRule: AuditRule = {
           return;
         }
 
-        failure = fail(
-          "Form control is missing a label or accessible name.",
-          "Associate the control with a `<label htmlFor>`, wrap it in a label, or add an accessible name.",
-          file.filePath,
-          getLineNumber(file, openingElement)
-        );
+        failures.push({
+          filePath: file.filePath,
+          line: getLineNumber(file, openingElement),
+          message: FORM_WRAPPER_TAGS.has(tagName)
+            ? `${tagName} call site is missing a label or accessible name.`
+            : "Form control is missing a label or accessible name.",
+        });
       });
+    }
 
-      if (failure) {
-        return failure;
-      }
+    if (failures.length > 0) {
+      return {
+        evidence: failures,
+        remediation:
+          "Associate the control with a `<label htmlFor>`, wrap it in a label, add an accessible name, or add `<FormLabel>` inside the nearest shadcn `<FormItem>`.",
+        status: "fail",
+      };
     }
 
     return uncertainResult ?? pass("No unlabeled form controls found.");
