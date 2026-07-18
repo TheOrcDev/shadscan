@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Empty-state checks now require actual query calls or mapped collection data,
+  avoiding false failures from `nuqs` URL state, static table markup, and pages
+  whose data-table component owns the empty-state branch.
 - Destructive-action advisories now require an interactive action surface and
   correlate confirmation within the same component flow; overflow advisories
   now inspect only layout classes, inline styles, and CSS declarations while

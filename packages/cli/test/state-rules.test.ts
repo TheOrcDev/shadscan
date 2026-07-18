@@ -208,6 +208,67 @@ describe("state rules", () => {
     }
   });
 
+  it("does not mistake URL state or table composition for data collections", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/url-state.ts",
+        'import { useQueryStates } from "nuqs"; export const useFilters = () => useQueryStates({ query: parseAsString });'
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write("src/url-state.ts", "export const value = 'static';");
+      await fixture.write(
+        "src/Showcase.tsx",
+        "export function Showcase() { return <TableBody><TableRow><TableCell>Static documentation</TableCell></TableRow></TableBody>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "src/Showcase.tsx",
+        'const items = [{ label: "Home" }]; export function Showcase() { return <nav>{items.map((item) => <a href="/" key={item.label}>{item.label}</a>)}</nav>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "src/Showcase.tsx",
+        "export function Showcase({ nav }) { return <nav>{nav.items.map((item) => <a href={item.href} key={item.label}>{item.label}</a>)}</nav>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "src/Showcase.tsx",
+        "export function Showcase({ items }) { return <nav>{items.map((item) => <a href={item.href} key={item.label}>{item.label}</a>)}</nav>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "src/App.tsx",
+        'import { DataTable } from "./DataTable"; export function App({ data }) { return <DataTable data={data} />; }'
+      );
+      await fixture.write(
+        "src/DataTable.tsx",
+        "export function DataTable({ rows }) { return <TableBody>{rows.length ? rows.map((row) => <TableRow key={row.id} />) : <TableRow><TableCell>No results.</TableCell></TableRow>}</TableBody>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("requires error states to expose a wired retry control", async () => {
     const fixture = await createRuleFixture({
       next: "16.2.6",

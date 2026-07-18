@@ -2,11 +2,41 @@ import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import { getProjectSourceFiles, getTextLineNumber } from "./source-files";
 
-const DATA_COLLECTION_PATTERN =
-  /(?:useQuery|useInfiniteQuery|<TableBody|<DataTable|\b(?:data|items|rows|results|records|projects|users|notifications)\??\.map\s*\()/i;
+const QUERY_COLLECTION_PATTERN = /\b(?:useQuery|useInfiniteQuery)\s*\(/i;
+const MAPPED_COLLECTION_PATTERN =
+  /(?<![\w.])(data|rows|results|records|projects|users|notifications)\??\.map\s*\(/gi;
 const EMPTY_STATE_PATTERN =
   /<(?:Empty|\w*EmptyState)(?:\s|>)|\b(?:data|items|rows|results|records|projects|users|notifications)\??\.length\s*===?\s*0|!\s*(?:data|items|rows|results|records|projects|users|notifications)\??\.length|\b(?:No|Nothing)\s+(?:here|yet|found|available|to show|items|results|records|projects|users|notifications|data)\b/i;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const isStaticLocalCollection = (content: string, name: string): boolean =>
+  new RegExp(
+    `\\b(?:const|let|var)\\s+${escapeRegex(name)}(?:\\s*:[^=;]+)?\\s*=\\s*(?:\\[|Array\\.from\\s*\\()`,
+    "i"
+  ).test(content);
+
+const getCollectionPattern = (content: string): RegExp | null => {
+  if (QUERY_COLLECTION_PATTERN.test(content)) {
+    return QUERY_COLLECTION_PATTERN;
+  }
+
+  MAPPED_COLLECTION_PATTERN.lastIndex = 0;
+  for (const match of content.matchAll(MAPPED_COLLECTION_PATTERN)) {
+    const collectionName = match[1];
+
+    if (collectionName && !isStaticLocalCollection(content, collectionName)) {
+      return new RegExp(
+        `(?<![\\w.])${escapeRegex(collectionName)}\\??\\.map\\s*\\(`,
+        "i"
+      );
+    }
+  }
+
+  return null;
+};
 
 const emptyStatePresentRule: AuditRule = {
   adapters: ["core"],
@@ -21,10 +51,9 @@ const emptyStatePresentRule: AuditRule = {
     let collectionCount = 0;
 
     for (const file of files) {
-      if (
-        GENERATED_UI_PATH_PATTERN.test(file.path) ||
-        !DATA_COLLECTION_PATTERN.test(file.content)
-      ) {
+      const collectionPattern = getCollectionPattern(file.content);
+
+      if (GENERATED_UI_PATH_PATTERN.test(file.path) || !collectionPattern) {
         continue;
       }
 
@@ -39,7 +68,7 @@ const emptyStatePresentRule: AuditRule = {
         "Render a clear empty-state title or message, plus a useful next action when one exists.",
         {
           filePath: file.path,
-          line: getTextLineNumber(file.content, DATA_COLLECTION_PATTERN),
+          line: getTextLineNumber(file.content, collectionPattern),
           roast:
             "Your users found nothing, and then your app found nothing to say.",
         }
