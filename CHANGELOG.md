@@ -11,8 +11,9 @@ stable releases published under `latest`.
 - Empty-state checks now require actual query calls or mapped collection data,
   avoiding false failures from `nuqs` URL state, static table markup, and pages
   whose data-table component owns the empty-state branch.
-- Destructive-action advisories now require an interactive action surface and
-  correlate confirmation within the same component flow; overflow advisories
+- Destructive-action advisories now require a native action or a custom control
+  wired with a handler or submit semantics, and correlate confirmation within
+  the same component flow; overflow advisories
   now inspect only layout classes, inline styles, and CSS declarations while
   respecting local overflow containment.
 - Form label checks now ignore generated prop-forwarding primitives and report

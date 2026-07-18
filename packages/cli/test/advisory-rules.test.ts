@@ -85,7 +85,7 @@ describe("browser-sensitive advisory rules", () => {
     try {
       await fixture.write(
         "src/account.tsx",
-        'export function Account() { return <Button variant="destructive">Delete account</Button>; }'
+        'export function Account() { return <Button onClick={deleteAccount} variant="destructive">Delete account</Button>; }'
       );
       expect(
         (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
@@ -93,7 +93,7 @@ describe("browser-sensitive advisory rules", () => {
 
       await fixture.write(
         "src/account.tsx",
-        'export function Account() { return <AlertDialog><Button variant="destructive">Delete account</Button></AlertDialog>; }'
+        'export function Account() { return <AlertDialog><Button onClick={deleteAccount} variant="destructive">Delete account</Button></AlertDialog>; }'
       );
       expect(
         (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
@@ -119,13 +119,29 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("ignores inert destructive component showcases", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/showcase.tsx",
+        'export function Showcase() { return <><Button variant="destructive">Destructive</Button><DropdownMenuItem>Delete</DropdownMenuItem></>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, destructiveActionsConfirmedRule)).status
+      ).toBe("not-applicable");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("does not correlate unrelated confirmation UI", async () => {
     const fixture = await createRuleFixture();
 
     try {
       await fixture.write(
         "src/account.tsx",
-        'export function Account() { return <Button variant="destructive">Delete account</Button>; }'
+        'export function Account() { return <Button onClick={deleteAccount} variant="destructive">Delete account</Button>; }'
       );
       await fixture.write(
         "src/profile.tsx",

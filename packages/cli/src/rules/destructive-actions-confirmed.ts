@@ -29,7 +29,6 @@ const ACTION_HANDLER_ATTRIBUTES = new Set([
   "onSelect",
   "onSubmit",
 ]);
-const ACTION_ROLES = new Set(["button", "menuitem"]);
 const DESTRUCTIVE_NAME_PATTERN =
   /\b(?:delete|destroy|erase|remove|revoke)\w*\b/i;
 const CONFIRMATION_OR_UNDO_PATTERN =
@@ -62,16 +61,6 @@ const hasActionHandler = (node: JsxOpeningLikeElement): boolean =>
       ACTION_HANDLER_ATTRIBUTES.has(property.name.getText())
   );
 
-const hasActionRole = (node: JsxOpeningLikeElement): boolean => {
-  const role = getJsxAttributeValue(node, "role");
-
-  return (
-    role.kind === "static" &&
-    typeof role.value === "string" &&
-    ACTION_ROLES.has(role.value.trim().toLowerCase())
-  );
-};
-
 const isNativeSubmitInput = (
   node: JsxOpeningLikeElement,
   tagName: string
@@ -85,7 +74,17 @@ const isNativeSubmitInput = (
   return (
     type.kind === "static" &&
     typeof type.value === "string" &&
-    ["button", "submit"].includes(type.value.trim().toLowerCase())
+    type.value.trim().toLowerCase() === "submit"
+  );
+};
+
+const hasSubmitType = (node: JsxOpeningLikeElement): boolean => {
+  const type = getJsxAttributeValue(node, "type");
+
+  return (
+    type.kind === "static" &&
+    typeof type.value === "string" &&
+    type.value.trim().toLowerCase() === "submit"
   );
 };
 
@@ -94,10 +93,9 @@ const isActionSurface = (
   tagName: string
 ): boolean =>
   tagName === "button" ||
-  ACTION_COMPONENT_PATTERN.test(tagName) ||
   isNativeSubmitInput(node, tagName) ||
-  hasActionRole(node) ||
-  hasActionHandler(node);
+  hasActionHandler(node) ||
+  (ACTION_COMPONENT_PATTERN.test(tagName) && hasSubmitType(node));
 
 const hasDestructiveEvidence = (
   file: ParsedSourceFile,
