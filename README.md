@@ -65,6 +65,17 @@ only the paste-ready remediation prompt.
 - Scan endpoint: `POST https://shadscan.dev/v1/scans`
 - Self-hosting and key setup: [docs/hosted-api.md](docs/hosted-api.md)
 
+## Web Scanner
+
+The product site exposes `/scan` for deterministic audits of public GitHub
+repositories without giving the browser an API key. The form submits through a
+Server Action, keeps GitHub access and scanning on the server, and returns the
+same versioned report and agent handoff as the hosted API.
+
+Deployment variables, public rate limits, runtime boundaries, and production
+verification are documented in
+[docs/web-scanner.md](docs/web-scanner.md).
+
 ## Current Checks
 
 The bundled ruleset currently contains 55 deterministic checks across
@@ -79,6 +90,9 @@ pnpm install
 pnpm cli:test
 pnpm cli:build
 pnpm test:api
+pnpm test:web
+pnpm exec playwright install chromium
+pnpm test:e2e
 pnpm audit:self
 pnpm audit:dependencies
 pnpm docs:check
@@ -98,6 +112,8 @@ pnpm build
 pnpm cli:test
 pnpm cli:build
 pnpm test:api
+pnpm test:web
+pnpm test:e2e
 pnpm audit:self
 pnpm audit:dependencies
 pnpm docs:check

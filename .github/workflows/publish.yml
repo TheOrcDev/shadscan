@@ -56,6 +56,12 @@ jobs:
         run: pnpm cli:test
       - name: Test hosted API
         run: pnpm test:api
+      - name: Test web scanner
+        run: pnpm test:web
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test web scanner in Chromium
+        run: pnpm test:e2e
       - name: Audit production dependencies
         run: pnpm audit:dependencies
       - name: Enforce the dogfood score

@@ -25,7 +25,9 @@
     "zod": "4.1.13"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@biomejs/biome": "2.4.16",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -68,9 +70,13 @@
     "test:api": "vitest run test/shadscan-api",
     "pretest:web": "pnpm cli:build",
     "test:web": "vitest run test/shadscan-web",
+    "pretest:e2e": "pnpm cli:build",
+    "test:e2e": "playwright test",
     "api:keygen": "node scripts/generate-api-key.mjs",
     "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js --fail-under 100",
-    "audit:dependencies": "pnpm audit --prod --audit-level moderate"
+    "audit:dependencies": "pnpm audit --prod --audit-level moderate",
+    "verify:trace": "node scripts/verify-production-trace.mjs",
+    "postbuild": "pnpm verify:trace"
   },
   "type": "module",
   "version": "0.0.1",

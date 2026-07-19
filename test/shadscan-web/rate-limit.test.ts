@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkMemoryWebRateLimit,
+  enforceWebScanRateLimit,
   getClientRateLimitKey,
   resetMemoryWebRateLimits,
   WEB_RATE_LIMITS,
@@ -11,6 +12,7 @@ const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 afterEach(() => {
   resetMemoryWebRateLimits();
+  vi.unstubAllEnvs();
 });
 
 describe("web scan rate limits", () => {
@@ -39,6 +41,34 @@ describe("web scan rate limits", () => {
         code: "SERVICE_NOT_CONFIGURED",
       })
     );
+  });
+
+  it("fails closed through the production limiter when configuration is absent", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SHADSCAN_WEB_RATE_LIMIT_SALT", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+
+    await expect(
+      enforceWebScanRateLimit({
+        clientAddress: "203.0.113.4",
+        repositoryKey: "acme/widget",
+      })
+    ).rejects.toMatchObject({ code: "SERVICE_NOT_CONFIGURED" });
+  });
+
+  it("uses predictable in-memory limits in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("SHADSCAN_WEB_RATE_LIMIT_MODE", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+
+    await expect(
+      enforceWebScanRateLimit({
+        clientAddress: "203.0.113.4",
+        repositoryKey: "acme/widget",
+      })
+    ).resolves.toHaveLength(3);
   });
 
   it("allows three client scans per short window and rejects the fourth", () => {

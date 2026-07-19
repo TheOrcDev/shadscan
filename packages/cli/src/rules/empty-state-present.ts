@@ -8,6 +8,10 @@ const MAPPED_COLLECTION_PATTERN =
 const EMPTY_STATE_PATTERN =
   /<(?:Empty|\w*EmptyState)(?:\s|>)|\b(?:data|items|rows|results|records|projects|users|notifications)\??\.length\s*===?\s*0|!\s*(?:data|items|rows|results|records|projects|users|notifications)\??\.length|\b(?:No|Nothing)\s+(?:here|yet|found|available|to show|items|results|records|projects|users|notifications|data)\b/i;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+const JSX_SOURCE_PATH_PATTERN = /\.[jt]sx$/i;
+const JAVASCRIPT_SOURCE_PATH_PATTERN = /\.[cm]?js$/i;
+const JSX_ELEMENT_PATTERN = /<[A-Za-z][\w.:-]*(?:\s|\/?>)/;
+const CREATE_ELEMENT_PATTERN = /\b(?:React\.)?createElement\s*\(/;
 
 const escapeRegex = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -17,6 +21,12 @@ const isStaticLocalCollection = (content: string, name: string): boolean =>
     `\\b(?:const|let|var)\\s+${escapeRegex(name)}(?:\\s*:[^=;]+)?\\s*=\\s*(?:\\[|Array\\.from\\s*\\()`,
     "i"
   ).test(content);
+
+const isUiSourceFile = (path: string, content: string): boolean =>
+  JSX_SOURCE_PATH_PATTERN.test(path) ||
+  (JAVASCRIPT_SOURCE_PATH_PATTERN.test(path) &&
+    (JSX_ELEMENT_PATTERN.test(content) ||
+      CREATE_ELEMENT_PATTERN.test(content)));
 
 const getCollectionPattern = (content: string): RegExp | null => {
   if (QUERY_COLLECTION_PATTERN.test(content)) {
@@ -51,9 +61,16 @@ const emptyStatePresentRule: AuditRule = {
     let collectionCount = 0;
 
     for (const file of files) {
+      if (
+        GENERATED_UI_PATH_PATTERN.test(file.path) ||
+        !isUiSourceFile(file.path, file.content)
+      ) {
+        continue;
+      }
+
       const collectionPattern = getCollectionPattern(file.content);
 
-      if (GENERATED_UI_PATH_PATTERN.test(file.path) || !collectionPattern) {
+      if (!collectionPattern) {
         continue;
       }
 

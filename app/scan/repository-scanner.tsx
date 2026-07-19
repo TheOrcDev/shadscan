@@ -7,7 +7,7 @@ import {
   TerminalWindowIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import { ScanLoading } from "./scan-loading";
 import { ScanResult } from "./scan-result";
 
 const INITIAL_SCAN_STATE = { status: "idle" } as const satisfies WebScanState;
+const REPOSITORY_FORM_ID = "scan-repository-form";
 const REPOSITORY_INPUT_ID = "github-repository";
 const REPOSITORY_ERROR_ID = "github-repository-error";
 const CLI_FALLBACK_CODES = new Set<WebScanErrorCode>([
@@ -69,7 +70,7 @@ function RepositoryScanner() {
     scanGitHubRepository,
     INITIAL_SCAN_STATE
   );
-  const formRef = useRef<HTMLFormElement>(null);
+  const [repositoryInput, setRepositoryInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
   const inputError =
@@ -88,7 +89,7 @@ function RepositoryScanner() {
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <form action={formAction} ref={formRef}>
+      <form action={formAction} id={REPOSITORY_FORM_ID}>
         <Field data-disabled={isPending} data-invalid={inputError}>
           <FieldLabel htmlFor={REPOSITORY_INPUT_ID}>
             GitHub repository
@@ -103,10 +104,14 @@ function RepositoryScanner() {
               id={REPOSITORY_INPUT_ID}
               maxLength={MAX_REPOSITORY_INPUT_LENGTH}
               name="repository"
+              onChange={(event) => {
+                setRepositoryInput(event.target.value);
+              }}
               placeholder="owner/repository or https://github.com/owner/repository"
               ref={inputRef}
               required
               spellCheck={false}
+              value={repositoryInput}
             />
             <InputGroupAddon align="inline-start">
               <GithubLogoIcon aria-hidden="true" />
@@ -167,9 +172,9 @@ function RepositoryScanner() {
             <div className="mt-3 flex flex-wrap gap-2">
               {state.error.retryable ? (
                 <Button
-                  onClick={() => formRef.current?.requestSubmit()}
+                  form={REPOSITORY_FORM_ID}
                   size="sm"
-                  type="button"
+                  type="submit"
                   variant="outline"
                 >
                   <ArrowClockwiseIcon

@@ -27,6 +27,9 @@ pnpm docs:check
 pnpm --filter shadscan typecheck
 pnpm cli:test
 pnpm test:api
+pnpm test:web
+pnpm exec playwright install chromium
+pnpm test:e2e
 pnpm typecheck
 pnpm audit:dependencies
 pnpm audit:self

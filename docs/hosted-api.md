@@ -9,6 +9,8 @@ other API clients:
 
 The service scans source only. It does not install dependencies, execute target
 repository scripts, persist uploaded source, or modify the target project.
+The unauthenticated `/scan` Server Action has separate public limits and is
+documented in [web-scanner.md](web-scanner.md).
 
 ## Provision an API key
 

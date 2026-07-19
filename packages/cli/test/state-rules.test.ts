@@ -208,6 +208,27 @@ describe("state rules", () => {
     }
   });
 
+  it("ignores collection transforms outside UI source files", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "lib/rate-limit.ts",
+        "export const toDecisions = (results) => results.map((result) => ({ limit: result.limit }));"
+      );
+      await fixture.write(
+        "lib/rate-limit.js",
+        "export const toDecisions = (results) => results.map((result) => ({ limit: result.limit }));"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("does not mistake URL state or table composition for data collections", async () => {
     const fixture = await createRuleFixture();
 
