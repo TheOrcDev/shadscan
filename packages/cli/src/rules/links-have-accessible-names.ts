@@ -1,7 +1,9 @@
 import {
   isJsxElement,
   isJsxSelfClosingElement,
+  isJsxSpreadAttribute,
   type JsxChild,
+  type JsxOpeningLikeElement,
 } from "typescript";
 import {
   type EvidenceState,
@@ -16,6 +18,18 @@ import type { AuditRule, AuditRuleResult } from "../audit";
 import { advisory, fail, pass } from "./rule-result";
 
 const LINK_TAGS = new Set(["Link", "a"]);
+const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+
+const isGeneratedNativeLinkPassThrough = (
+  filePath: string,
+  tagName: string,
+  openingElement: JsxOpeningLikeElement
+): boolean =>
+  tagName === "a" &&
+  GENERATED_UI_PATH_PATTERN.test(filePath) &&
+  openingElement.attributes.properties.some((property) =>
+    isJsxSpreadAttribute(property)
+  );
 
 const getChildNameState = (child: JsxChild): EvidenceState => {
   if (isJsxSelfClosingElement(child)) {
@@ -71,6 +85,12 @@ const linksHaveAccessibleNamesRule: AuditRule = {
       const tagName = getJsxTagName(openingElement);
 
       if (!(tagName && LINK_TAGS.has(tagName))) {
+        return;
+      }
+
+      if (
+        isGeneratedNativeLinkPassThrough(file.filePath, tagName, openingElement)
+      ) {
         return;
       }
 

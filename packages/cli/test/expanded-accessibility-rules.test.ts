@@ -105,6 +105,18 @@ describe("expanded accessibility rules", () => {
       expect(
         (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
       ).toBe("pass");
+
+      await fixture.write(
+        "src/App.tsx",
+        "export function App() { return null; }"
+      );
+      await fixture.write(
+        "components/ui/pagination.tsx",
+        "export function PaginationLink(props) { return <a {...props} />; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
+      ).toBe("pass");
     } finally {
       await fixture.cleanup();
     }

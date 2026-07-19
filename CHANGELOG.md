@@ -29,6 +29,8 @@ stable releases published under `latest`.
   failures on non-focusable popup containers such as hover-card content.
 - Form-label checks now correlate matching dynamic `id`/`htmlFor` expressions,
   recognize `FieldLabel`, and ignore generated prop-forwarding input wrappers.
+- Link-name checks now ignore generated native-anchor wrappers that forward their
+  accessible content and attributes from rendered call sites.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories
