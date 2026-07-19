@@ -129,6 +129,18 @@ describe("expanded accessibility rules", () => {
       expect(
         (await runRule(fixture.rootDir, customControlsHaveLabelsRule)).status
       ).toBe("pass");
+
+      await fixture.write(
+        "src/settings.tsx",
+        `
+          export function Settings({ row }) {
+            return <><Label htmlFor={\`\${row.id}-status\`}>Status</Label><SelectTrigger id={\`\${row.id}-status\`} /></>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, customControlsHaveLabelsRule)).status
+      ).toBe("pass");
     } finally {
       await fixture.cleanup();
     }

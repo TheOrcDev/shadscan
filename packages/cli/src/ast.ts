@@ -250,6 +250,46 @@ const getJsxAttributeValue = (
   return { kind: "absent" };
 };
 
+const getLiteralAttributeIdentity = (value: string): string | null =>
+  value.trim().length > 0 ? `literal:${value}` : null;
+
+const getJsxAttributeIdentity = (
+  node: JsxOpeningLikeElement,
+  name: string
+): string | null => {
+  for (const property of node.attributes.properties) {
+    if (!isJsxAttribute(property) || property.name.getText() !== name) {
+      continue;
+    }
+
+    const initializer = property.initializer;
+    if (!initializer) {
+      return null;
+    }
+
+    if (isStringLiteral(initializer)) {
+      return getLiteralAttributeIdentity(initializer.text);
+    }
+
+    if (!(isJsxExpression(initializer) && initializer.expression)) {
+      return null;
+    }
+
+    const expression = initializer.expression;
+    if (
+      isStringLiteral(expression) ||
+      isNoSubstitutionTemplateLiteral(expression)
+    ) {
+      return getLiteralAttributeIdentity(expression.text);
+    }
+
+    const expressionText = expression.getText().trim();
+    return expressionText.length > 0 ? `expression:${expressionText}` : null;
+  }
+
+  return null;
+};
+
 const getJsxAttribute = (
   node: JsxOpeningLikeElement,
   name: string
@@ -430,6 +470,7 @@ export {
   findOwnedSourceScopes,
   getAccessibleTextState,
   getJsxAttribute,
+  getJsxAttributeIdentity,
   getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,

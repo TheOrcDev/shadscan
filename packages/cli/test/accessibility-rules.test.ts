@@ -232,6 +232,46 @@ describe("accessibility rules", () => {
   it("does not report generated pass-through form primitives", async () => {
     const rootDir = await createFixture();
     await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "components/ui/input-group.tsx",
+      `
+        export function InputGroupInput(props) {
+          return <Input data-slot="input-group-control" {...props} />;
+        }
+        export function InputGroupTextarea(props) {
+          return <Textarea data-slot="input-group-control" {...props} />;
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "forms-have-labels")
+        ?.status
+    ).toBe("pass");
+  });
+
+  it("correlates FieldLabel and control IDs that use the same expression", async () => {
+    const rootDir = await createFixture();
+    await writeGeneratedFormPrimitives(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App({ row }) {
+          return (
+            <form>
+              <FieldLabel htmlFor={\`\${row.id}-target\`}>Target</FieldLabel>
+              <Input id={\`\${row.id}-target\`} />
+            </form>
+          );
+        }
+      `
+    );
 
     const report = await runAudit(rootDir, {
       rules: accessibilityRules,

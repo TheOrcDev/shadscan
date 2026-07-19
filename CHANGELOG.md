@@ -27,6 +27,8 @@ stable releases published under `latest`.
   trigger.
 - Focus-outline checks now inspect actual JSX focus targets, avoiding false
   failures on non-focusable popup containers such as hover-card content.
+- Form-label checks now correlate matching dynamic `id`/`htmlFor` expressions,
+  recognize `FieldLabel`, and ignore generated prop-forwarding input wrappers.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories

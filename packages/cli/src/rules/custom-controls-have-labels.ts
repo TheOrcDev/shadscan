@@ -9,7 +9,7 @@ import {
   ancestorHasTagName,
   type EvidenceState,
   getAccessibleTextState,
-  getJsxAttribute,
+  getJsxAttributeIdentity,
   getJsxTagName,
   getLineNumber,
   getTextAttributeState,
@@ -42,9 +42,8 @@ const getControlLabelState = ({
   node: JsxElement | JsxOpeningLikeElement;
   openingElement: JsxOpeningLikeElement;
 }): EvidenceState => {
-  const id = getJsxAttribute(openingElement, "id");
-  const isLabeledById =
-    typeof id === "string" && id.trim().length > 0 && labelTargets.has(id);
+  const id = getJsxAttributeIdentity(openingElement, "id");
+  const isLabeledById = id !== null && labelTargets.has(id);
   const isWrappedByLabel =
     ancestorHasTagName(ancestors, "label") ||
     ancestorHasTagName(ancestors, "Label") ||
@@ -81,19 +80,16 @@ const customControlsHaveLabelsRule: AuditRule = {
       const labelTargets = new Set<string>();
 
       visitJsxNodes([file], ({ node }) => {
-        if (isJsxElement(node)) {
-          return;
-        }
-
-        const tagName = getJsxTagName(node);
+        const openingElement = isJsxElement(node) ? node.openingElement : node;
+        const tagName = getJsxTagName(openingElement);
 
         if (!(tagName && LABEL_TAGS.has(tagName))) {
           return;
         }
 
-        const htmlFor = getJsxAttribute(node, "htmlFor");
+        const htmlFor = getJsxAttributeIdentity(openingElement, "htmlFor");
 
-        if (typeof htmlFor === "string" && htmlFor.trim().length > 0) {
+        if (htmlFor) {
           labelTargets.add(htmlFor);
         }
       });

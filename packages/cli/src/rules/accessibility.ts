@@ -11,6 +11,7 @@ import {
   type EvidenceState,
   getAccessibleTextState,
   getJsxAttribute,
+  getJsxAttributeIdentity,
   getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
@@ -31,9 +32,14 @@ const FORM_CONTROL_TAGS = new Set([
   "select",
   "textarea",
 ]);
-const FORM_LABEL_TAGS = new Set(["FormLabel", "Label", "label"]);
+const FORM_LABEL_TAGS = new Set(["FieldLabel", "FormLabel", "Label", "label"]);
 const FORM_WRAPPER_TAGS = new Set(["Input", "Textarea"]);
-const GENERATED_FORM_PRIMITIVE_TAGS = new Set(["input", "textarea"]);
+const GENERATED_FORM_PASS_THROUGH_TAGS = new Set([
+  "Input",
+  "Textarea",
+  "input",
+  "textarea",
+]);
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 const MAX_FORM_LABEL_EVIDENCE = 5;
 const NON_SEMANTIC_INTERACTIVE_TAGS = new Set(["div", "span"]);
@@ -194,7 +200,7 @@ const isGeneratedPassThroughFormPrimitive = (
   tagName: string
 ): boolean =>
   GENERATED_UI_PATH_PATTERN.test(filePath) &&
-  GENERATED_FORM_PRIMITIVE_TAGS.has(tagName) &&
+  GENERATED_FORM_PASS_THROUGH_TAGS.has(tagName) &&
   openingElement.attributes.properties.some((property) =>
     isJsxSpreadAttribute(property)
   );
@@ -238,9 +244,8 @@ const getFormControlLabelState = ({
   labelTargets: Set<string>;
   openingElement: JsxOpeningLikeElement;
 }): EvidenceState => {
-  const id = getJsxAttribute(openingElement, "id");
-  const isLabeledById =
-    typeof id === "string" && id.trim().length > 0 && labelTargets.has(id);
+  const id = getJsxAttributeIdentity(openingElement, "id");
+  const isLabeledById = id !== null && labelTargets.has(id);
   const isWrappedByLabel = [...FORM_LABEL_TAGS].some((tagName) =>
     ancestorHasTagName(ancestors, tagName)
   );
@@ -544,9 +549,9 @@ const formsHaveLabelsRule: AuditRule = {
         const tagName = getJsxTagName(openingElement);
 
         if (tagName && FORM_LABEL_TAGS.has(tagName)) {
-          const htmlFor = getJsxAttribute(openingElement, "htmlFor");
+          const htmlFor = getJsxAttributeIdentity(openingElement, "htmlFor");
 
-          if (typeof htmlFor === "string" && htmlFor.trim().length > 0) {
+          if (htmlFor) {
             labelTargets.add(htmlFor);
           }
         }
@@ -599,7 +604,7 @@ const formsHaveLabelsRule: AuditRule = {
       return {
         evidence: failures,
         remediation:
-          "Associate the control with a `<label htmlFor>`, wrap it in a label, add an accessible name, or add `<FormLabel>` inside the nearest shadcn `<FormItem>`.",
+          "Associate the control with a `<label htmlFor>`, `FieldLabel`, or accessible name, or add `<FormLabel>` inside the nearest shadcn `<FormItem>`.",
         status: "fail",
       };
     }
