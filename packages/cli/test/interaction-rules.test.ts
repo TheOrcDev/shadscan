@@ -309,7 +309,74 @@ describe("interaction rules", () => {
 
       await fixture.write(
         "components/site-nav.tsx",
+        `
+          export function SiteNav() {
+            return <nav aria-label="Utility links" className="grid grid-cols-2 sm:grid-cols-5"><a href="/">Home</a><a href="/docs">Docs</a></nav>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "components/site-nav.tsx",
         'export function SiteNav() { return <nav><a href="/">Home</a></nav>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("recognizes a mounted responsive shadcn sidebar across app files", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components/ui/sidebar.tsx",
+        `
+          export function SidebarProvider({ children }) {
+            const isMobile = useIsMobile();
+            const [openMobile, setOpenMobile] = useState(false);
+            return <div data-mobile={isMobile} data-open={openMobile}>{children}</div>;
+          }
+          export function Sidebar({ children }) {
+            const { isMobile, openMobile, setOpenMobile } = useSidebar();
+            return isMobile ? <Sheet open={openMobile} onOpenChange={setOpenMobile}><SheetContent>{children}</SheetContent></Sheet> : <aside>{children}</aside>;
+          }
+        `
+      );
+      await fixture.write(
+        "app/dashboard/page.tsx",
+        `
+          import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
+          import { DashboardHeader } from "@/components/dashboard-header";
+          export default function Page() {
+            return <SidebarProvider><Sidebar><a href="/dashboard">Dashboard</a></Sidebar><DashboardHeader /></SidebarProvider>;
+          }
+        `
+      );
+      await fixture.write(
+        "components/dashboard-header.tsx",
+        `
+          import { useSidebar } from "@/components/ui/sidebar";
+          export function DashboardHeader() {
+            const { toggleSidebar } = useSidebar();
+            return <button aria-label="Toggle navigation" onClick={toggleSidebar}>Menu</button>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "components/dashboard-header.tsx",
+        "export function DashboardHeader() { return <header>Dashboard</header>; }"
       );
       expect(
         (await runRule(fixture.rootDir, mobileNavPresentRule)).status

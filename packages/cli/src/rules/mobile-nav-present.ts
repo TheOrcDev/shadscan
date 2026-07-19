@@ -31,6 +31,11 @@ import {
   isSmallScreenVisibility,
 } from "./responsive-visibility";
 import { fail, notApplicable, pass } from "./rule-result";
+import {
+  getProjectSourceFiles,
+  getTextLineNumber,
+  type SourceFile,
+} from "./source-files";
 
 interface StatePair {
   setterName: string;
@@ -54,6 +59,21 @@ const RESPONSIVE_PATTERN =
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 const MENU_NAME_PATTERN = /(?:menu|navigation)/i;
 const INTERACTIVE_TRIGGER_PATTERN = /(?:Button|Trigger)$/;
+const DIRECT_MOBILE_LAYOUT_PATTERN =
+  /(?:^|\s)(?:grid-cols-[1-4]|flex-wrap|overflow-x-(?:auto|scroll))(?:\s|$)/;
+const SHADCN_SIDEBAR_IMPORT_PATTERN =
+  /from\s+["'][^"']*\/components\/ui\/sidebar["']/;
+const SHADCN_SIDEBAR_RUNTIME_FILE_PATTERN =
+  /[/\\]components[/\\]ui[/\\]sidebar\.[cm]?[jt]sx?$/;
+const SHADCN_SIDEBAR_RUNTIME_PATTERN =
+  /useIsMobile\s*\([\s\S]*?openMobile[\s\S]*?<Sheet\b[\s\S]*?<SheetContent\b/;
+const SHADCN_SIDEBAR_COMPOSITION_PATTERN =
+  /<SidebarProvider\b[\s\S]*?<Sidebar\b[\s\S]*?<(?:a|Link)\b/;
+const SHADCN_SIDEBAR_TRIGGER_PATTERN = /<SidebarTrigger(?:\s|>)/;
+const USE_SIDEBAR_PATTERN = /useSidebar\s*\(/;
+const TOGGLE_SIDEBAR_PATTERN = /\btoggleSidebar\b/;
+const SHADCN_SIDEBAR_HOOK_TRIGGER_PATTERN =
+  /onClick\s*=\s*\{\s*toggleSidebar\s*\}/;
 const NAVIGATION_TAGS = new Set(["NavigationMenu", "Sidebar", "nav"]);
 const ACTIONABLE_LINK_TAGS = new Set(["Link", "NavigationMenuLink", "a"]);
 
@@ -332,6 +352,73 @@ const hasPrimitiveMobileNavigation = (scopeContent: string): boolean =>
   MOBILE_TRIGGER_PATTERN.test(scopeContent) &&
   RESPONSIVE_PATTERN.test(scopeContent);
 
+const hasDirectMobileNavigation = (scopeContent: string): boolean => {
+  const sourceFile = createSourceFile(
+    "navigation-scope.tsx",
+    scopeContent,
+    ScriptTarget.Latest,
+    true,
+    ScriptKind.TSX
+  );
+  let hasResponsiveNavigation = false;
+
+  walkNodes(sourceFile, (node, ancestors) => {
+    if (!(isJsxElement(node) && getJsxTagName(node.openingElement) === "nav")) {
+      return;
+    }
+
+    const className = getJsxAttributeValue(node.openingElement, "className");
+    const classValue =
+      className.kind === "static" && typeof className.value === "string"
+        ? className.value
+        : null;
+
+    if (
+      classValue &&
+      DIRECT_MOBILE_LAYOUT_PATTERN.test(classValue) &&
+      hasNavigationAndLink(node) &&
+      getResponsiveVisibility(node.openingElement, ancestors).bands[0] ===
+        "visible"
+    ) {
+      hasResponsiveNavigation = true;
+    }
+  });
+
+  return hasResponsiveNavigation;
+};
+
+const findShadcnSidebarMobileNavigation = (
+  files: SourceFile[]
+): SourceFile | null => {
+  const runtimeFile = files.find(
+    (file) =>
+      SHADCN_SIDEBAR_RUNTIME_FILE_PATTERN.test(file.path) &&
+      SHADCN_SIDEBAR_RUNTIME_PATTERN.test(file.content)
+  );
+
+  if (!runtimeFile) {
+    return null;
+  }
+
+  const compositionFile = files.find(
+    (file) =>
+      !GENERATED_UI_PATH_PATTERN.test(file.path) &&
+      SHADCN_SIDEBAR_IMPORT_PATTERN.test(file.content) &&
+      SHADCN_SIDEBAR_COMPOSITION_PATTERN.test(file.content)
+  );
+  const hasTrigger = files.some(
+    (file) =>
+      !GENERATED_UI_PATH_PATTERN.test(file.path) &&
+      SHADCN_SIDEBAR_IMPORT_PATTERN.test(file.content) &&
+      (SHADCN_SIDEBAR_TRIGGER_PATTERN.test(file.content) ||
+        (USE_SIDEBAR_PATTERN.test(file.content) &&
+          TOGGLE_SIDEBAR_PATTERN.test(file.content) &&
+          SHADCN_SIDEBAR_HOOK_TRIGGER_PATTERN.test(file.content)))
+  );
+
+  return compositionFile && hasTrigger ? compositionFile : null;
+};
+
 const mobileNavPresentRule: AuditRule = {
   adapters: ["core"],
   category: "interaction",
@@ -341,6 +428,7 @@ const mobileNavPresentRule: AuditRule = {
   id: "mobile-nav-present",
   maxScore: 3,
   run: async ({ project }) => {
+    const sourceFiles = await getProjectSourceFiles(project);
     const navigationScopes = (
       await findOwnedSourceScopes(project, NAVIGATION_PATTERN)
     ).filter((scope) => !GENERATED_UI_PATH_PATTERN.test(scope.file.filePath));
@@ -360,12 +448,32 @@ const mobileNavPresentRule: AuditRule = {
           scope.line
         );
       }
+
+      if (hasDirectMobileNavigation(scope.content)) {
+        return pass(
+          "Always-visible navigation links use an explicit small-screen layout.",
+          scope.file.filePath,
+          scope.line
+        );
+      }
+    }
+
+    const sidebarNavigation = findShadcnSidebarMobileNavigation(sourceFiles);
+    if (sidebarNavigation) {
+      return pass(
+        "Mounted shadcn Sidebar has a mobile Sheet runtime and an app-level trigger.",
+        sidebarNavigation.path,
+        getTextLineNumber(
+          sidebarNavigation.content,
+          SHADCN_SIDEBAR_COMPOSITION_PATTERN
+        )
+      );
     }
 
     const navigationScope = navigationScopes[0];
     return fail(
       "Navigation has no verifiable responsive mobile trigger and controlled panel.",
-      "Add an accessible small-screen trigger connected to a responsive panel with navigation links.",
+      "Add an accessible small-screen trigger connected to a responsive panel, or keep navigation links visible in an explicit small-screen layout.",
       {
         filePath: navigationScope?.file.filePath,
         line: navigationScope?.line,

@@ -22,6 +22,9 @@ stable releases published under `latest`.
 - Command-menu checks now recognize complete, mounted Fumadocs search dialogs
   and the provider's default Cmd/Ctrl+K shortcut, while excluding standalone
   `Command` comboboxes from app-level command-menu credit.
+- Mobile-navigation checks now recognize explicit always-visible small-screen
+  layouts and mounted shadcn Sidebar runtimes whose mobile Sheet has an app-level
+  trigger.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories
