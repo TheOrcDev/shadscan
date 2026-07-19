@@ -41,6 +41,8 @@ const GENERATED_FORM_PASS_THROUGH_TAGS = new Set([
   "textarea",
 ]);
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
+const INPUT_FOCUS_DELEGATION_PATTERN =
+  /\.querySelector\(\s*["'](?:input|textarea)["']\s*\)\?\.focus\(\)/;
 const MAX_FORM_LABEL_EVIDENCE = 5;
 const NON_SEMANTIC_INTERACTIVE_TAGS = new Set(["div", "span"]);
 const INTERACTIVE_ROLES = new Set([
@@ -342,8 +344,24 @@ type InteractiveElementEvaluation =
   | { status: "advisory" | "ignored" | "pass" }
   | { missing: string[]; status: "fail" };
 
+const isGeneratedInputGroupFocusDelegation = (
+  filePath: string,
+  openingElement: JsxOpeningLikeElement
+): boolean => {
+  if (
+    !GENERATED_UI_PATH_PATTERN.test(filePath) ||
+    getJsxAttribute(openingElement, "data-slot") !== "input-group-addon"
+  ) {
+    return false;
+  }
+
+  const onClick = getJsxAttributeIdentity(openingElement, "onClick");
+  return onClick !== null && INPUT_FOCUS_DELEGATION_PATTERN.test(onClick);
+};
+
 const evaluateInteractiveElement = (
-  node: JsxElement | JsxOpeningLikeElement
+  node: JsxElement | JsxOpeningLikeElement,
+  filePath: string
 ): InteractiveElementEvaluation => {
   const openingElement = getOpeningElement(node);
   const tagName = getJsxTagName(openingElement);
@@ -355,6 +373,10 @@ const evaluateInteractiveElement = (
       hasJsxAttribute(openingElement, "onClick")
     )
   ) {
+    return { status: "ignored" };
+  }
+
+  if (isGeneratedInputGroupFocusDelegation(filePath, openingElement)) {
     return { status: "ignored" };
   }
 
@@ -493,7 +515,7 @@ const interactiveElementsAreSemanticRule: AuditRule = {
         }
 
         const openingElement = getOpeningElement(node);
-        const evaluation = evaluateInteractiveElement(node);
+        const evaluation = evaluateInteractiveElement(node, file.filePath);
 
         if (evaluation.status === "fail") {
           failure = fail(

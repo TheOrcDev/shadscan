@@ -176,6 +176,35 @@ describe("accessibility rules", () => {
     ).toBe("fail");
   });
 
+  it("ignores generated input-group focus delegation", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "components/ui/input-group.tsx",
+      `
+        export function InputGroupAddon() {
+          return (
+            <div
+              data-slot="input-group-addon"
+              onClick={(event) => event.currentTarget.parentElement?.querySelector("input")?.focus()}
+              role="group"
+            />
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find(
+        (finding) => finding.id === "interactive-elements-are-semantic"
+      )?.status
+    ).toBe("pass");
+  });
+
   it("requires role and focusability on keyboard-enabled click targets", async () => {
     const rootDir = await createFixture();
     await writeFixtureFile(

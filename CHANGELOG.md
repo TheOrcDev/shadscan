@@ -31,6 +31,8 @@ stable releases published under `latest`.
   recognize `FieldLabel`, and ignore generated prop-forwarding input wrappers.
 - Link-name checks now ignore generated native-anchor wrappers that forward their
   accessible content and attributes from rendered call sites.
+- Semantic-interaction checks now recognize generated input-group addons whose
+  click handler only delegates focus to the sibling form control.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories
