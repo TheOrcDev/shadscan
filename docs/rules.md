@@ -59,7 +59,7 @@ Rules only run for matching adapters. A rule can also return `not-applicable` wh
 | `nav-landmarks-have-names` | Checks concurrent navigation landmarks for distinguishing accessible names. | high | 2 raw points when applicable | `core` |
 | `no-nested-interactive-controls` | Checks for interactive controls nested inside other interactive controls. | high | 3 raw points when applicable | `core` |
 | `status-messages-announced` | Checks dynamic status messages for a live region or accessible toast channel. | medium | 3 raw points when applicable | `core` |
-| `heading-structure-sane` | Looks for obvious heading-level skips and multiple primary headings in individual source files. | low | Advisory | `core` |
+| `heading-structure-sane` | Looks for obvious heading-level skips and multiple primary headings in individual render branches. | low | Advisory | `core` |
 | `animations-respect-reduced-motion` | Looks for a reduced-motion strategy when application animations or transitions are present. | low | Advisory | `core` |
 | `dialog-focus-trap-works` | Looks for focus-managed primitives behind dialog-like user interfaces. | low | Advisory | `core` |
 | `keyboard-navigation-works` | Looks for proven keyboard behavior behind composite widgets such as menus, tabs, and listboxes. | low | Advisory | `core` |
