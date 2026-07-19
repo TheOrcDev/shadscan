@@ -15,6 +15,7 @@ import {
   visitJsxNodes,
 } from "../ast";
 import type { AuditRule, AuditRuleResult } from "../audit";
+import { getStaticMappedTextState } from "../static-text";
 import { advisory, fail, pass } from "./rule-result";
 
 const LINK_TAGS = new Set(["Link", "a"]);
@@ -36,21 +37,25 @@ const getChildNameState = (child: JsxChild): EvidenceState => {
     const tagName = getJsxTagName(child);
 
     return tagName === "Image" || tagName === "img"
-      ? getTextAttributeState(child, "alt")
+      ? getTextAttributeState(child, "alt", getStaticMappedTextState)
       : "invalid";
   }
 
   if (isJsxElement(child)) {
     const ariaLabelState = getTextAttributeState(
       child.openingElement,
-      "aria-label"
+      "aria-label",
+      getStaticMappedTextState
     );
 
     if (ariaLabelState === "valid") {
       return "valid";
     }
 
-    const textState = getAccessibleTextState(child.children);
+    const textState = getAccessibleTextState(
+      child.children,
+      getStaticMappedTextState
+    );
 
     if (textState === "valid") {
       return "valid";
@@ -61,7 +66,7 @@ const getChildNameState = (child: JsxChild): EvidenceState => {
       : "invalid";
   }
 
-  return getAccessibleTextState([child]);
+  return getAccessibleTextState([child], getStaticMappedTextState);
 };
 
 const linksHaveAccessibleNamesRule: AuditRule = {
@@ -95,9 +100,21 @@ const linksHaveAccessibleNamesRule: AuditRule = {
       }
 
       const states = [
-        getTextAttributeState(openingElement, "aria-label"),
-        getTextAttributeState(openingElement, "aria-labelledby"),
-        getTextAttributeState(openingElement, "title"),
+        getTextAttributeState(
+          openingElement,
+          "aria-label",
+          getStaticMappedTextState
+        ),
+        getTextAttributeState(
+          openingElement,
+          "aria-labelledby",
+          getStaticMappedTextState
+        ),
+        getTextAttributeState(
+          openingElement,
+          "title",
+          getStaticMappedTextState
+        ),
         ...(isJsxElement(node)
           ? node.children.map((child) => getChildNameState(child))
           : []),

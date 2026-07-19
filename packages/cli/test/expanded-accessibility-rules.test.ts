@@ -108,6 +108,38 @@ describe("expanded accessibility rules", () => {
 
       await fixture.write(
         "src/App.tsx",
+        `
+          function UnrelatedExample() {
+            const navLinks = [{ href: "#docs", label: "Docs" }] as const;
+            return navLinks.length;
+          }
+          export function App({ navLinks }) {
+            return <nav>{navLinks.map((link) => <Link href={link.href}>{link.label}</Link>)}</nav>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
+      ).toBe("advisory");
+
+      await fixture.write(
+        "src/App.tsx",
+        `
+          const navLinks = [
+            { href: "#compare", label: "Compare" },
+            { href: "#themes", label: "Themes" },
+          ] as const;
+          export function App() {
+            return <nav>{navLinks.map((link) => <Link href={link.href}>{link.label}</Link>)}</nav>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, linksHaveAccessibleNamesRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/App.tsx",
         "export function App() { return null; }"
       );
       await fixture.write(

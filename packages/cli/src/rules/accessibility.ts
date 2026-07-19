@@ -23,6 +23,7 @@ import {
   walkNodes,
 } from "../ast";
 import type { AuditEvidence, AuditRule, AuditRuleResult } from "../audit";
+import { getStaticMappedTextState } from "../static-text";
 
 const BUTTON_TAGS = new Set(["Button", "button"]);
 const FORM_CONTROL_TAGS = new Set([
@@ -113,11 +114,14 @@ const getOpeningElement = (
   node: JsxElement | JsxOpeningLikeElement
 ): JsxOpeningLikeElement => (isJsxElement(node) ? node.openingElement : node);
 
-const getAccessibleNameState = (node: JsxOpeningLikeElement): EvidenceState => {
+const getAccessibleNameState = (
+  node: JsxOpeningLikeElement,
+  resolveExpression = getStaticMappedTextState
+): EvidenceState => {
   const states = [
-    getTextAttributeState(node, "aria-label"),
-    getTextAttributeState(node, "aria-labelledby"),
-    getTextAttributeState(node, "title"),
+    getTextAttributeState(node, "aria-label", resolveExpression),
+    getTextAttributeState(node, "aria-labelledby", resolveExpression),
+    getTextAttributeState(node, "title", resolveExpression),
   ];
 
   if (states.includes("valid")) {
@@ -491,7 +495,10 @@ const iconButtonsHaveLabelsRule: AuditRule = {
         }
 
         const nameState = getAccessibleNameState(openingElement);
-        const textState = getAccessibleTextState(node.children);
+        const textState = getAccessibleTextState(
+          node.children,
+          getStaticMappedTextState
+        );
 
         if (nameState === "valid" || textState === "valid") {
           return;

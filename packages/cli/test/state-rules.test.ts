@@ -229,6 +229,69 @@ describe("state rules", () => {
     }
   });
 
+  it("ignores internal collection transforms inside UI modules", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components/charts/bar-chart.tsx",
+        `
+          export function BarChart({ data }) {
+            const scale = useMemo(
+              () => scaleBand({ domain: data.map((datum) => datum.label) }),
+              [data]
+            );
+            return <svg aria-label="Bar chart" data-scale={scale} />;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "components/charts/bar-chart.tsx",
+        "export const chartName = 'bar';"
+      );
+      await fixture.write(
+        "components/charts/bar.tsx",
+        `
+          export function BarSeries({ data }) {
+            return (
+              <g className="bar-series">
+                {data.map((datum) => <rect height={datum.value} />)}
+              </g>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "components/charts/bar.tsx",
+        "export const chartName = 'bar';"
+      );
+      await fixture.write(
+        "components/charts/tooltip/tooltip-content.tsx",
+        `
+          export function TooltipContent({ rows }) {
+            return <div>{rows.map((row) => <span>{row.label}</span>)}</div>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, emptyStatePresentRule)).status
+      ).toBe("not-applicable");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("does not mistake URL state or table composition for data collections", async () => {
     const fixture = await createRuleFixture();
 

@@ -71,6 +71,38 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("treats early and final component returns as exclusive render branches", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/hero.tsx",
+        `
+          export function Hero({ compact }) {
+            if (compact) {
+              return <section><h1>Compact report</h1></section>;
+            }
+
+            return <section><h1>Full report</h1><h2>Details</h2></section>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, headingStructureSaneRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/hero.tsx",
+        "export function Hero() { return <main><h1>First</h1><h1>Second</h1></main>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, headingStructureSaneRule)).status
+      ).toBe("advisory");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("advises when an app shell has no responsive source evidence", async () => {
     const fixture = await createRuleFixture();
 

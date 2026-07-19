@@ -50,6 +50,7 @@ interface SourceScope {
 }
 
 type EvidenceState = "invalid" | "unknown" | "valid";
+type TextExpressionResolver = (expression: Expression) => EvidenceState;
 type StaticJsxValue = boolean | null | number | string | undefined;
 
 type JsxAttributeValue =
@@ -309,11 +310,26 @@ const getJsxAttribute = (
 
 const getTextAttributeState = (
   node: JsxOpeningLikeElement,
-  name: string
+  name: string,
+  resolveExpression?: TextExpressionResolver
 ): EvidenceState => {
   const attribute = getJsxAttributeValue(node, name);
 
   if (attribute.kind === "dynamic") {
+    if (resolveExpression) {
+      for (const property of node.attributes.properties) {
+        if (
+          isJsxAttribute(property) &&
+          property.name.getText() === name &&
+          property.initializer &&
+          isJsxExpression(property.initializer) &&
+          property.initializer.expression
+        ) {
+          return resolveExpression(property.initializer.expression);
+        }
+      }
+    }
+
     return "unknown";
   }
 
@@ -359,7 +375,16 @@ const visitJsxNodes = (
   }
 };
 
-const getChildAccessibleTextState = (child: JsxChild): EvidenceState => {
+const resolveAccessibleTextExpression = (
+  expression: Expression,
+  resolveExpression?: TextExpressionResolver
+): EvidenceState =>
+  resolveExpression ? resolveExpression(expression) : "unknown";
+
+const getChildAccessibleTextState = (
+  child: JsxChild,
+  resolveExpression?: TextExpressionResolver
+): EvidenceState => {
   if (isJsxText(child)) {
     return child.getText().trim().length > 0 ? "valid" : "invalid";
   }
@@ -391,27 +416,28 @@ const getChildAccessibleTextState = (child: JsxChild): EvidenceState => {
       return "invalid";
     }
 
-    return "unknown";
+    return resolveAccessibleTextExpression(expression, resolveExpression);
   }
 
   if (isJsxElement(child)) {
-    return getAccessibleTextState(child.children);
+    return getAccessibleTextState(child.children, resolveExpression);
   }
 
   if (isJsxFragment(child)) {
-    return getAccessibleTextState(child.children);
+    return getAccessibleTextState(child.children, resolveExpression);
   }
 
   return "invalid";
 };
 
 const getAccessibleTextState = (
-  children: readonly JsxChild[]
+  children: readonly JsxChild[],
+  resolveExpression?: TextExpressionResolver
 ): EvidenceState => {
   let hasUnknownText = false;
 
   for (const child of children) {
-    const state = getChildAccessibleTextState(child);
+    const state = getChildAccessibleTextState(child, resolveExpression);
 
     if (state === "valid") {
       return "valid";
@@ -464,6 +490,7 @@ export type {
   JsxNodeVisit,
   ParsedSourceFile,
   SourceScope,
+  TextExpressionResolver,
 };
 export {
   ancestorHasTagName,

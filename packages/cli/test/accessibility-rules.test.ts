@@ -157,6 +157,38 @@ describe("accessibility rules", () => {
     );
   });
 
+  it("resolves icon button labels from static mapped configuration", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        const shareActions = [
+          { label: "PNG", srLabel: "Export chart as PNG" },
+          { label: "SVG", srLabel: "Export chart as SVG" },
+        ] as const;
+
+        export function App() {
+          return shareActions.map(({ label, srLabel }) => (
+            <button aria-label={srLabel}>
+              <DownloadIcon />
+              <span>{label}</span>
+            </button>
+          ));
+        }
+      `
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find((finding) => finding.id === "icon-buttons-have-labels")
+        ?.status
+    ).toBe("pass");
+  });
+
   it("fails clickable divs without keyboard support", async () => {
     const rootDir = await createFixture();
     await writeFixtureFile(
