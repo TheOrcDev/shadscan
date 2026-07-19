@@ -19,6 +19,8 @@ stable releases published under `latest`.
   ignore chart transforms, SVG mark generation, and tooltip internals; heading
   checks treat separate component returns as mutually exclusive branches; and
   accessible-name checks resolve labels from local static mapped configuration.
+- Browser contrast and mobile-overflow advisories now exclude Next route
+  handlers, Pages API routes, and generated metadata images from page evidence.
 - Empty-state checks now require actual query calls or mapped collection data,
   avoiding false failures from `nuqs` URL state, static table markup, and pages
   whose data-table component owns the empty-state branch.

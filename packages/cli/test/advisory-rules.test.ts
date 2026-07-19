@@ -370,6 +370,37 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("excludes generated responses from page contrast evidence", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.10",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/api/embed/route.tsx",
+        'export function GET() { return <svg style={{ color: "#fff" }} />; }'
+      );
+      await fixture.write(
+        "app/opengraph-image.tsx",
+        'export default function Image() { return <div style={{ background: "#000" }} />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, colorContrastPassesRule)).status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "src/banner.tsx",
+        'export function Banner() { return <p className="text-primary">Saved</p>; }'
+      );
+      const finding = await runRule(fixture.rootDir, colorContrastPassesRule);
+      expect(finding.status).toBe("advisory");
+      expect(finding.evidence[0]?.filePath).toBe("src/banner.tsx");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("calls out obviously small pointer targets for browser verification", async () => {
     const fixture = await createRuleFixture();
 
@@ -400,6 +431,37 @@ describe("browser-sensitive advisory rules", () => {
       const finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
       expect(finding.status).toBe("advisory");
       expect(finding.evidence[0]?.message).toContain("overflow-prone");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("excludes generated responses from mobile overflow evidence", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.10",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/api/og/route.tsx",
+        "export function GET() { return <div style={{ width: 1200 }} />; }"
+      );
+      await fixture.write(
+        "app/opengraph-image.tsx",
+        "export default function Image() { return <div style={{ width: 1200 }} />; }"
+      );
+      let finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.evidence[0]?.message).not.toContain("overflow-prone");
+      expect(finding.evidence[0]?.filePath).toBeUndefined();
+
+      await fixture.write(
+        "src/dashboard.tsx",
+        'export function Dashboard() { return <main className="w-screen">Content</main>; }'
+      );
+      finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.evidence[0]?.message).toContain("overflow-prone");
+      expect(finding.evidence[0]?.filePath).toBe("src/dashboard.tsx");
     } finally {
       await fixture.cleanup();
     }

@@ -36,6 +36,10 @@ const STYLE_PATTERNS = [
   "src/**/*.css",
   "styles/**/*.css",
 ];
+const APP_NON_PAGE_SOURCE_PATTERN =
+  /(?:^|[/\\])(?:src[/\\])?app[/\\](?:.*[/\\])?(?:apple-icon|icon|opengraph-image|route|twitter-image)\.[cm]?[jt]sx?$/i;
+const PAGES_API_SOURCE_PATTERN =
+  /(?:^|[/\\])(?:src[/\\])?pages[/\\]api[/\\].+\.[cm]?[jt]sx?$/i;
 const PROJECT_IGNORES = [
   "**/.next/**",
   "**/__fixtures__/**",
@@ -164,6 +168,10 @@ const getTextLineNumber = (
 
   return content.slice(0, match.index).split("\n").length;
 };
+
+const isNonPageSourcePath = (filePath: string): boolean =>
+  APP_NON_PAGE_SOURCE_PATTERN.test(filePath) ||
+  PAGES_API_SOURCE_PATTERN.test(filePath);
 
 const loadSourceFiles = async (
   project: ProjectDiscovery,
@@ -326,5 +334,6 @@ export {
   getProjectSourceFiles,
   getProjectStyleFiles,
   getTextLineNumber,
+  isNonPageSourcePath,
   readProjectSourceFile,
 };

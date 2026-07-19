@@ -4,6 +4,7 @@ import {
   getProjectSourceFiles,
   getProjectStyleFiles,
   getTextLineNumber,
+  isNonPageSourcePath,
 } from "./source-files";
 
 const COLOR_STYLE_PATTERN =
@@ -22,7 +23,13 @@ const colorContrastPassesRule: AuditRule = {
     const sourceFiles = await getProjectSourceFiles(project);
     const styleFiles = await getProjectStyleFiles(project);
     const colorFile = [...sourceFiles, ...styleFiles]
-      .filter((file) => !GENERATED_UI_PATH_PATTERN.test(file.path))
+      .filter(
+        (file) =>
+          !(
+            GENERATED_UI_PATH_PATTERN.test(file.path) ||
+            isNonPageSourcePath(file.path)
+          )
+      )
       .find((file) => COLOR_STYLE_PATTERN.test(file.content));
 
     if (!colorFile) {

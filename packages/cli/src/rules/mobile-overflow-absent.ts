@@ -21,7 +21,11 @@ import {
 } from "../ast";
 import type { AuditRule } from "../audit";
 import { advisory, notApplicable } from "./rule-result";
-import { getProjectStyleFiles, type SourceFile } from "./source-files";
+import {
+  getProjectStyleFiles,
+  isNonPageSourcePath,
+  type SourceFile,
+} from "./source-files";
 
 const CLASS_OVERFLOW_RISK_PATTERN =
   /^(?:[\w-]+:)*!?(?:w-screen|min-w-(?:screen|\[[^\]\s]+\])|w-\[\d{3,}px\]|overflow-x-visible)$/i;
@@ -281,7 +285,11 @@ const mobileOverflowAbsentRule: AuditRule = {
   maxScore: 0,
   run: async ({ project }) => {
     const sourceFiles = (await parseProjectSourceFiles(project)).filter(
-      (file) => !GENERATED_UI_PATH_PATTERN.test(file.filePath)
+      (file) =>
+        !(
+          GENERATED_UI_PATH_PATTERN.test(file.filePath) ||
+          isNonPageSourcePath(file.filePath)
+        )
     );
 
     if (sourceFiles.length === 0) {
