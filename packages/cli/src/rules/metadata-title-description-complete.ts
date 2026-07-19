@@ -18,6 +18,7 @@ import {
   isReturnStatement,
   isSatisfiesExpression,
   isShorthandPropertyAssignment,
+  isSpreadAssignment,
   isStringLiteral,
   isTypeAssertionExpression,
   isVariableStatement,
@@ -164,11 +165,17 @@ function getObjectFieldState(
   object: ObjectLiteralExpression,
   fieldName: string
 ): MetadataFieldState {
-  for (const property of object.properties) {
+  const properties = Array.from(object.properties).reverse();
+
+  for (const property of properties) {
     const state = getPropertyFieldState(property, fieldName);
 
     if (state) {
       return state;
+    }
+
+    if (isSpreadAssignment(property)) {
+      return "unknown";
     }
   }
 

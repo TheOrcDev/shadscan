@@ -17,6 +17,8 @@ stable releases published under `latest`.
   requiring unused destination directories such as `@/hooks` to exist yet.
 - Async-action checks now recognize parenthesized pending-state branches and
   loading feedback supplied by `toast.promise`.
+- Metadata completeness checks now treat object spreads as unknown field sources
+  and honor later field overrides instead of reporting spread fields missing.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories

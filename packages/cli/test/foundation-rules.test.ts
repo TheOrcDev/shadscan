@@ -235,6 +235,54 @@ describe("foundation rules", () => {
     }
   });
 
+  it("does not report metadata fields missing when an object spread may provide them", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "app/layout.tsx",
+        `
+          import { sharedMetadata } from "@/lib/metadata";
+          export const metadata = { ...sharedMetadata };
+          export default function Layout({ children }) { return <html>{children}</html>; }
+        `
+      );
+      await fixture.write(
+        "lib/metadata.ts",
+        `
+          export const sharedMetadata = {
+            title: { default: siteConfig.title, template: "%s | Acme" },
+            description: siteConfig.description,
+          };
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
+          .status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/layout.tsx",
+        `
+          import { sharedMetadata } from "@/lib/metadata";
+          export const metadata = { ...sharedMetadata, description: "" };
+          export default function Layout({ children }) { return <html>{children}</html>; }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, metadataTitleDescriptionCompleteRule))
+          .status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("evaluates Next metadata through the route hierarchy", async () => {
     const fixture = await createRuleFixture({
       next: "16.2.6",
