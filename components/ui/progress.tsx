@@ -17,6 +17,7 @@ function Progress({
         className
       )}
       data-slot="progress"
+      value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator

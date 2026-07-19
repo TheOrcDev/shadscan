@@ -1,8 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./typeset.css";
 
 @custom-variant dark (&:is(.dark *));
+
+.typeset-report {
+  --typeset-size: 0.9375rem;
+  --typeset-leading: 1.65;
+  --typeset-flow: 1em;
+}
 
 :root {
   --background: oklch(1 0 0);
