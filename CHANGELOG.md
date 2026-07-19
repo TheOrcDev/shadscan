@@ -19,6 +19,9 @@ stable releases published under `latest`.
   loading feedback supplied by `toast.promise`.
 - Metadata completeness checks now treat object spreads as unknown field sources
   and honor later field overrides instead of reporting spread fields missing.
+- Command-menu checks now recognize complete, mounted Fumadocs search dialogs
+  and the provider's default Cmd/Ctrl+K shortcut, while excluding standalone
+  `Command` comboboxes from app-level command-menu credit.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories

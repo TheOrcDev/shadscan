@@ -61,6 +61,19 @@ describe("interaction rules", () => {
 
       await fixture.write(
         "components/command-menu.tsx",
+        `
+          import { Command, CommandEmpty, CommandInput, CommandItem } from "@/components/ui/command";
+          export function Combobox() {
+            return <Command><CommandInput /><CommandEmpty>No results</CommandEmpty><CommandItem>Settings</CommandItem></Command>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "components/command-menu.tsx",
         'import { CommandDialog } from "@/components/ui/command"; export function CommandMenu() { return <CommandDialog />; }'
       );
       expect(
@@ -102,6 +115,69 @@ describe("interaction rules", () => {
         "components/command-menu.tsx",
         "export function CommandMenu() { return <button onKeyDown={() => setOpen(true)}>Open</button>; }"
       );
+      expect(
+        (await runRule(fixture.rootDir, commandMenuHotkeyPresentRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("recognizes a mounted Fumadocs search dialog and its default hotkey", async () => {
+    const fixture = await createRuleFixture({
+      "fumadocs-ui": "16.0.0",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "components/search.tsx",
+        `
+          import {
+            SearchDialog,
+            SearchDialogContent,
+            SearchDialogInput,
+            SearchDialogList,
+          } from "fumadocs-ui/components/dialog/search";
+
+          export default function DefaultSearchDialog(props) {
+            return (
+              <SearchDialog {...props}>
+                <SearchDialogContent>
+                  <SearchDialogInput />
+                  <SearchDialogList items={[]} />
+                </SearchDialogContent>
+              </SearchDialog>
+            );
+          }
+        `
+      );
+      await fixture.write(
+        "app/layout.tsx",
+        `
+          import { RootProvider } from "fumadocs-ui/provider/next";
+          import SearchDialog from "@/components/search";
+          export default function Layout({ children }) {
+            return <RootProvider search={{ SearchDialog }}>{children}</RootProvider>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+      ).toBe("pass");
+      expect(
+        (await runRule(fixture.rootDir, commandMenuHotkeyPresentRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "app/layout.tsx",
+        "export default function Layout({ children }) { return <main>{children}</main>; }"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+      ).toBe("fail");
       expect(
         (await runRule(fixture.rootDir, commandMenuHotkeyPresentRule)).status
       ).toBe("fail");

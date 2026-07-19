@@ -1,9 +1,10 @@
 import type { AuditRule } from "../audit";
+import { findFumadocsCommandRuntime } from "./fumadocs-command-runtime";
 import { fail, pass } from "./rule-result";
 import { getProjectSourceFiles, getTextLineNumber } from "./source-files";
 
 const COMMAND_IMPORT_PATTERN = /from\s+["'][^"']*(?:\/command|cmdk)["']/;
-const COMMAND_CONTAINER_PATTERN = /<(?:CommandDialog|Command)(?:\s|>)/;
+const COMMAND_CONTAINER_PATTERN = /<CommandDialog(?:\s|>)/;
 const COMMAND_INPUT_PATTERN = /<(?:CommandInput|Command\.Input)(?:\s|>)/;
 const COMMAND_EMPTY_PATTERN = /<(?:CommandEmpty|Command\.Empty)(?:\s|>)/;
 const COMMAND_ITEM_PATTERN = /<(?:CommandItem|Command\.Item)(?:\s|>)/;
@@ -46,9 +47,18 @@ const commandMenuPresentRule: AuditRule = {
       }
     }
 
+    const fumadocsRuntime = await findFumadocsCommandRuntime(project);
+    if (fumadocsRuntime) {
+      return pass(
+        "Mounted Fumadocs search command dialog found.",
+        fumadocsRuntime.file.path,
+        fumadocsRuntime.line
+      );
+    }
+
     return fail(
       "No complete app-level command menu was found.",
-      "Compose CommandDialog or Command with an input, empty state, and actionable items.",
+      "Compose CommandDialog with an input, empty state, and actionable items, or mount an integrated command-search provider.",
       {
         roast:
           "Cmd+K was right there. Your users are doing cardio through the sidebar.",

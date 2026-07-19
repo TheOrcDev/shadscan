@@ -1,5 +1,6 @@
 import { findOwnedSourceScopes } from "../ast";
 import type { AuditRule } from "../audit";
+import { findFumadocsCommandRuntime } from "./fumadocs-command-runtime";
 import { fail, pass } from "./rule-result";
 
 const COMMAND_HOTKEY_LIBRARY_PATTERN =
@@ -56,6 +57,15 @@ const commandMenuHotkeyPresentRule: AuditRule = {
           scope.line
         );
       }
+    }
+
+    const fumadocsRuntime = await findFumadocsCommandRuntime(project);
+    if (fumadocsRuntime?.usesDefaultHotkey) {
+      return pass(
+        "Cmd/Ctrl+K is supplied by the mounted Fumadocs search provider.",
+        fumadocsRuntime.file.path,
+        fumadocsRuntime.line
+      );
     }
 
     return fail(
