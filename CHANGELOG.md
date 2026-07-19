@@ -39,6 +39,8 @@ stable releases published under `latest`.
   TypeScript path aliases instead of stopping at the route file.
 - Mobile-overflow checks now ignore sub-320px widths and fixed widths introduced
   only at min-width breakpoints while retaining max-width risks.
+- Personal-data autocomplete checks now distinguish person-name fields from
+  product, project, package, repository, and other object-name inputs.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories

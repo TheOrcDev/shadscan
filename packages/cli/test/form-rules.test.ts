@@ -199,4 +199,34 @@ describe("form rules", () => {
       await fixture.cleanup();
     }
   });
+
+  it("does not treat product or project names as personal data", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/catalog.tsx",
+        `
+          export function Catalog() {
+            return <><Input id="name" defaultValue="Gamer Gear" /><Input name="projectName" /></>;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
+      ).toBe("not-applicable");
+
+      await fixture.write(
+        "src/profile.tsx",
+        'export function Profile() { return <Input name="name" />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, personalDataAutocompletePresentRule))
+          .status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
 });

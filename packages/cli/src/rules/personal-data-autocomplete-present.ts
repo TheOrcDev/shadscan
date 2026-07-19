@@ -13,10 +13,16 @@ import { advisory, fail, notApplicable, pass } from "./rule-result";
 const INPUT_TAGS = new Set(["Input", "input"]);
 const PERSONAL_INPUT_TYPES = new Set(["email", "password", "tel"]);
 const PERSONAL_FIELD_PATTERN =
-  /(?:^|-)(?:address|bday|cc|country|credit-card|current-password|email|family-name|first-name|given-name|last-name|name|new-password|organization|phone|postal|street|tel|username|zip)(?:-|$)/;
+  /(?:^|-)(?:address|bday|cc|country|credit-card|current-password|email|family-name|first-name|full-name|given-name|last-name|new-password|organization|phone|postal|street|tel|username|zip)(?:-|$)/;
+const EXPLICIT_PERSON_NAME_PATTERN =
+  /(?:^|-)(?:contact|customer|display|person|user)-name(?:-|$)/;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 const GIVEN_NAME_PATTERN = /(?:first|given)-name/;
 const FAMILY_NAME_PATTERN = /(?:family|last)-name/;
+const NON_PERSON_NAME_PATTERN =
+  /(?:^|-)(?:app|component|event|file|item|package|product|project|repo|repository|resource|team|workspace)-name(?:-|$)/;
+const PERSONAL_NAME_CONTEXT_PATH_PATTERN =
+  /(?:^|[/\\-])(?:account|billing|checkout|contact|customer|profile|register|registration|shipping|signup|user)(?=[/\\.-]|$)/i;
 const WHITESPACE_PATTERN = /\s+/;
 const TEL_AUTOCOMPLETE_TOKENS = [
   "tel",
@@ -33,10 +39,31 @@ const normalizeFieldName = (value: string): string =>
     .replace(/[_\s]+/g, "-")
     .toLowerCase();
 
+const isPersonalFieldIdentifier = (
+  value: string,
+  filePath: string
+): boolean => {
+  const fieldName = normalizeFieldName(value);
+
+  if (PERSONAL_FIELD_PATTERN.test(fieldName)) {
+    return true;
+  }
+
+  if (NON_PERSON_NAME_PATTERN.test(fieldName)) {
+    return false;
+  }
+
+  return (
+    EXPLICIT_PERSON_NAME_PATTERN.test(fieldName) ||
+    (fieldName === "name" && PERSONAL_NAME_CONTEXT_PATH_PATTERN.test(filePath))
+  );
+};
+
 const isPersonalDataInput = (
   name: string | true | null,
   id: string | true | null,
-  type: string | true | null
+  type: string | true | null,
+  filePath: string
 ): boolean => {
   if (
     typeof type === "string" &&
@@ -47,8 +74,7 @@ const isPersonalDataInput = (
 
   return [name, id].some(
     (value) =>
-      typeof value === "string" &&
-      PERSONAL_FIELD_PATTERN.test(normalizeFieldName(value))
+      typeof value === "string" && isPersonalFieldIdentifier(value, filePath)
   );
 };
 
@@ -180,7 +206,7 @@ const personalDataAutocompletePresentRule: AuditRule = {
         !(
           tagName &&
           INPUT_TAGS.has(tagName) &&
-          isPersonalDataInput(name, id, type)
+          isPersonalDataInput(name, id, type, file.filePath)
         )
       ) {
         return;
