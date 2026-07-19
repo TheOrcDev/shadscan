@@ -65,6 +65,7 @@ const DIALOG_TITLE_TAGS = new Set([
   "DialogTitle",
   "SheetTitle",
 ]);
+const DIALOG_SCOPE_TAG_PATTERN = /(?:AlertDialog|Dialog|Sheet)$/;
 
 const evidence = (
   message: string,
@@ -316,17 +317,32 @@ const getTabIndexState = (node: JsxOpeningLikeElement): EvidenceState => {
     : "invalid";
 };
 
+const isDialogScopeElement = (node: Node): node is JsxElement => {
+  if (!isJsxElement(node)) {
+    return false;
+  }
+
+  const tagName = getJsxTagName(node.openingElement);
+  return tagName !== null && DIALOG_SCOPE_TAG_PATTERN.test(tagName);
+};
+
 const getDialogTitleState = (node: JsxElement): EvidenceState => {
   const title = { state: "invalid" as EvidenceState };
 
-  walkNodes(node, (descendant) => {
+  walkNodes(node, (descendant, ancestors) => {
     if (!isJsxElement(descendant)) {
       return;
     }
 
+    const belongsToNestedDialog = ancestors.some(
+      (ancestor) => ancestor !== node && isDialogScopeElement(ancestor)
+    );
     const descendantTag = getJsxTagName(descendant.openingElement);
 
-    if (!(descendantTag && DIALOG_TITLE_TAGS.has(descendantTag))) {
+    if (
+      belongsToNestedDialog ||
+      !(descendantTag && DIALOG_TITLE_TAGS.has(descendantTag))
+    ) {
       return;
     }
 
@@ -338,6 +354,16 @@ const getDialogTitleState = (node: JsxElement): EvidenceState => {
   });
 
   return title.state;
+};
+
+const getNearestDialogScope = (ancestors: Node[]): JsxElement | null => {
+  for (const ancestor of ancestors.slice().reverse()) {
+    if (isDialogScopeElement(ancestor)) {
+      return ancestor;
+    }
+  }
+
+  return null;
 };
 
 type InteractiveElementEvaluation =
@@ -402,7 +428,8 @@ const evaluateInteractiveElement = (
 };
 
 const evaluateDialogName = (
-  node: JsxElement | JsxOpeningLikeElement
+  node: JsxElement | JsxOpeningLikeElement,
+  ancestors: Node[]
 ): EvidenceState | null => {
   if (!(isJsxElement(node) || isJsxSelfClosingElement(node))) {
     return null;
@@ -417,12 +444,22 @@ const evaluateDialogName = (
 
   const nameState = getAccessibleNameState(openingElement);
   const titleState = isJsxElement(node) ? getDialogTitleState(node) : "invalid";
+  const dialogScope = getNearestDialogScope(ancestors);
+  const scopeTitleState = dialogScope
+    ? getDialogTitleState(dialogScope)
+    : "invalid";
 
-  if (nameState === "valid" || titleState === "valid") {
+  if (
+    nameState === "valid" ||
+    titleState === "valid" ||
+    scopeTitleState === "valid"
+  ) {
     return "valid";
   }
 
-  return nameState === "unknown" || titleState === "unknown"
+  return nameState === "unknown" ||
+    titleState === "unknown" ||
+    scopeTitleState === "unknown"
     ? "unknown"
     : "invalid";
 };
@@ -651,13 +688,13 @@ const dialogsHaveAccessibleNamesRule: AuditRule = {
     for (const file of files) {
       let failure: AuditRuleResult | null = null;
 
-      visitJsxNodes([file], ({ node }) => {
+      visitJsxNodes([file], ({ ancestors, node }) => {
         if (failure) {
           return;
         }
 
         const openingElement = getOpeningElement(node);
-        const nameState = evaluateDialogName(node);
+        const nameState = evaluateDialogName(node, ancestors);
 
         if (nameState === null || nameState === "valid") {
           return;

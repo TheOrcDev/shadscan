@@ -496,6 +496,34 @@ describe("accessibility rules", () => {
     ).toBe("fail");
   });
 
+  it("correlates dialog titles placed beside content under the same root", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App() {
+          return (
+            <ShadcnCommandDialog>
+              <DialogHeader><DialogTitle>Command Palette</DialogTitle></DialogHeader>
+              <DialogContent>Commands</DialogContent>
+            </ShadcnCommandDialog>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: accessibilityRules,
+    });
+
+    expect(
+      report.findings.find(
+        (finding) => finding.id === "dialogs-have-accessible-names"
+      )?.status
+    ).toBe("pass");
+  });
+
   it("requires a title inside every dialog subtree", async () => {
     const rootDir = await createFixture();
     await writeFixtureFile(
@@ -507,6 +535,35 @@ describe("accessibility rules", () => {
             <DialogContent><DialogTitle>Named</DialogTitle></DialogContent>
             <DialogContent>Still unnamed</DialogContent>
           </>;
+        }
+      `
+    );
+
+    expect(
+      (
+        await runAudit(rootDir, {
+          rules: accessibilityRules,
+        })
+      ).findings.find(
+        (finding) => finding.id === "dialogs-have-accessible-names"
+      )?.status
+    ).toBe("fail");
+
+    await writeFixtureFile(
+      rootDir,
+      "src/app.tsx",
+      `
+        export function App() {
+          return (
+            <Dialog>
+              <DialogContent>
+                <Dialog>
+                  <DialogTitle>Nested title</DialogTitle>
+                  <DialogContent>Nested content</DialogContent>
+                </Dialog>
+              </DialogContent>
+            </Dialog>
+          );
         }
       `
     );
