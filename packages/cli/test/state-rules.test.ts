@@ -318,6 +318,35 @@ describe("state rules", () => {
       expect(
         (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
       ).toBe("pass");
+
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({
+          compilerOptions: {
+            baseUrl: ".",
+            paths: { "@/*": ["./*"] },
+          },
+        })
+      );
+      await fixture.write(
+        "components/not-found-recovery.tsx",
+        'export default function NotFoundRecovery() { return <Link href="/">Go home</Link>; }'
+      );
+      await fixture.write(
+        "app/not-found.tsx",
+        'import NotFoundRecovery from "@/components/not-found-recovery"; export default function NotFound() { return <h1>Not found</h1>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "app/not-found.tsx",
+        'import NotFoundRecovery from "@/components/not-found-recovery"; export default function NotFound() { return <NotFoundRecovery />; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
+      ).toBe("pass");
     } finally {
       await fixture.cleanup();
     }

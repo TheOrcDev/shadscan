@@ -35,6 +35,8 @@ stable releases published under `latest`.
   click handler only delegates focus to the sibling form control.
 - Dialog-name checks now correlate titles and content placed as siblings beneath
   the same dialog, sheet, alert-dialog, or composite dialog root.
+- Not-found recovery checks now follow rendered local components through project
+  TypeScript path aliases instead of stopping at the route file.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories
