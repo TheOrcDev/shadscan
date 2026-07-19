@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { HostedScanResponseSchema } from "../shadscan-api/contracts";
-
-const MAX_REPOSITORY_INPUT_LENGTH = 256;
+import { MAX_REPOSITORY_INPUT_LENGTH, WEB_SCAN_ERROR_CODES } from "./types";
 
 const RepositoryInputSchema = z
   .string()
@@ -18,18 +17,7 @@ const NormalizedGitHubRepositorySchema = z
   })
   .strict();
 
-const WebScanErrorCodeSchema = z.enum([
-  "GITHUB_SOURCE_NOT_FOUND",
-  "INTERNAL_ERROR",
-  "INVALID_REPOSITORY",
-  "PRIVATE_REPOSITORY_UNSUPPORTED",
-  "PROJECT_DISCOVERY_FAILED",
-  "RATE_LIMITED",
-  "SERVICE_NOT_CONFIGURED",
-  "SOURCE_TOO_LARGE",
-  "SOURCE_UNSUPPORTED",
-  "UPSTREAM_UNAVAILABLE",
-]);
+const WebScanErrorCodeSchema = z.enum(WEB_SCAN_ERROR_CODES);
 
 const WebScanErrorSchema = z
   .object({
@@ -65,15 +53,6 @@ const WebScanStateSchema = z.discriminatedUnion("status", [
   WebScanCompleteStateSchema,
 ]);
 
-type NormalizedGitHubRepository = z.infer<
-  typeof NormalizedGitHubRepositorySchema
->;
-type WebScanCompleteState = z.infer<typeof WebScanCompleteStateSchema>;
-type WebScanError = z.infer<typeof WebScanErrorSchema>;
-type WebScanErrorCode = z.infer<typeof WebScanErrorCodeSchema>;
-type WebScanErrorState = z.infer<typeof WebScanErrorStateSchema>;
-type WebScanState = z.infer<typeof WebScanStateSchema>;
-
 export type {
   NormalizedGitHubRepository,
   WebScanCompleteState,
@@ -81,9 +60,8 @@ export type {
   WebScanErrorCode,
   WebScanErrorState,
   WebScanState,
-};
+} from "./types";
 export {
-  MAX_REPOSITORY_INPUT_LENGTH,
   NormalizedGitHubRepositorySchema,
   RepositoryInputSchema,
   WebScanCompleteStateSchema,

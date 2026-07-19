@@ -8,13 +8,11 @@ import {
   materializeGitHubSource,
 } from "../shadscan-api/github-source";
 import { runHostedScan } from "../shadscan-api/run-hosted-scan";
-import {
-  type WebScanCompleteState,
-  WebScanCompleteStateSchema,
-} from "./contracts";
+import { WebScanCompleteStateSchema } from "./contracts";
 import { asWebScanServiceError } from "./errors";
 import { normalizeGitHubRepository } from "./normalize-repository";
 import { enforceWebScanRateLimit, type WebRateLimitInput } from "./rate-limit";
+import type { WebScanCompleteState } from "./types";
 
 interface ExecuteWebRepositoryScanInput {
   clientAddress: string;

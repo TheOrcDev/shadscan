@@ -1,9 +1,6 @@
 import { HostedScanError } from "../shadscan-api/errors";
-import {
-  type WebScanError,
-  type WebScanErrorCode,
-  WebScanErrorSchema,
-} from "./contracts";
+import { WebScanErrorSchema } from "./contracts";
+import type { WebScanError, WebScanErrorCode } from "./types";
 
 interface WebScanServiceErrorOptions {
   cause?: unknown;

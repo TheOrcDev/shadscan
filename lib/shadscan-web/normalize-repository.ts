@@ -1,10 +1,10 @@
 import { GitHubSourceSchema } from "../shadscan-api/contracts";
 import {
-  type NormalizedGitHubRepository,
   NormalizedGitHubRepositorySchema,
   RepositoryInputSchema,
 } from "./contracts";
 import { WebScanServiceError } from "./errors";
+import type { NormalizedGitHubRepository } from "./types";
 
 const GITHUB_HOSTNAME = "github.com";
 const GIT_SUFFIX = ".git";
