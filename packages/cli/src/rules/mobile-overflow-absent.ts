@@ -24,13 +24,18 @@ import { advisory, notApplicable } from "./rule-result";
 import { getProjectStyleFiles, type SourceFile } from "./source-files";
 
 const CLASS_OVERFLOW_RISK_PATTERN =
-  /(?:^|[\s"'`])(?:[\w-]+:)*!?(?:w-screen|min-w-(?:screen|\[[^\]\s]+\])|w-\[\d{3,}px\]|overflow-x-visible)(?=$|[\s"'`])/i;
+  /^(?:[\w-]+:)*!?(?:w-screen|min-w-(?:screen|\[[^\]\s]+\])|w-\[\d{3,}px\]|overflow-x-visible)$/i;
+const CLASS_SOURCE_TOKEN_SEPARATOR_PATTERN = /[\s"'`]+/;
 const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//g;
 const CSS_DECLARATION_RISK_PATTERN =
-  /(?:^|[;{])\s*((?:min-)?width\s*:\s*(?:100vw|\d{3,}px)\b|overflow-x\s*:\s*visible\b)/im;
-const FIXED_WIDTH_VALUE_PATTERN = /\b100vw\b|\b\d{3,}px\b/i;
+  /(?:^|[;{])\s*((?:min-)?width\s*:\s*(?:100vw|(?:3[2-9]\d|[4-9]\d{2}|\d{4,})px)\b|overflow-x\s*:\s*visible\b)/im;
+const FIXED_WIDTH_VALUE_PATTERN =
+  /\b100vw\b|\b(?:3[2-9]\d|[4-9]\d{2}|\d{4,})px\b/i;
 const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
-const MIN_RISKY_NUMERIC_WIDTH = 100;
+const MIN_RISKY_NUMERIC_WIDTH = 320;
+const MIN_WIDTH_BREAKPOINT_VARIANT_PATTERN =
+  /^(?:sm|md|lg|xl|2xl|min-(?:sm|md|lg|xl|2xl))$/;
+const PIXEL_WIDTH_CLASS_PATTERN = /(?:^|:)!?(?:w|min-w)-\[(\d+)px\]$/i;
 const OVERFLOW_CONTAINMENT_CLASS_PATTERN =
   /(?:^|[\s"'`])!?(?:overflow|overflow-x)-(?:auto|clip|hidden|scroll)(?=$|[\s"'`])/i;
 const OVERFLOW_CONTAINMENT_VALUES = new Set([
@@ -58,6 +63,23 @@ const getJsxAttributeNode = (
   return null;
 };
 
+const hasMobileClassOverflowRisk = (classSource: string): boolean =>
+  classSource.split(CLASS_SOURCE_TOKEN_SEPARATOR_PATTERN).some((classToken) => {
+    if (!CLASS_OVERFLOW_RISK_PATTERN.test(classToken)) {
+      return false;
+    }
+
+    const pixelWidth = PIXEL_WIDTH_CLASS_PATTERN.exec(classToken)?.[1];
+    if (pixelWidth && Number(pixelWidth) < MIN_RISKY_NUMERIC_WIDTH) {
+      return false;
+    }
+
+    const variants = classToken.split(":").slice(0, -1);
+    return !variants.some((variant) =>
+      MIN_WIDTH_BREAKPOINT_VARIANT_PATTERN.test(variant)
+    );
+  });
+
 const getClassRiskNode = (node: JsxOpeningLikeElement): Node | null => {
   const classAttribute =
     getJsxAttributeNode(node, "className") ??
@@ -66,7 +88,7 @@ const getClassRiskNode = (node: JsxOpeningLikeElement): Node | null => {
   if (
     !(
       classAttribute?.initializer &&
-      CLASS_OVERFLOW_RISK_PATTERN.test(classAttribute.initializer.getText())
+      hasMobileClassOverflowRisk(classAttribute.initializer.getText())
     )
   ) {
     return null;

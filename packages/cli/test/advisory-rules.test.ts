@@ -357,6 +357,29 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("ignores fixed widths introduced only above mobile breakpoints", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/combobox.tsx",
+        'export function Combobox() { return <div className="w-[180px] md:w-[320px]">Options</div>; }'
+      );
+      let finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.evidence[0]?.message).not.toContain("overflow-prone");
+      expect(finding.evidence[0]?.filePath).toBeUndefined();
+
+      await fixture.write(
+        "src/combobox.tsx",
+        'export function Combobox() { return <div className="max-md:w-[900px]">Options</div>; }'
+      );
+      finding = await runRule(fixture.rootDir, mobileOverflowAbsentRule);
+      expect(finding.evidence[0]?.message).toContain("overflow-prone");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("ignores viewport hints in responsive image sizes", async () => {
     const fixture = await createRuleFixture();
 
