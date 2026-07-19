@@ -66,6 +66,8 @@
     "docs:check": "pnpm --filter shadscan docs:rules:check",
     "pretest:api": "pnpm cli:build",
     "test:api": "vitest run test/shadscan-api",
+    "pretest:web": "pnpm cli:build",
+    "test:web": "vitest run test/shadscan-web",
     "api:keygen": "node scripts/generate-api-key.mjs",
     "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js --fail-under 100",
     "audit:dependencies": "pnpm audit --prod --audit-level moderate"
