@@ -29,22 +29,24 @@ describe("ScanResult", () => {
   it("renders agent-ready actionable details with Typeset semantics", () => {
     const markup = renderToStaticMarkup(
       <ActionablesReport
-        actionables={agentHandoff.actionables}
         context={agentHandoff.context}
         findings={findings}
         suggestedSkills={agentHandoff.suggestedSkills}
+        verification={agentHandoff.verification}
+        workItems={agentHandoff.workItems}
       />
     );
 
     expect(markup).toContain("typeset typeset-report");
     expect(markup).toContain("P1");
-    expect(markup).toContain("high confidence");
-    expect(markup).toContain("+4 score impact");
+    expect(markup).toContain("Fix");
+    expect(markup).toContain("+4 raw rule points");
     expect(markup).toContain("components/theme-shortcut.tsx:12");
-    expect(markup).toContain("Suggested fix");
+    expect(markup).toContain("Suggested approach");
     expect(markup).toContain("Acceptance criteria");
     expect(markup).toContain("Pathetic. Pressing a button manually in 2026?");
     expect(markup).toContain("Suggested skills");
+    expect(markup).toContain("pnpm dlx shadscan@0.1.0-rc.1 --json");
   });
 
   it("renders every finding status and its evidence", () => {
@@ -62,10 +64,11 @@ describe("ScanResult", () => {
   it("renders a purposeful empty state when no actionables remain", () => {
     const markup = renderToStaticMarkup(
       <ActionablesReport
-        actionables={[]}
         context={agentHandoff.context}
         findings={findings}
         suggestedSkills={agentHandoff.suggestedSkills}
+        verification={agentHandoff.verification}
+        workItems={[]}
       />
     );
 

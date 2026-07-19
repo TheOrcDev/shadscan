@@ -19,8 +19,11 @@ Useful flags:
 - `--no-roast` keeps human output neutral.
 - `--roast` includes roast copy in JSON or CI output.
 
-Every report includes an agent handoff with suggested skills, context, and
-prioritized actionables. JSON consumers can read this from `agentHandoff`.
+Every report includes an agent handoff with suggested skills, context, exact
+verification commands, raw per-rule actionables, and grouped work items.
+Work-item dispositions distinguish required fixes from product decisions and
+score-neutral manual verification. JSON consumers can read this from
+`agentHandoff`.
 
 To hand the audit directly to an agent:
 
@@ -29,8 +32,10 @@ npx --yes shadscan@next /path/to/shadcn-app --prompt
 ```
 
 Prompt output is deterministic, neutral, repository-relative Markdown. It asks
-the agent to verify evidence, fix P0/P1 findings, review P2 advisories, run the
-project's checks, and rescan with the same ruleset.
+the agent to confirm source identity, process grouped work items by disposition,
+run every discovered project gate, and rescan with the exact Shadscan version.
+Verified advisories may remain advisory; the prompt explicitly forbids code
+churn whose only purpose is forcing a static pass.
 
 The executable is read-only and static: it does not start the app, edit project
 files, call an AI model, or send source over the network. Findings return exit
@@ -40,9 +45,9 @@ return `1`. The complete command contract is maintained at
 
 ## Contracts
 
-- Audit JSON uses schema version `2` and is validated by the exported
+- Audit JSON uses schema version `3` and is validated by the exported
   `AuditReportSchema`.
-- Agent prompt output uses prompt version `1`.
+- Agent prompt output uses prompt version `2`.
 - Reports identify the exact bundled ruleset version that produced them.
 - `RULE_CATALOG` exposes immutable rule metadata without exposing the internal
   custom-rule runner.

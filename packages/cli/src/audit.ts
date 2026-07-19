@@ -18,7 +18,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 2 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 3 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -51,12 +51,14 @@ const CATEGORY_DETAILS = {
 } as const satisfies Record<AuditCategory, { title: string; weight: number }>;
 
 const AuditCategorySchema = z.enum(AUDIT_CATEGORIES);
+const ActionableDispositionSchema = z.enum(["decide", "fix", "verify"]);
 const ActionablePrioritySchema = z.enum(["P0", "P1", "P2"]);
 const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 const RuleStatusSchema = z.enum(["advisory", "fail", "not-applicable", "pass"]);
 const ScanSourceKindSchema = z.enum(["git", "snapshot", "working-tree"]);
 const SeveritySchema = z.enum(["error", "info", "warning"]);
 type ActionablePriority = z.infer<typeof ActionablePrioritySchema>;
+type ActionableDisposition = z.infer<typeof ActionableDispositionSchema>;
 type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 type AuditRuleAdapter = "core" | FrameworkAdapter;
 type AuditRuleStatus = z.infer<typeof RuleStatusSchema>;
@@ -134,6 +136,7 @@ interface AgentActionable {
   acceptanceCriteria: string[];
   category: AuditCategory;
   confidence: Confidence;
+  disposition: ActionableDisposition;
   evidence: AuditEvidence[];
   findingId: string;
   priority: ActionablePriority;
@@ -145,11 +148,32 @@ interface AgentActionable {
   title: string;
 }
 
+interface AgentWorkItem {
+  acceptanceCriteria: string[];
+  categories: AuditCategory[];
+  disposition: ActionableDisposition;
+  evidence: AuditEvidence[];
+  findingIds: string[];
+  id: string;
+  priority: ActionablePriority;
+  rawScoreImpact: number;
+  suggestedFixes: string[];
+  summary: string;
+  title: string;
+}
+
+interface AgentVerification {
+  projectGates: string[];
+  shadscanCommand: string;
+}
+
 interface AgentHandoff {
   actionables: AgentActionable[];
   context: string[];
   goal: string;
   suggestedSkills: string[];
+  verification: AgentVerification;
+  workItems: AgentWorkItem[];
 }
 
 interface AuditReport {
@@ -231,6 +255,7 @@ const AgentActionableSchema = z.object({
   acceptanceCriteria: z.array(z.string()),
   category: AuditCategorySchema,
   confidence: ConfidenceSchema,
+  disposition: ActionableDispositionSchema,
   evidence: z.array(AuditEvidenceSchema),
   findingId: z.string(),
   priority: ActionablePrioritySchema,
@@ -242,11 +267,32 @@ const AgentActionableSchema = z.object({
   title: z.string(),
 });
 
+const AgentWorkItemSchema = z.object({
+  acceptanceCriteria: z.array(z.string()),
+  categories: z.array(AuditCategorySchema).min(1),
+  disposition: ActionableDispositionSchema,
+  evidence: z.array(AuditEvidenceSchema),
+  findingIds: z.array(z.string()).min(1),
+  id: z.string(),
+  priority: ActionablePrioritySchema,
+  rawScoreImpact: z.number(),
+  suggestedFixes: z.array(z.string()),
+  summary: z.string(),
+  title: z.string(),
+});
+
+const AgentVerificationSchema = z.object({
+  projectGates: z.array(z.string()),
+  shadscanCommand: z.string(),
+});
+
 const AgentHandoffSchema = z.object({
   actionables: z.array(AgentActionableSchema),
   context: z.array(z.string()),
   goal: z.string(),
   suggestedSkills: z.array(z.string()),
+  verification: AgentVerificationSchema,
+  workItems: z.array(AgentWorkItemSchema),
 });
 
 const AuditReportSchema = z.object({
@@ -483,6 +529,123 @@ const getTotalScore = (categories: AuditCategoryScore[]): number | null => {
   return Math.round((weightedScore / activeWeight) * 100);
 };
 
+const PRIORITY_ORDER: Record<ActionablePriority, number> = {
+  P0: 0,
+  P1: 1,
+  P2: 2,
+};
+const DISPOSITION_ORDER: Record<ActionableDisposition, number> = {
+  fix: 0,
+  decide: 1,
+  verify: 2,
+};
+const PROJECT_GATE_SCRIPT_NAMES = [
+  "check",
+  "lint",
+  "typecheck",
+  "test",
+  "build",
+] as const;
+const PACKAGE_EXECUTORS = {
+  bun: "bunx",
+  npm: "npx --yes",
+  pnpm: "pnpm dlx",
+  unknown: "npx --yes",
+  yarn: "yarn dlx",
+} as const satisfies Record<ProjectDiscovery["packageManager"], string>;
+const SCRIPT_RUNNERS = {
+  bun: "bun run",
+  npm: "npm run",
+  pnpm: "pnpm",
+  unknown: "npm run",
+  yarn: "yarn",
+} as const satisfies Record<ProjectDiscovery["packageManager"], string>;
+const PRODUCT_DECISION_DETAILS: Record<
+  string,
+  { summary: string; title: string }
+> = {
+  "command-menu-hotkey-present": {
+    summary:
+      "Decide whether the app has enough navigation or actions to justify a command menu and shortcut.",
+    title: "Decide the command-menu interaction",
+  },
+  "command-menu-present": {
+    summary:
+      "Decide whether the app has enough navigation or actions to justify a command menu and shortcut.",
+    title: "Decide the command-menu interaction",
+  },
+  "mobile-nav-present": {
+    summary:
+      "Choose a mobile navigation pattern that fits the app, or document why visible page flow is sufficient.",
+    title: "Decide the mobile navigation pattern",
+  },
+  "public-app-seo-files-present": {
+    summary:
+      "Choose whether the app should be indexed, then add framework-native SEO files or document an explicit noindex policy.",
+    title: "Decide the app indexing policy",
+  },
+  "toast-provider-mounted": {
+    summary:
+      "Choose how transient success and failure feedback should work before adding notification infrastructure.",
+    title: "Decide the transient-feedback pattern",
+  },
+  "toast-provider-present": {
+    summary:
+      "Choose how transient success and failure feedback should work before adding notification infrastructure.",
+    title: "Decide the transient-feedback pattern",
+  },
+};
+const WORK_ITEM_GROUPS = [
+  {
+    findingIds: ["forms-have-labels", "invalid-fields-associated-with-errors"],
+    id: "form-field-accessibility",
+    summary:
+      "Make each affected field discoverable by name and connect invalid state to its rendered error message.",
+    title: "Associate form fields with labels and errors",
+  },
+  {
+    findingIds: ["command-menu-present", "command-menu-hotkey-present"],
+    id: "command-menu",
+    summary:
+      "Decide whether the product warrants a command menu; if it does, ship the menu and its keyboard entry point together.",
+    title: "Decide the command-menu experience",
+  },
+  {
+    findingIds: [
+      "error-boundary-present",
+      "error-state-retry-present",
+      "route-loading-boundary-present",
+      "suspense-fallback-useful",
+    ],
+    id: "route-resilience",
+    summary:
+      "Keep route failures recoverable and suspended content visibly represented instead of blanking the application shell.",
+    title: "Provide route recovery and useful loading UI",
+  },
+  {
+    findingIds: [
+      "toast-provider-present",
+      "toast-provider-mounted",
+      "status-messages-announced",
+    ],
+    id: "transient-feedback",
+    summary:
+      "Choose a feedback channel based on real user actions, and avoid mounting an unused provider solely for the audit score.",
+    title: "Decide how transient feedback should work",
+  },
+  {
+    findingIds: [
+      "color-contrast-passes",
+      "pointer-target-size-passes",
+      "mobile-overflow-absent",
+    ],
+    id: "rendered-ui-verification",
+    summary:
+      "Verify computed accessibility and responsive behavior in a browser at representative themes, states, and viewport widths.",
+    title: "Verify rendered accessibility and responsive behavior",
+  },
+] as const;
+
 const getActionablePriority = (finding: AuditFinding): ActionablePriority => {
   if (finding.severity === "error" && finding.status === "fail") {
     return "P0";
@@ -495,15 +658,84 @@ const getActionablePriority = (finding: AuditFinding): ActionablePriority => {
   return "P2";
 };
 
-const getActionableSummary = (finding: AuditFinding): string => {
-  if (finding.status === "advisory") {
+const getActionableDisposition = (
+  finding: AuditFinding
+): ActionableDisposition => {
+  if (PRODUCT_DECISION_DETAILS[finding.id]) {
+    return "decide";
+  }
+
+  return finding.status === "advisory" ? "verify" : "fix";
+};
+
+const getActionableSummary = (
+  finding: AuditFinding,
+  disposition: ActionableDisposition
+): string => {
+  const decisionDetails = PRODUCT_DECISION_DETAILS[finding.id];
+
+  if (decisionDetails) {
+    return decisionDetails.summary;
+  }
+
+  if (disposition === "verify") {
     return `Verify ${finding.title}; Shadscan has low-confidence evidence and did not reduce the score.`;
   }
 
   return `Fix ${finding.title}; Shadscan marked this as a ${finding.confidence}-confidence missing UI fundamental.`;
 };
 
-const getActionableAcceptanceCriteria = (finding: AuditFinding): string[] => {
+const getActionableTitle = (
+  finding: AuditFinding,
+  disposition: ActionableDisposition
+): string => {
+  const decisionDetails = PRODUCT_DECISION_DETAILS[finding.id];
+
+  if (decisionDetails) {
+    return decisionDetails.title;
+  }
+
+  return `${disposition === "verify" ? "Verify" : "Fix"} ${finding.title}`;
+};
+
+const getProjectGateCriterion = (
+  projectGates: string[],
+  prefix: string
+): string => {
+  if (projectGates.length === 0) {
+    return `${prefix} inspect package scripts and run every available check, lint, typecheck, test, and build gate relevant to the change.`;
+  }
+
+  const commands = projectGates.map((command) => `\`${command}\``).join(", ");
+  return `${prefix} every discovered project gate succeeds: ${commands}.`;
+};
+
+const getActionableAcceptanceCriteria = ({
+  disposition,
+  finding,
+  projectGates,
+}: {
+  disposition: ActionableDisposition;
+  finding: AuditFinding;
+  projectGates: string[];
+}): string[] => {
+  if (disposition === "verify") {
+    return [
+      "Record the finding as confirmed, verified-no-change, or unable-to-verify, with rendered or composed evidence.",
+      "Do not edit solely to force a score-neutral static advisory to report pass; it may remain advisory after successful verification.",
+      getProjectGateCriterion(projectGates, "If code changes,"),
+    ];
+  }
+
+  if (disposition === "decide") {
+    return [
+      "Record an explicit implement-or-waive product decision based on the app's current workflows.",
+      `If implemented, the Shadscan finding \`${finding.id}\` reports pass; if waived, keep it visible and report the rationale.`,
+      "Do not add unused infrastructure solely to increase the audit score.",
+      getProjectGateCriterion(projectGates, "If code changes,"),
+    ];
+  }
+
   const criteria = [
     `The Shadscan finding \`${finding.id}\` reports pass when rerun with the same ruleset and category scope.`,
   ];
@@ -514,11 +746,198 @@ const getActionableAcceptanceCriteria = (finding: AuditFinding): string[] => {
     );
   }
 
-  criteria.push(
-    "The target app's own lint, typecheck, test, or build gate still passes."
-  );
+  criteria.push(getProjectGateCriterion(projectGates, "After the change,"));
 
   return criteria;
+};
+
+const getProjectGateCommands = (project: ProjectDiscovery): string[] => {
+  const runner = SCRIPT_RUNNERS[project.packageManager];
+
+  return PROJECT_GATE_SCRIPT_NAMES.filter(
+    (scriptName) => project.scripts[scriptName] !== undefined
+  ).map((scriptName) => `${runner} ${scriptName}`);
+};
+
+const getShadscanCommand = (
+  project: ProjectDiscovery,
+  category: AuditCategory | undefined
+): string => {
+  const executor = PACKAGE_EXECUTORS[project.packageManager];
+  const categoryOption = category ? ` --category ${category}` : "";
+  return `${executor} shadscan@${ENGINE_VERSION} --json${categoryOption}`;
+};
+
+const uniqueEvidence = (actionables: AgentActionable[]): AuditEvidence[] => {
+  const evidenceByKey = new Map<string, AuditEvidence>();
+
+  for (const actionable of actionables) {
+    for (const evidence of actionable.evidence) {
+      const key = `${evidence.filePath ?? ""}:${evidence.line ?? ""}:${evidence.message}`;
+      evidenceByKey.set(key, evidence);
+    }
+  }
+
+  return [...evidenceByKey.values()];
+};
+
+const getWorkItemDisposition = (
+  actionables: AgentActionable[]
+): ActionableDisposition =>
+  [...actionables].sort(
+    (left, right) =>
+      DISPOSITION_ORDER[left.disposition] - DISPOSITION_ORDER[right.disposition]
+  )[0]?.disposition ?? "verify";
+
+const getWorkItemPriority = (
+  actionables: AgentActionable[]
+): ActionablePriority =>
+  [...actionables].sort(
+    (left, right) =>
+      PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority]
+  )[0]?.priority ?? "P2";
+
+const getWorkItemAcceptanceCriteria = ({
+  actionables,
+  disposition,
+  projectGates,
+}: {
+  actionables: AgentActionable[];
+  disposition: ActionableDisposition;
+  projectGates: string[];
+}): string[] => {
+  const findingIds = actionables.map(({ findingId }) => `\`${findingId}\``);
+
+  if (disposition === "verify") {
+    return [
+      `Record each related finding (${findingIds.join(", ")}) as confirmed, verified-no-change, or unable-to-verify, with rendered or composed evidence.`,
+      "Do not edit solely to force score-neutral static advisories to report pass; verified advisories may remain advisory.",
+      getProjectGateCriterion(projectGates, "If code changes,"),
+    ];
+  }
+
+  if (disposition === "decide") {
+    return [
+      `Record one explicit implement-or-waive product decision covering ${findingIds.join(", ")}.`,
+      "If implemented, the related findings should pass; if waived, keep them visible and report the product rationale.",
+      "Do not add unused infrastructure solely to increase the audit score.",
+      getProjectGateCriterion(projectGates, "If code changes,"),
+    ];
+  }
+
+  return [
+    ...findingIds.map(
+      (findingId) =>
+        `The Shadscan finding ${findingId} reports pass when rerun with the same ruleset and category scope.`
+    ),
+    "The implementation addresses the user-facing problem described by the related remediations, not only the detector syntax.",
+    getProjectGateCriterion(projectGates, "After the change,"),
+  ];
+};
+
+const createWorkItem = ({
+  actionables,
+  id,
+  projectGates,
+  summary,
+  title,
+}: {
+  actionables: AgentActionable[];
+  id: string;
+  projectGates: string[];
+  summary: string;
+  title: string;
+}): AgentWorkItem => {
+  const disposition = getWorkItemDisposition(actionables);
+  const suggestedFixes = [
+    ...new Set(
+      actionables.flatMap(({ suggestedFix }) =>
+        suggestedFix ? [suggestedFix] : []
+      )
+    ),
+  ];
+
+  return {
+    acceptanceCriteria: getWorkItemAcceptanceCriteria({
+      actionables,
+      disposition,
+      projectGates,
+    }),
+    categories: AUDIT_CATEGORIES.filter((category) =>
+      actionables.some((actionable) => actionable.category === category)
+    ),
+    disposition,
+    evidence: uniqueEvidence(actionables),
+    findingIds: actionables.map(({ findingId }) => findingId),
+    id,
+    priority: getWorkItemPriority(actionables),
+    rawScoreImpact: actionables.reduce(
+      (total, actionable) => total + actionable.scoreImpact,
+      0
+    ),
+    suggestedFixes,
+    summary,
+    title,
+  };
+};
+
+const createWorkItems = (
+  actionables: AgentActionable[],
+  projectGates: string[]
+): AgentWorkItem[] => {
+  const groupedFindingIds = new Set<string>();
+  const workItems: AgentWorkItem[] = [];
+
+  for (const group of WORK_ITEM_GROUPS) {
+    const groupedActionables = group.findingIds.flatMap((findingId) => {
+      const actionable = actionables.find(
+        (candidate) => candidate.findingId === findingId
+      );
+      return actionable ? [actionable] : [];
+    });
+
+    if (groupedActionables.length < 2) {
+      continue;
+    }
+
+    for (const actionable of groupedActionables) {
+      groupedFindingIds.add(actionable.findingId);
+    }
+    workItems.push(
+      createWorkItem({
+        actionables: groupedActionables,
+        id: group.id,
+        projectGates,
+        summary: group.summary,
+        title: group.title,
+      })
+    );
+  }
+
+  for (const actionable of actionables) {
+    if (groupedFindingIds.has(actionable.findingId)) {
+      continue;
+    }
+
+    workItems.push(
+      createWorkItem({
+        actionables: [actionable],
+        id: actionable.findingId,
+        projectGates,
+        summary: actionable.summary,
+        title: actionable.title,
+      })
+    );
+  }
+
+  return workItems.sort(
+    (left, right) =>
+      PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority] ||
+      DISPOSITION_ORDER[left.disposition] -
+        DISPOSITION_ORDER[right.disposition] ||
+      right.rawScoreImpact - left.rawScoreImpact ||
+      left.id.localeCompare(right.id)
+  );
 };
 
 const getSuggestedSkills = ({
@@ -549,17 +968,20 @@ const getSuggestedSkills = ({
 };
 
 const createAgentHandoff = ({
+  category,
   findings,
   grade,
   project,
   score,
 }: {
+  category?: AuditCategory;
   findings: AuditFinding[];
   grade: AuditGrade | null;
   project: ProjectDiscovery;
   score: number | null;
 }): AgentHandoff => {
   const packageName = project.packageName ?? "the target app";
+  const projectGates = getProjectGateCommands(project);
   const actionables = findings
     .filter(
       (
@@ -568,41 +990,42 @@ const createAgentHandoff = ({
         status: Extract<AuditRuleStatus, "advisory" | "fail">;
       } => finding.status === "fail" || finding.status === "advisory"
     )
-    .map((finding) => ({
-      acceptanceCriteria: getActionableAcceptanceCriteria(finding),
-      category: finding.category,
-      confidence: finding.confidence,
-      evidence: finding.evidence,
-      findingId: finding.id,
-      priority: getActionablePriority(finding),
-      scoreImpact: finding.impactsScore ? finding.maxScore - finding.score : 0,
-      severity: finding.severity,
-      status: finding.status,
-      suggestedFix: finding.remediation,
-      summary: getActionableSummary(finding),
-      title:
-        finding.status === "advisory"
-          ? `Verify ${finding.title}`
-          : `Fix ${finding.title}`,
-    }))
-    .sort((left, right) => {
-      const priorityOrder: Record<ActionablePriority, number> = {
-        P0: 0,
-        P1: 1,
-        P2: 2,
-      };
+    .map((finding): AgentActionable => {
+      const disposition = getActionableDisposition(finding);
 
-      return (
-        priorityOrder[left.priority] - priorityOrder[right.priority] ||
+      return {
+        acceptanceCriteria: getActionableAcceptanceCriteria({
+          disposition,
+          finding,
+          projectGates,
+        }),
+        category: finding.category,
+        confidence: finding.confidence,
+        disposition,
+        evidence: finding.evidence,
+        findingId: finding.id,
+        priority: getActionablePriority(finding),
+        scoreImpact: finding.impactsScore
+          ? finding.maxScore - finding.score
+          : 0,
+        severity: finding.severity,
+        status: finding.status,
+        suggestedFix: finding.remediation,
+        summary: getActionableSummary(finding, disposition),
+        title: getActionableTitle(finding, disposition),
+      };
+    })
+    .sort(
+      (left, right) =>
+        PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority] ||
         right.scoreImpact - left.scoreImpact ||
         left.findingId.localeCompare(right.findingId)
-      );
-    });
+    );
   const goal = (() => {
     if (score === null) {
       return actionables.length === 0
         ? `${packageName}'s Shadscan score is unassessed because no score-impacting rules applied; preserve the existing UI and verify the scan scope.`
-        : `${packageName}'s Shadscan score is unassessed; address the agent-ready findings and rerun the same scope.`;
+        : `${packageName}'s Shadscan score is unassessed; fix confirmed defects, make explicit product decisions, and verify advisories without unnecessary code changes.`;
     }
 
     const hasScoreImpactingActionables = actionables.some(
@@ -610,7 +1033,7 @@ const createAgentHandoff = ({
     );
 
     if (hasScoreImpactingActionables) {
-      return `Raise ${packageName}'s Shadscan score from ${score}/100 (${grade}) by addressing agent-ready UI audit findings.`;
+      return `Improve ${packageName} from its ${score}/100 (${grade}) audit baseline by fixing confirmed defects, making explicit product decisions, and verifying advisories without score-driven churn.`;
     }
 
     return actionables.length === 0
@@ -637,6 +1060,11 @@ const createAgentHandoff = ({
       actionables,
       warnings: project.warnings,
     }),
+    verification: {
+      projectGates,
+      shadscanCommand: getShadscanCommand(project, category),
+    },
+    workItems: createWorkItems(actionables, projectGates),
   };
 };
 
@@ -665,6 +1093,7 @@ const createAuditReport = ({
   const grade = score === null ? null : getGrade(score);
   const report: AuditReport = {
     agentHandoff: createAgentHandoff({
+      category,
       findings: normalizedFindings,
       grade,
       project,
@@ -729,9 +1158,12 @@ const runAudit = async (
 };
 
 export type {
+  ActionableDisposition,
   ActionablePriority,
   AgentActionable,
   AgentHandoff,
+  AgentVerification,
+  AgentWorkItem,
   AuditCategory,
   AuditContext,
   AuditEvidence,

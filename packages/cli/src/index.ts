@@ -1,8 +1,11 @@
 // biome-ignore-all lint/performance/noBarrelFile: This is the package's intentional public API boundary.
 export type {
+  ActionableDisposition,
   ActionablePriority,
   AgentActionable,
   AgentHandoff,
+  AgentVerification,
+  AgentWorkItem,
   AuditCategory,
   AuditEvidence,
   AuditFinding,

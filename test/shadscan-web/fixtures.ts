@@ -21,7 +21,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
   result: {
     handoff: {
       promptMarkdown: "You are improving acme/widget from a Shadscan audit.",
-      promptVersion: 1,
+      promptVersion: 2,
     },
     report: {
       agentHandoff: {
@@ -33,6 +33,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
             ],
             category: "interaction",
             confidence: "high",
+            disposition: "fix",
             evidence: THEME_SHORTCUT_EVIDENCE,
             findingId: "interaction.theme-shortcut",
             priority: "P1",
@@ -50,6 +51,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
             ],
             category: "states",
             confidence: "medium",
+            disposition: "verify",
             evidence: EMPTY_STATE_EVIDENCE,
             findingId: "states.empty-states",
             priority: "P2",
@@ -65,6 +67,47 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
         context: ["Framework: Next.js App Router", "Package manager: pnpm"],
         goal: "Raise widget's Shadscan score from 72/100 (C).",
         suggestedSkills: ["shadcn"],
+        verification: {
+          projectGates: ["pnpm check", "pnpm build"],
+          shadscanCommand: "pnpm dlx shadscan@0.1.0-rc.1 --json",
+        },
+        workItems: [
+          {
+            acceptanceCriteria: [
+              "Pressing D toggles the active theme outside editable controls.",
+              "The shortcut ignores inputs, textareas, selects, and contenteditable nodes.",
+            ],
+            categories: ["interaction"],
+            disposition: "fix",
+            evidence: THEME_SHORTCUT_EVIDENCE,
+            findingIds: ["interaction.theme-shortcut"],
+            id: "interaction.theme-shortcut",
+            priority: "P1",
+            rawScoreImpact: 4,
+            suggestedFixes: [
+              "Add a D shortcut that toggles the theme and ignores editable controls.",
+            ],
+            summary: "A keyboard shortcut for theme switching is missing.",
+            title: "Add a dark-mode shortcut",
+          },
+          {
+            acceptanceCriteria: [
+              "Record the finding as confirmed, verified-no-change, or unable-to-verify.",
+            ],
+            categories: ["states"],
+            disposition: "verify",
+            evidence: EMPTY_STATE_EVIDENCE,
+            findingIds: ["states.empty-states"],
+            id: "states.empty-states",
+            priority: "P2",
+            rawScoreImpact: 0,
+            suggestedFixes: [
+              "Verify the route behavior, then add an empty state where the collection can be empty.",
+            ],
+            summary: "One collection route may not explain its empty state.",
+            title: "Verify collection empty states",
+          },
+        ],
       },
       categories: [
         {
@@ -203,7 +246,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
       packageManager: "pnpm",
       packageName: "widget",
       rulesetVersion: "2026.07.25",
-      schemaVersion: 2,
+      schemaVersion: 3,
       scope: {
         categories: [
           "foundation",

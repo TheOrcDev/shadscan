@@ -6,6 +6,13 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Changed
+
+- Agent handoffs now group related findings into `fix`, `decide`, and `verify`
+  work items, include discovered project gates and a version-pinned rerun
+  command, and allow verified-no-change outcomes for score-neutral advisories.
+- Audit reports use schema version 3 and paste-ready prompts use version 2.
+
 ### Fixed
 
 - Empty-state checks now require actual query calls or mapped collection data,

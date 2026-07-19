@@ -87,6 +87,17 @@ describe("hosted API OpenAPI document", () => {
     expect(schemas.HostedScanResponse.properties.schemaVersion.const).toBe(
       PUBLIC_CONTRACT_VERSIONS.scan
     );
+    expect(schemas.ActionableDisposition.enum).toEqual([
+      "decide",
+      "fix",
+      "verify",
+    ]);
+    expect(schemas.AgentHandoff.required).toEqual(
+      expect.arrayContaining(["verification", "workItems"])
+    );
+    expect(schemas.AgentWorkItem.required).toEqual(
+      expect.arrayContaining(["disposition", "findingIds", "rawScoreImpact"])
+    );
     expect(responses).toHaveProperty("400");
     expect(responses).toHaveProperty("401");
     expect(responses).toHaveProperty("413");

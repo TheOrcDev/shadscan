@@ -57,7 +57,7 @@ const scanGitHubRepository = async (
     });
     const { report, scan } = result.result;
     writeWebScanLog({
-      actionableCount: report.agentHandoff.actionables.length,
+      actionableCount: report.agentHandoff.workItems.length,
       durationMs: Date.now() - startedAt,
       engineVersion: scan.engineVersion,
       event: "web_scan",

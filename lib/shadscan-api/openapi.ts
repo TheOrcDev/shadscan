@@ -282,6 +282,10 @@ const OPENAPI_DOCUMENT = {
         type: "string",
         enum: ["P0", "P1", "P2"],
       },
+      ActionableDisposition: {
+        type: "string",
+        enum: ["decide", "fix", "verify"],
+      },
       PortableProjectPath: {
         type: "string",
         minLength: 1,
@@ -416,6 +420,7 @@ const OPENAPI_DOCUMENT = {
           "acceptanceCriteria",
           "category",
           "confidence",
+          "disposition",
           "evidence",
           "findingId",
           "priority",
@@ -430,6 +435,9 @@ const OPENAPI_DOCUMENT = {
           acceptanceCriteria: { items: { type: "string" }, type: "array" },
           category: { $ref: "#/components/schemas/AuditCategory" },
           confidence: { $ref: "#/components/schemas/Confidence" },
+          disposition: {
+            $ref: "#/components/schemas/ActionableDisposition",
+          },
           evidence: {
             items: { $ref: "#/components/schemas/AuditEvidence" },
             type: "array",
@@ -444,10 +452,71 @@ const OPENAPI_DOCUMENT = {
           title: { type: "string" },
         },
       },
+      AgentWorkItem: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "acceptanceCriteria",
+          "categories",
+          "disposition",
+          "evidence",
+          "findingIds",
+          "id",
+          "priority",
+          "rawScoreImpact",
+          "suggestedFixes",
+          "summary",
+          "title",
+        ],
+        properties: {
+          acceptanceCriteria: { items: { type: "string" }, type: "array" },
+          categories: {
+            items: { $ref: "#/components/schemas/AuditCategory" },
+            minItems: 1,
+            type: "array",
+            uniqueItems: true,
+          },
+          disposition: {
+            $ref: "#/components/schemas/ActionableDisposition",
+          },
+          evidence: {
+            items: { $ref: "#/components/schemas/AuditEvidence" },
+            type: "array",
+          },
+          findingIds: {
+            items: { minLength: 1, type: "string" },
+            minItems: 1,
+            type: "array",
+            uniqueItems: true,
+          },
+          id: { minLength: 1, type: "string" },
+          priority: { $ref: "#/components/schemas/ActionablePriority" },
+          rawScoreImpact: { minimum: 0, type: "number" },
+          suggestedFixes: { items: { type: "string" }, type: "array" },
+          summary: { type: "string" },
+          title: { type: "string" },
+        },
+      },
+      AgentVerification: {
+        type: "object",
+        additionalProperties: false,
+        required: ["projectGates", "shadscanCommand"],
+        properties: {
+          projectGates: { items: { type: "string" }, type: "array" },
+          shadscanCommand: { minLength: 1, type: "string" },
+        },
+      },
       AgentHandoff: {
         type: "object",
         additionalProperties: false,
-        required: ["actionables", "context", "goal", "suggestedSkills"],
+        required: [
+          "actionables",
+          "context",
+          "goal",
+          "suggestedSkills",
+          "verification",
+          "workItems",
+        ],
         properties: {
           actionables: {
             items: { $ref: "#/components/schemas/AgentActionable" },
@@ -456,6 +525,11 @@ const OPENAPI_DOCUMENT = {
           context: { items: { type: "string" }, type: "array" },
           goal: { type: "string" },
           suggestedSkills: { items: { type: "string" }, type: "array" },
+          verification: { $ref: "#/components/schemas/AgentVerification" },
+          workItems: {
+            items: { $ref: "#/components/schemas/AgentWorkItem" },
+            type: "array",
+          },
         },
       },
       ScanSource: {

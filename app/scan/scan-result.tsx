@@ -66,7 +66,7 @@ function ScanMetadata({ state }: { state: WebScanCompleteState }) {
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">Rules {scan.rulesetVersion}</Badge>
           <Badge variant="outline">
-            {report.agentHandoff.actionables.length} actionables
+            {report.agentHandoff.workItems.length} work items
           </Badge>
         </div>
       </div>
@@ -93,7 +93,7 @@ function ScanMetadata({ state }: { state: WebScanCompleteState }) {
 
 function ScanResult({ headingRef, state }: ScanResultProps) {
   const { report } = state.result;
-  const actionableCount = report.agentHandoff.actionables.length;
+  const actionableCount = report.agentHandoff.workItems.length;
   const findingCount = report.findings.length;
 
   return (
@@ -145,10 +145,11 @@ function ScanResult({ headingRef, state }: ScanResultProps) {
           </TabsList>
           <TabsContent className="mt-6 min-w-0" value="actionables">
             <ActionablesReport
-              actionables={report.agentHandoff.actionables}
               context={report.agentHandoff.context}
               findings={report.findings}
               suggestedSkills={report.agentHandoff.suggestedSkills}
+              verification={report.agentHandoff.verification}
+              workItems={report.agentHandoff.workItems}
             />
           </TabsContent>
           <TabsContent className="mt-6 min-w-0" value="all-checks">

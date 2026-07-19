@@ -103,7 +103,9 @@ curl --fail-with-body --silent --show-error \
 
 `text/markdown` returns only the agent-ready prompt. `application/json` returns
 the scan identity, versioned report, and the same prompt in
-`handoff.promptMarkdown`. Errors are always versioned JSON.
+`handoff.promptMarkdown`. The report's `agentHandoff` keeps raw actionables for
+rule-level consumers and adds grouped `workItems` plus version-pinned
+verification commands. Errors are always versioned JSON.
 
 ## Operational boundaries
 

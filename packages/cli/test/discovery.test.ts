@@ -88,6 +88,7 @@ describe("discoverProject", () => {
 
     expect(project.framework.adapter).toBe("next-app-router");
     expect(project.packageName).toBe("next-fixture");
+    expect(project.scripts).toEqual({});
     expect(project.shadcn.confidence).toBe("high");
     expect(project.shadcn.aliases.ui).toBe("@/components/ui");
     expect(project.paths.appDir).toBe(path.join(rootDir, "app"));

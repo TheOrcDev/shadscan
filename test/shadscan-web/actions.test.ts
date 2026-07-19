@@ -33,7 +33,7 @@ const COMPLETED_RESULT = {
   repositoryUrl: "https://github.com/acme/widget",
   result: {
     report: {
-      agentHandoff: { actionables: [] },
+      agentHandoff: { workItems: [] },
       score: 92,
     },
     scan: {

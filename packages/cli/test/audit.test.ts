@@ -42,11 +42,16 @@ const createReactFixture = async (): Promise<string> => {
           react: "19.2.4",
         },
         name: "audit-fixture",
+        scripts: {
+          build: "vite build",
+          check: "ultracite check",
+        },
       },
       null,
       2
     )}\n`
   );
+  await writeFixtureFile(rootDir, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
 
   return rootDir;
 };
@@ -211,18 +216,21 @@ describe("runAudit", () => {
     expect(
       report.agentHandoff.actionables.map((actionable) => ({
         findingId: actionable.findingId,
+        disposition: actionable.disposition,
         priority: actionable.priority,
         scoreImpact: actionable.scoreImpact,
         status: actionable.status,
       }))
     ).toEqual([
       {
+        disposition: "fix",
         findingId: "interaction-fail",
         priority: "P1",
         scoreImpact: 10,
         status: "fail",
       },
       {
+        disposition: "verify",
         findingId: "states-advisory",
         priority: "P2",
         scoreImpact: 0,
@@ -231,6 +239,75 @@ describe("runAudit", () => {
     ]);
     expect(report.agentHandoff.actionables[0]?.acceptanceCriteria[0]).toBe(
       "The Shadscan finding `interaction-fail` reports pass when rerun with the same ruleset and category scope."
+    );
+    expect(report.agentHandoff.actionables[1]?.acceptanceCriteria).toContain(
+      "Do not edit solely to force a score-neutral static advisory to report pass; it may remain advisory after successful verification."
+    );
+    expect(report.agentHandoff.verification).toEqual({
+      projectGates: ["pnpm check", "pnpm build"],
+      shadscanCommand: `pnpm dlx shadscan@${ENGINE_VERSION} --json`,
+    });
+  });
+
+  it("groups related fixes and marks optional infrastructure as a product decision", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          category: "accessibility",
+          id: "forms-have-labels",
+          severity: "error",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "forms",
+          id: "invalid-fields-associated-with-errors",
+          severity: "error",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "interaction",
+          id: "command-menu-present",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "interaction",
+          id: "command-menu-hotkey-present",
+          run: () => ({ status: "fail" }),
+        }),
+      ],
+    });
+
+    expect(
+      report.agentHandoff.workItems.map((workItem) => ({
+        disposition: workItem.disposition,
+        findingIds: workItem.findingIds,
+        id: workItem.id,
+        priority: workItem.priority,
+      }))
+    ).toEqual([
+      {
+        disposition: "fix",
+        findingIds: [
+          "forms-have-labels",
+          "invalid-fields-associated-with-errors",
+        ],
+        id: "form-field-accessibility",
+        priority: "P0",
+      },
+      {
+        disposition: "decide",
+        findingIds: ["command-menu-present", "command-menu-hotkey-present"],
+        id: "command-menu",
+        priority: "P1",
+      },
+    ]);
+    expect(report.agentHandoff.workItems[1]?.acceptanceCriteria).toContain(
+      "Do not add unused infrastructure solely to increase the audit score."
+    );
+    expect(report.agentHandoff.goal).toContain(
+      "making explicit product decisions"
     );
   });
 
@@ -393,6 +470,7 @@ describe("createAuditReport", () => {
         viteEntry: null,
       },
       rootDir: "/tmp",
+      scripts: {},
       shadcn: {
         aliases: {},
         configPath: null,

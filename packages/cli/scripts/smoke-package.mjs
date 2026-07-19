@@ -113,7 +113,12 @@ try {
   });
   const report = JSON.parse(jsonResult.stdout);
   assert.equal(report.engineVersion, packageManifest.version);
-  assert.equal(report.schemaVersion, 2);
+  assert.equal(report.schemaVersion, 3);
+  assert.ok(Array.isArray(report.agentHandoff.workItems));
+  assert.equal(
+    typeof report.agentHandoff.verification.shadscanCommand,
+    "string"
+  );
   assert.ok(Array.isArray(report.findings));
   assert.ok(report.score < 100);
   assert.ok(!jsonResult.stdout.includes(temporaryRoot));
@@ -162,6 +167,8 @@ try {
   });
   assert.match(promptResult.stdout, /<shadscan-data/);
   assert.match(promptResult.stdout, /"acceptanceCriteria"/);
+  assert.match(promptResult.stdout, /"promptVersion": 2/);
+  assert.match(promptResult.stdout, /"workItems"/);
 
   const thresholdResult = await run(
     executable,
@@ -175,7 +182,7 @@ try {
     importCheckPath,
     [
       'import { AUDIT_REPORT_SCHEMA_VERSION, RULE_CATALOG, scanProject } from "shadscan";',
-      'if (AUDIT_REPORT_SCHEMA_VERSION !== 2 || RULE_CATALOG.length !== 55 || typeof scanProject !== "function") {',
+      'if (AUDIT_REPORT_SCHEMA_VERSION !== 3 || RULE_CATALOG.length !== 55 || typeof scanProject !== "function") {',
       '  throw new Error("The installed library exports are incomplete.");',
       "}",
       "",

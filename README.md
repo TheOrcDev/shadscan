@@ -38,7 +38,8 @@ For explicit output selection, use `--format human`, `--format json`, or
 repository-relative evidence without roast copy or machine-local paths.
 
 Both human and JSON output include an `agentHandoff` section with suggested
-skills, context, and prioritized actionables for another agent to pick up.
+skills, exact verification commands, raw per-rule actionables, and grouped work
+items classified as `fix`, `decide`, or `verify`.
 The executable's path, output, exit, stability, and privacy guarantees are
 defined in the [CLI contract](docs/cli-contract.md).
 

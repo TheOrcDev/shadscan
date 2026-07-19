@@ -44,6 +44,7 @@ interface ProjectDiscovery {
   packageName: string | null;
   paths: ProjectPaths;
   rootDir: string;
+  scripts: Record<string, string>;
   shadcn: ShadcnDiscovery;
   versions: ProjectVersions;
   warnings: string[];
@@ -332,6 +333,7 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
       viteEntry,
     },
     rootDir,
+    scripts: getStringRecord(packageJson.scripts),
     shadcn: {
       aliases: getStringRecord(shadcnConfig?.aliases),
       configPath: shadcnConfig ? componentsJsonPath : null,

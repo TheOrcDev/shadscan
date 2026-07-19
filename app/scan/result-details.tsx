@@ -17,17 +17,18 @@ import { Separator } from "@/components/ui/separator";
 import type { WebScanCompleteState } from "@/lib/shadscan-web/types";
 
 type ScanReport = WebScanCompleteState["result"]["report"];
-type Actionable = ScanReport["agentHandoff"]["actionables"][number];
+type WorkItem = ScanReport["agentHandoff"]["workItems"][number];
 type CategoryScore = ScanReport["categories"][number];
 type Evidence = ScanReport["findings"][number]["evidence"][number];
 type Finding = ScanReport["findings"][number];
 type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
 
 interface ActionablesReportProps {
-  actionables: ScanReport["agentHandoff"]["actionables"];
   context: ScanReport["agentHandoff"]["context"];
   findings: ScanReport["findings"];
   suggestedSkills: ScanReport["agentHandoff"]["suggestedSkills"];
+  verification: ScanReport["agentHandoff"]["verification"];
+  workItems: ScanReport["agentHandoff"]["workItems"];
 }
 
 interface CategoryScoresProps {
@@ -53,7 +54,13 @@ const CATEGORY_TITLES = {
   interaction: "Interaction",
   "production-polish": "Production Polish",
   states: "States",
-} as const satisfies Record<Actionable["category"], string>;
+} as const satisfies Record<Finding["category"], string>;
+
+const DISPOSITION_TITLES = {
+  decide: "Product decision",
+  fix: "Fix",
+  verify: "Manual verification",
+} as const satisfies Record<WorkItem["disposition"], string>;
 
 const STATUS_TITLES = {
   advisory: "Advisory",
@@ -62,7 +69,7 @@ const STATUS_TITLES = {
   pass: "Passed",
 } as const satisfies Record<Finding["status"], string>;
 
-const getPriorityVariant = (priority: Actionable["priority"]): BadgeVariant => {
+const getPriorityVariant = (priority: WorkItem["priority"]): BadgeVariant => {
   if (priority === "P0") {
     return "destructive";
   }
@@ -133,59 +140,74 @@ function EvidenceList({ evidence }: EvidenceListProps) {
   );
 }
 
-function ActionableBadges({ actionable }: { actionable: Actionable }) {
+function WorkItemBadges({ workItem }: { workItem: WorkItem }) {
   return (
     <div className="not-typeset flex flex-wrap gap-2">
-      <Badge variant={getPriorityVariant(actionable.priority)}>
-        {actionable.priority}
+      <Badge variant={getPriorityVariant(workItem.priority)}>
+        {workItem.priority}
       </Badge>
-      <Badge variant={getStatusVariant(actionable.status)}>
-        {STATUS_TITLES[actionable.status]}
+      <Badge variant="secondary">
+        {DISPOSITION_TITLES[workItem.disposition]}
       </Badge>
-      <Badge variant="outline">{actionable.confidence} confidence</Badge>
-      <Badge variant="outline">{CATEGORY_TITLES[actionable.category]}</Badge>
+      {workItem.categories.map((category) => (
+        <Badge key={category} variant="outline">
+          {CATEGORY_TITLES[category]}
+        </Badge>
+      ))}
       <Badge variant="outline">
-        {actionable.scoreImpact > 0
-          ? `+${formatScoreValue(actionable.scoreImpact)} score impact`
+        {workItem.rawScoreImpact > 0
+          ? `+${formatScoreValue(workItem.rawScoreImpact)} raw rule points`
           : "No score impact"}
       </Badge>
     </div>
   );
 }
 
-function ActionableArticle({
-  actionable,
-  finding,
+function WorkItemArticle({
+  findings,
+  workItem,
 }: {
-  actionable: Actionable;
-  finding: Finding | undefined;
+  findings: Finding[];
+  workItem: WorkItem;
 }) {
+  const roasts = findings.flatMap(({ roast }) => (roast ? [roast] : []));
+
   return (
     <article>
-      <ActionableBadges actionable={actionable} />
-      <h3>{actionable.title}</h3>
-      <p>{actionable.summary}</p>
-      <p>
-        Finding <code>{actionable.findingId}</code>
-      </p>
+      <WorkItemBadges workItem={workItem} />
+      <h3>{workItem.title}</h3>
+      <p>{workItem.summary}</p>
+      <h4>Related findings</h4>
+      <ul>
+        {workItem.findingIds.map((findingId) => (
+          <li key={findingId}>
+            <code>{findingId}</code>
+          </li>
+        ))}
+      </ul>
       <h4>Evidence</h4>
-      <EvidenceList evidence={actionable.evidence} />
-      <h4>Suggested fix</h4>
-      <p>
-        {actionable.suggestedFix ??
-          "Verify the finding against the current code before choosing a fix."}
-      </p>
+      <EvidenceList evidence={workItem.evidence} />
+      <h4>Suggested approach</h4>
+      {workItem.suggestedFixes.length > 0 ? (
+        <ul>
+          {workItem.suggestedFixes.map((suggestedFix) => (
+            <li key={suggestedFix}>{suggestedFix}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>Verify the evidence before choosing whether code should change.</p>
+      )}
       <h4>Acceptance criteria</h4>
       <ul>
-        {actionable.acceptanceCriteria.map((criterion) => (
+        {workItem.acceptanceCriteria.map((criterion) => (
           <li key={criterion}>{criterion}</li>
         ))}
       </ul>
-      {finding?.roast ? (
-        <blockquote>
-          <p>{finding.roast}</p>
+      {roasts.map((roast) => (
+        <blockquote key={roast}>
+          <p>{roast}</p>
         </blockquote>
-      ) : null}
+      ))}
     </article>
   );
 }
@@ -193,8 +215,17 @@ function ActionableArticle({
 function AgentContext({
   context,
   suggestedSkills,
-}: Pick<ActionablesReportProps, "context" | "suggestedSkills">) {
-  if (context.length === 0 && suggestedSkills.length === 0) {
+  verification,
+}: Pick<
+  ActionablesReportProps,
+  "context" | "suggestedSkills" | "verification"
+>) {
+  if (
+    context.length === 0 &&
+    suggestedSkills.length === 0 &&
+    verification.projectGates.length === 0 &&
+    !verification.shadscanCommand
+  ) {
     return null;
   }
 
@@ -220,17 +251,29 @@ function AgentContext({
           </div>
         </>
       ) : null}
+      <h4>Verification commands</h4>
+      <ul>
+        <li>
+          <code>{verification.shadscanCommand}</code>
+        </li>
+        {verification.projectGates.map((command) => (
+          <li key={command}>
+            <code>{command}</code>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
 
 function ActionablesReport({
-  actionables,
   context,
   findings,
   suggestedSkills,
+  verification,
+  workItems,
 }: ActionablesReportProps) {
-  if (actionables.length === 0) {
+  if (workItems.length === 0) {
     return (
       <div className="flex flex-col gap-8">
         <Empty className="min-h-64 border">
@@ -245,7 +288,11 @@ function ActionablesReport({
           </EmptyHeader>
         </Empty>
         <div className="typeset typeset-report">
-          <AgentContext context={context} suggestedSkills={suggestedSkills} />
+          <AgentContext
+            context={context}
+            suggestedSkills={suggestedSkills}
+            verification={verification}
+          />
         </div>
       </div>
     );
@@ -257,17 +304,24 @@ function ActionablesReport({
 
   return (
     <div className="typeset typeset-report">
-      {actionables.map((actionable, index) => (
-        <Fragment key={actionable.findingId}>
+      {workItems.map((workItem, index) => (
+        <Fragment key={workItem.id}>
           {index > 0 ? <Separator className="not-typeset my-8" /> : null}
-          <ActionableArticle
-            actionable={actionable}
-            finding={findingsById.get(actionable.findingId)}
+          <WorkItemArticle
+            findings={workItem.findingIds.flatMap((findingId) => {
+              const finding = findingsById.get(findingId);
+              return finding ? [finding] : [];
+            })}
+            workItem={workItem}
           />
         </Fragment>
       ))}
       <Separator className="not-typeset my-8" />
-      <AgentContext context={context} suggestedSkills={suggestedSkills} />
+      <AgentContext
+        context={context}
+        suggestedSkills={suggestedSkills}
+        verification={verification}
+      />
     </div>
   );
 }

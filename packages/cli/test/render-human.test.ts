@@ -11,6 +11,7 @@ const createReport = (): AuditReport => ({
         ],
         category: "foundation",
         confidence: "high",
+        disposition: "fix",
         evidence: [
           {
             filePath: "/tmp/app/layout.tsx",
@@ -37,6 +38,34 @@ const createReport = (): AuditReport => ({
     ],
     goal: "Raise demo's Shadscan score from 50/100 (F) by addressing agent-ready UI audit findings.",
     suggestedSkills: ["shadscan"],
+    verification: {
+      projectGates: ["pnpm check", "pnpm build"],
+      shadscanCommand: "pnpm dlx shadscan@0.0.1 --json --category foundation",
+    },
+    workItems: [
+      {
+        acceptanceCriteria: [
+          "The Shadscan finding `metadata-configured` reports pass.",
+        ],
+        categories: ["foundation"],
+        disposition: "fix",
+        evidence: [
+          {
+            filePath: "/tmp/app/layout.tsx",
+            line: 3,
+            message: "No metadata export was found.",
+          },
+        ],
+        findingIds: ["metadata-configured"],
+        id: "metadata-configured",
+        priority: "P1",
+        rawScoreImpact: 3,
+        suggestedFixes: ["Export metadata."],
+        summary:
+          "Fix metadata configured; Shadscan marked this as a high-confidence missing UI fundamental.",
+        title: "Fix metadata configured",
+      },
+    ],
   },
   categories: [
     {
@@ -124,7 +153,10 @@ describe("renderHumanReport", () => {
     expect(output).toContain("Missing: metadata configured");
     expect(output).toContain("Agent handoff:");
     expect(output).toContain("Suggested skills: shadscan");
+    expect(output).toContain("Shadscan: pnpm dlx shadscan@0.0.1");
+    expect(output).toContain("Project gate: pnpm check");
     expect(output).toContain("1. [P1] Fix metadata configured");
+    expect(output).toContain("Disposition: fix");
     expect(output).toContain(
       "Evidence: No metadata export was found. (/tmp/app/layout.tsx:3)"
     );

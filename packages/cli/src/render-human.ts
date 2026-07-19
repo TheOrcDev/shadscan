@@ -119,34 +119,45 @@ const renderAgentHandoff = (report: AuditReport): string[] => {
     ...report.agentHandoff.context.map(
       (context) => `    - ${sanitizeTerminalText(context)}`
     ),
-    "  Actionables:",
+    "  Verification:",
+    `    - Shadscan: ${sanitizeTerminalText(report.agentHandoff.verification.shadscanCommand)}`,
+    ...(report.agentHandoff.verification.projectGates.length > 0
+      ? report.agentHandoff.verification.projectGates.map(
+          (command) => `    - Project gate: ${sanitizeTerminalText(command)}`
+        )
+      : [
+          "    - Project gates: inspect package scripts; none were discovered.",
+        ]),
+    "  Work items:",
   ];
 
-  if (report.agentHandoff.actionables.length === 0) {
+  if (report.agentHandoff.workItems.length === 0) {
     lines.push("    - None. Keep the existing fundamentals intact.");
 
     return lines;
   }
 
-  for (const [index, actionable] of report.agentHandoff.actionables.entries()) {
+  for (const [index, workItem] of report.agentHandoff.workItems.entries()) {
     lines.push(
-      `    ${index + 1}. [${actionable.priority}] ${sanitizeTerminalText(actionable.title)}`,
-      `       Finding: ${sanitizeTerminalText(actionable.findingId)} (${actionable.status}, ${actionable.confidence} confidence, ${actionable.category})`,
-      `       Summary: ${sanitizeTerminalText(actionable.summary)}`
+      `    ${index + 1}. [${workItem.priority}] ${sanitizeTerminalText(workItem.title)}`,
+      `       Disposition: ${workItem.disposition}`,
+      `       Findings: ${workItem.findingIds.map(sanitizeTerminalText).join(", ")}`,
+      `       Categories: ${workItem.categories.map(sanitizeTerminalText).join(", ")}`,
+      `       Summary: ${sanitizeTerminalText(workItem.summary)}`
     );
 
-    if (actionable.scoreImpact > 0) {
-      lines.push(`       Score impact: ${actionable.scoreImpact} raw points`);
-    }
-
-    if (actionable.suggestedFix) {
+    if (workItem.rawScoreImpact > 0) {
       lines.push(
-        `       Fix: ${sanitizeTerminalText(actionable.suggestedFix)}`
+        `       Score impact: ${workItem.rawScoreImpact} raw rule points`
       );
     }
 
+    for (const suggestedFix of workItem.suggestedFixes) {
+      lines.push(`       Suggested fix: ${sanitizeTerminalText(suggestedFix)}`);
+    }
+
     lines.push(
-      `       Acceptance: ${actionable.acceptanceCriteria.map(sanitizeTerminalText).join(" ")}`
+      `       Acceptance: ${workItem.acceptanceCriteria.map(sanitizeTerminalText).join(" ")}`
     );
   }
 
