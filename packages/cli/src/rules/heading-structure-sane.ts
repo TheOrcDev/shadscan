@@ -12,8 +12,11 @@ interface HeadingOccurrence {
   filePath: string;
   level: number;
   line: number;
+  position: number;
 }
 
+const COMPOSED_CONTENT_PATTERN =
+  /(?:^|\.)(?:mdx(?:content)?|markdown(?:content)?)$/i;
 const HEADING_PATTERN = /^h([1-6])$/;
 
 const headingStructureSaneRule: AuditRule = {
@@ -26,6 +29,7 @@ const headingStructureSaneRule: AuditRule = {
   maxScore: 0,
   run: async ({ project }) => {
     const files = await parseProjectSourceFiles(project);
+    const compositionBoundariesByFile = new Map<string, number[]>();
     const headingsByFile = new Map<string, HeadingOccurrence[]>();
 
     visitJsxNodes(files, ({ file, node }) => {
@@ -33,7 +37,15 @@ const headingStructureSaneRule: AuditRule = {
         return;
       }
 
-      const match = getJsxTagName(node)?.match(HEADING_PATTERN);
+      const tagName = getJsxTagName(node);
+
+      if (tagName && COMPOSED_CONTENT_PATTERN.test(tagName)) {
+        const boundaries = compositionBoundariesByFile.get(file.filePath) ?? [];
+        boundaries.push(node.getStart(file.sourceFile));
+        compositionBoundariesByFile.set(file.filePath, boundaries);
+      }
+
+      const match = tagName?.match(HEADING_PATTERN);
 
       if (!match?.[1]) {
         return;
@@ -44,6 +56,7 @@ const headingStructureSaneRule: AuditRule = {
         filePath: file.filePath,
         level: Number(match[1]),
         line: getLineNumber(file, node),
+        position: node.getStart(file.sourceFile),
       });
       headingsByFile.set(file.filePath, headings);
     });
@@ -74,7 +87,18 @@ const headingStructureSaneRule: AuditRule = {
         const previous = fileHeadings[index - 1];
         const current = fileHeadings[index];
 
-        if (previous && current && current.level > previous.level + 1) {
+        if (!(previous && current)) {
+          continue;
+        }
+
+        const hasComposedContentBetween = (
+          compositionBoundariesByFile.get(current.filePath) ?? []
+        ).some(
+          (position) =>
+            position > previous.position && position < current.position
+        );
+
+        if (!hasComposedContentBetween && current.level > previous.level + 1) {
           return fail(
             `Heading order jumps from h${previous.level} to h${current.level}.`,
             "Use the next heading level unless the rendered document outline supplies the missing level. Verify the composed route in a browser.",

@@ -55,6 +55,22 @@ describe("browser-sensitive advisory rules", () => {
     }
   });
 
+  it("does not infer a heading skip across composed MDX content", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/page.tsx",
+        "export function Page() { return <main><h1>Docs</h1><MDX /><aside><h3>Sponsor</h3></aside></main>; }"
+      );
+      expect(
+        (await runRule(fixture.rootDir, headingStructureSaneRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("advises when an app shell has no responsive source evidence", async () => {
     const fixture = await createRuleFixture();
 

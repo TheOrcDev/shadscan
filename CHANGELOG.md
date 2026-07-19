@@ -41,6 +41,8 @@ stable releases published under `latest`.
   only at min-width breakpoints while retaining max-width risks.
 - Personal-data autocomplete checks now distinguish person-name fields from
   product, project, package, repository, and other object-name inputs.
+- Heading-order checks now stop at MDX and Markdown composition boundaries,
+  where rendered content can supply intermediate heading levels.
 - Destructive-action advisories now require a native action or a custom control
   wired with a handler or submit semantics, and correlate confirmation within
   the same component flow; overflow advisories
