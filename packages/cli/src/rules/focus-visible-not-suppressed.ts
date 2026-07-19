@@ -1,9 +1,26 @@
+import {
+  createSourceFile,
+  forEachChild,
+  isJsxAttribute,
+  isJsxExpression,
+  isJsxOpeningElement,
+  isJsxSelfClosingElement,
+  isNoSubstitutionTemplateLiteral,
+  isStringLiteral,
+  type JsxOpeningLikeElement,
+  type Node,
+  ScriptKind,
+  ScriptTarget,
+} from "typescript";
+import { getJsxAttributeValue, getJsxTagName } from "../ast";
 import type { AuditRule } from "../audit";
 import { fail, pass } from "./rule-result";
-import { getProjectSourceFiles, getProjectStyleFiles } from "./source-files";
+import {
+  getProjectSourceFiles,
+  getProjectStyleFiles,
+  type SourceFile,
+} from "./source-files";
 
-const CLASS_VALUE_PATTERN =
-  /className\s*=\s*(?:["'`]([^"'`]*outline-none[^"'`]*)["'`]|\{[^}]*["'`]([^"'`]*outline-none[^"'`]*)["'`][^}]*\})/g;
 const FOCUS_REPLACEMENT_PATTERN =
   /focus-visible:(?:ring|outline|border|shadow)|focus:(?:ring|outline|border|shadow)/;
 const CSS_RULE_PATTERN = /([^{}]+)\{([^{}]*)\}/g;
@@ -12,6 +29,18 @@ const CSS_VISIBLE_PROPERTY_PATTERN =
   /^(?:border(?:-color|-style|-width)?|box-shadow|outline)$/i;
 const FOCUS_PSEUDO_PATTERN = /:(?:focus-visible|focus-within|focus)\b/;
 const ALL_FOCUS_PSEUDOS_PATTERN = /:(?:focus-visible|focus-within|focus)\b/g;
+const CLASS_SEPARATOR_PATTERN = /\s+/;
+const FOCUSABLE_CUSTOM_TAG_PATTERN =
+  /(?:Button|Trigger|Input|Textarea|Select|Checkbox|Radio|Switch|Slider|Item|Link|Tab)(?:Primitive)?$/;
+const FOCUS_MANAGED_SURFACE_PATTERN =
+  /^(?:AlertDialog|Dialog|Drawer|Sheet)Content$|(?:^|\.)(?:AlertDialog|Dialog|Drawer|Sheet)(?:Primitive)?\.(?:Content|Popup)$/;
+const NATIVE_FOCUSABLE_TAGS = new Set([
+  "button",
+  "input",
+  "select",
+  "summary",
+  "textarea",
+]);
 
 interface CssRule {
   body: string;
@@ -71,6 +100,125 @@ const hasMatchingFocusReplacement = (
   );
 };
 
+const collectStaticStrings = (node: Node, values: string[]): void => {
+  if (isStringLiteral(node) || isNoSubstitutionTemplateLiteral(node)) {
+    values.push(node.text);
+    return;
+  }
+
+  forEachChild(node, (child) => collectStaticStrings(child, values));
+};
+
+const getStaticClassValue = (node: JsxOpeningLikeElement): string => {
+  for (const property of node.attributes.properties) {
+    if (
+      !(
+        isJsxAttribute(property) &&
+        ["class", "className"].includes(property.name.getText()) &&
+        property.initializer
+      )
+    ) {
+      continue;
+    }
+
+    if (isStringLiteral(property.initializer)) {
+      return property.initializer.text;
+    }
+
+    if (
+      isJsxExpression(property.initializer) &&
+      property.initializer.expression
+    ) {
+      const values: string[] = [];
+      collectStaticStrings(property.initializer.expression, values);
+      return values.join(" ");
+    }
+  }
+
+  return "";
+};
+
+const suppressesOwnOutline = (classValue: string): boolean =>
+  classValue.split(CLASS_SEPARATOR_PATTERN).some((className) => {
+    if (className === "outline-none") {
+      return true;
+    }
+
+    return !className.includes("[") && className.endsWith(":outline-none");
+  });
+
+const isPotentialFocusTarget = (node: JsxOpeningLikeElement): boolean => {
+  const tagName = getJsxTagName(node);
+
+  if (!tagName) {
+    return false;
+  }
+
+  if (NATIVE_FOCUSABLE_TAGS.has(tagName)) {
+    return true;
+  }
+
+  if (tagName === "a" && getJsxAttributeValue(node, "href").kind !== "absent") {
+    return true;
+  }
+
+  if (
+    FOCUSABLE_CUSTOM_TAG_PATTERN.test(tagName) ||
+    FOCUS_MANAGED_SURFACE_PATTERN.test(tagName)
+  ) {
+    return true;
+  }
+
+  const tabIndex = getJsxAttributeValue(node, "tabIndex");
+  if (
+    tabIndex.kind === "static" &&
+    typeof tabIndex.value === "number" &&
+    tabIndex.value >= 0
+  ) {
+    return true;
+  }
+
+  const contentEditable = getJsxAttributeValue(node, "contentEditable");
+  return contentEditable.kind === "static" && contentEditable.value === true;
+};
+
+const findSourceOutlineSuppression = (file: SourceFile): number | null => {
+  const sourceFile = createSourceFile(
+    file.path,
+    file.content,
+    ScriptTarget.Latest,
+    true,
+    ScriptKind.TSX
+  );
+  let suppressionLine: number | null = null;
+
+  const visit = (node: Node): void => {
+    if (suppressionLine !== null) {
+      return;
+    }
+
+    if (isJsxOpeningElement(node) || isJsxSelfClosingElement(node)) {
+      const classValue = getStaticClassValue(node);
+
+      if (
+        isPotentialFocusTarget(node) &&
+        suppressesOwnOutline(classValue) &&
+        !FOCUS_REPLACEMENT_PATTERN.test(classValue)
+      ) {
+        suppressionLine =
+          sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+            .line + 1;
+        return;
+      }
+    }
+
+    forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return suppressionLine;
+};
+
 const focusVisibleNotSuppressedRule: AuditRule = {
   adapters: ["core"],
   category: "interaction",
@@ -83,19 +231,14 @@ const focusVisibleNotSuppressedRule: AuditRule = {
     const sourceFiles = await getProjectSourceFiles(project);
 
     for (const file of sourceFiles) {
-      CLASS_VALUE_PATTERN.lastIndex = 0;
+      const line = findSourceOutlineSuppression(file);
 
-      for (const match of file.content.matchAll(CLASS_VALUE_PATTERN)) {
-        const classValue = match[1] ?? match[2] ?? "";
-
-        if (!FOCUS_REPLACEMENT_PATTERN.test(classValue)) {
-          const line = file.content.slice(0, match.index).split("\n").length;
-          return fail(
-            "A control removes its focus outline without a visible replacement.",
-            "Add a focus-visible ring, outline, border, or shadow before suppressing the default outline.",
-            { filePath: file.path, line }
-          );
-        }
+      if (line !== null) {
+        return fail(
+          "A focus target removes its outline without a visible replacement.",
+          "Add a focus-visible ring, outline, border, or shadow before suppressing the default outline.",
+          { filePath: file.path, line }
+        );
       }
     }
 

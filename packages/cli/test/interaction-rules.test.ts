@@ -502,6 +502,30 @@ describe("interaction rules", () => {
       expect(
         (await runRule(fixture.rootDir, focusVisibleNotSuppressedRule)).status
       ).toBe("pass");
+
+      await fixture.write(
+        "src/button.tsx",
+        `
+          export function HoverCardContent({ className }) {
+            return <HoverCardPrimitive.Content className={cn("rounded-md outline-none", className)} />;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, focusVisibleNotSuppressedRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/button.tsx",
+        `
+          export function DialogContent({ className }) {
+            return <DialogPrimitive.Popup className={cn("rounded-md outline-none", className)} />;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, focusVisibleNotSuppressedRule)).status
+      ).toBe("fail");
     } finally {
       await fixture.cleanup();
     }
