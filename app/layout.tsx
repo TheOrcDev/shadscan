@@ -5,6 +5,10 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  getGitHubStargazerCount,
+  SOURCE_CODE_GITHUB_REPO,
+} from "@/lib/github-stars";
 import { getSiteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
@@ -49,11 +53,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const stargazersCount = await getGitHubStargazerCount();
+
   return (
     <html
       className={cn(
@@ -68,7 +74,10 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <SiteHeader />
+          <SiteHeader
+            githubRepo={SOURCE_CODE_GITHUB_REPO}
+            stargazersCount={stargazersCount}
+          />
           {children}
           <Toaster />
         </ThemeProvider>

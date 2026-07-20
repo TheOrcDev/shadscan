@@ -3,29 +3,25 @@ import { CodeBlockCommand } from "@/components/code-block-command";
 import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
 
-const PACKAGE_SCRIPT = `{
-  "scripts": {
-    "audit:ui": "shadscan --fail-under 80 --no-roast"
-  }
-}`;
+const AGENT_PROMPT =
+  "Use $shadscan-pre-commit for this task. Establish the current score before editing, run Shadscan immediately before every commit, and do not commit if the audit is unassessed or below the task floor.";
 
-const HUSKY_HOOK = "pnpm run audit:ui";
+const PROJECT_RULE = `## Shadscan
 
-const SKILL_PROMPT =
-  "Use $shadscan-pre-commit to add a safe Shadscan pre-commit gate to this repository.";
+Before creating any commit, use $shadscan-pre-commit. Establish the current score when work begins, run Shadscan immediately before each commit, and do not commit if the score is unassessed or below the task floor.`;
 
 const sections = [
-  { href: "#quick-start", label: "Quick start" },
-  { href: "#score-floor", label: "Set the score floor" },
-  { href: "#existing-hooks", label: "Existing hooks" },
-  { href: "#agent-skill", label: "Agent skill" },
-  { href: "#verify", label: "Verify the gate" },
+  { href: "#install", label: "Install the skill" },
+  { href: "#activate", label: "Activate it" },
+  { href: "#protocol", label: "Agent protocol" },
+  { href: "#project-rule", label: "Project rule" },
+  { href: "#agent-only", label: "Agent-only scope" },
 ] as const satisfies ReadonlyArray<{ href: `#${string}`; label: string }>;
 
 interface DocsCodeBlockProps {
   code: string;
   label: string;
-  language: "bash" | "json" | "text";
+  language: "bash" | "markdown" | "text";
 }
 
 function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
@@ -56,14 +52,14 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
 export const metadata: Metadata = {
   alternates: { canonical: "/docs" },
   description:
-    "Run a deterministic Shadscan audit before every commit and prevent shadcn UI regressions.",
+    "Make AI agents run a deterministic Shadscan audit before every commit without changing project tooling.",
   openGraph: {
     description:
-      "Run a deterministic Shadscan audit before every commit and prevent shadcn UI regressions.",
-    title: "Shadscan pre-commit guide",
+      "Make AI agents run a deterministic Shadscan audit before every commit without changing project tooling.",
+    title: "Shadscan agent commit guide",
     url: "/docs",
   },
-  title: "Pre-commit guide",
+  title: "Agent commit guide",
 };
 
 export default function DocsPage() {
@@ -76,157 +72,112 @@ export default function DocsPage() {
       <article className="typeset min-w-0 max-w-3xl pb-20 [&_section[id]]:scroll-mt-10">
         <header>
           <p className="not-typeset font-mono text-muted-foreground text-sm">
-            Commit automation
+            Agent workflow
           </p>
-          <h1>Run Shadscan before every commit</h1>
+          <h1>Make agents run Shadscan before every commit</h1>
           <p>
-            Put the audit in a tracked Git hook so every commit checks the
-            project against the same score floor. A failed audit exits nonzero,
-            and Git leaves the commit untouched.
+            The Shadscan skill gives AI agents a commit protocol. It records the
+            project&apos;s starting score, audits the working tree immediately
+            before each commit, and stops the agent when the score regresses.
+            Your project tooling stays untouched.
           </p>
         </header>
 
-        <section id="quick-start">
-          <h2>Quick start</h2>
+        <section id="install">
+          <h2>Install the skill</h2>
           <p>
-            These steps are for a repository without a Git hook manager. When
-            one is already configured, keep it and continue at the existing
-            hooks section.
-          </p>
-          <ol>
-            <li>
-              <strong>Install local, locked dependencies.</strong> Keeping
-              Shadscan in the project avoids a registry request on every commit
-              and makes the lockfile the source of truth.
-              <div className="not-typeset mt-4">
-                <CodeBlockCommand
-                  bun="bun add --dev shadscan husky"
-                  npm="npm install --save-dev shadscan husky"
-                  pnpm="pnpm add --save-dev shadscan husky"
-                  yarn="yarn add --dev shadscan husky"
-                />
-              </div>
-            </li>
-            <li>
-              <strong>Add an audit script.</strong> Start with 80, or use the
-              current project score as described below.
-              <DocsCodeBlock
-                code={PACKAGE_SCRIPT}
-                label="package.json"
-                language="json"
-              />
-            </li>
-            <li>
-              <strong>Initialize Husky.</strong> This creates a tracked
-              <code>.husky/pre-commit</code> file and configures package
-              installation to activate the hooks.
-              <div className="not-typeset mt-4">
-                <CodeBlockCommand
-                  bun="bunx husky init"
-                  npm="npx husky init"
-                  pnpm="pnpm exec husky init"
-                  yarn="yarn run postinstall"
-                />
-              </div>
-              <p>
-                Yarn uses Husky&apos;s manual setup: add
-                <code>&quot;postinstall&quot;: &quot;husky&quot;</code> to the
-                package scripts before running the Yarn tab command. The agent
-                skill below detects and configures this case for you.
-              </p>
-            </li>
-            <li>
-              <strong>Run the audit from the hook.</strong> Replace the sample
-              command created by Husky, or append this line when the hook
-              already does other work.
-              <DocsCodeBlock
-                code={HUSKY_HOOK}
-                label=".husky/pre-commit"
-                language="bash"
-              />
-            </li>
-          </ol>
-        </section>
-
-        <section id="score-floor">
-          <h2>Set the score floor</h2>
-          <p>
-            For a new app, <code>--fail-under 80</code> is a useful team target.
-            For an existing app, run a baseline first and set the threshold to
-            its current score. That blocks regressions today without requiring
-            an all-at-once cleanup.
+            Install the canonical skill globally so supported agents can use it
+            in any repository.
           </p>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
-              bun="bunx shadscan --json"
-              npm="npx shadscan --json"
-              pnpm="pnpm exec shadscan --json"
-              yarn="yarn shadscan --json"
+              bun="bunx --bun skills add TheOrcDev/skills --skill shadscan-pre-commit --global"
+              npm="npx skills add TheOrcDev/skills --skill shadscan-pre-commit --global"
+              pnpm="pnpm dlx skills add TheOrcDev/skills --skill shadscan-pre-commit --global"
+              yarn="yarn dlx skills add TheOrcDev/skills --skill shadscan-pre-commit --global"
             />
           </div>
-          <p>
-            Read the top-level <code>score</code> from the JSON output and place
-            that integer after <code>--fail-under</code>. Raise it as the UI
-            improves; do not lower it to make a failing commit pass.
-          </p>
         </section>
 
-        <section id="existing-hooks">
-          <h2>Keep existing hooks intact</h2>
+        <section id="activate">
+          <h2>Activate it for the task</h2>
           <p>
-            Add Shadscan after the commands already in the pre-commit hook.
-            Reuse Husky, Lefthook, or simple-git-hooks when the repository has
-            one configured. Two hook managers competing for
-            <code>core.hooksPath</code> will make the result unpredictable.
+            Give the agent this instruction before it starts changing files. The
+            task baseline becomes the default minimum score.
           </p>
-          <p>
-            Shadscan audits the working tree as it exists at commit time, not
-            only the staged diff. It reports findings and exits; it does not
-            rewrite or restage source files.
-          </p>
-        </section>
-
-        <section id="agent-skill">
-          <h2>Let an agent configure it</h2>
-          <p>
-            Install the canonical skill through the Skills CLI. It detects the
-            package manager, takes a baseline, preserves existing hooks, adds a
-            local Shadscan dependency, and verifies both passing and failing
-            exit codes.
-          </p>
-          <div className="not-typeset mt-4">
-            <CodeBlockCommand
-              bun="bunx --bun skills add TheOrcDev/skills --skill shadscan-pre-commit"
-              npm="npx skills add TheOrcDev/skills --skill shadscan-pre-commit"
-              pnpm="pnpm dlx skills add TheOrcDev/skills --skill shadscan-pre-commit"
-              yarn="yarn dlx skills add TheOrcDev/skills --skill shadscan-pre-commit"
-            />
-          </div>
-          <p>Then give your agent this prompt:</p>
           <DocsCodeBlock
-            code={SKILL_PROMPT}
+            code={AGENT_PROMPT}
             label="Agent prompt"
             language="text"
           />
         </section>
 
-        <section id="verify">
-          <h2>Verify the gate</h2>
-          <p>Run the package script directly before relying on the hook.</p>
+        <section id="protocol">
+          <h2>What the agent does</h2>
+          <ol>
+            <li>
+              <strong>Establishes a baseline.</strong> Before editing, the agent
+              runs <code>shadscan --json</code> and reads the top-level score.
+              It uses a local binary when one already exists, or a one-shot CLI
+              command otherwise.
+            </li>
+            <li>
+              <strong>Sets the task floor.</strong> The starting score is the
+              minimum by default. A higher score requested by the user becomes
+              the new floor. An unassessed result stops the workflow.
+            </li>
+            <li>
+              <strong>Audits before every commit.</strong> After the intended
+              edits and tests, the agent scans the complete working tree again.
+              A failed audit must be fixed and rerun before committing.
+            </li>
+            <li>
+              <strong>Reports the result.</strong> Each commit is accompanied by
+              the baseline, enforced floor, and final score. Findings outside
+              the task scope are reported instead of silently bypassed.
+            </li>
+          </ol>
+          <p>
+            When Shadscan is not already installed, the agent uses the matching
+            one-shot command without adding a dependency:
+          </p>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
-              bun="bun run audit:ui"
-              npm="npm run audit:ui"
-              pnpm="pnpm run audit:ui"
-              yarn="yarn run audit:ui"
+              bun="bunx --bun shadscan@latest --json"
+              npm="npx --yes shadscan@latest --json"
+              pnpm="pnpm dlx shadscan@latest --json"
+              yarn="yarn dlx shadscan@latest --json"
             />
           </div>
+        </section>
+
+        <section id="project-rule">
+          <h2>Make it a project rule</h2>
           <p>
-            A score at or above the floor exits with code 0. A lower or
-            unassessed score exits nonzero and blocks the commit. Use
-            <code>git commit --no-verify</code> only as an emergency bypass, and
-            pair the same audit with CI when the team needs enforcement that
-            cannot be skipped locally.
+            Add this policy to <code>AGENTS.md</code> so agents that read the
+            repository instructions activate the skill for future commit tasks.
+            Use the equivalent agent instruction file when your tool uses a
+            different filename.
+          </p>
+          <DocsCodeBlock
+            code={PROJECT_RULE}
+            label="AGENTS.md"
+            language="markdown"
+          />
+        </section>
+
+        <section id="agent-only">
+          <h2>Agent-only by design</h2>
+          <p>
+            The skill changes agent behavior only. It does not install project
+            dependencies, edit package scripts, modify lockfiles, or configure
+            Git. It also never rewrites or stages source files while auditing.
+          </p>
+          <p>
+            Commits made manually, or by an agent that has not loaded the skill,
+            are not intercepted. That boundary keeps Shadscan entirely inside
+            the AI workflow while leaving the developer&apos;s local commit
+            process alone.
           </p>
         </section>
       </article>

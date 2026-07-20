@@ -8,13 +8,13 @@ const VIEWPORTS = [
   { height: 1000, width: 1440 },
 ] as const;
 
-test("documents the pre-commit workflow and agent skill", async ({ page }) => {
+test("documents the agent-only commit workflow", async ({ page }) => {
   await page.goto("/docs");
 
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Run Shadscan before every commit",
+      name: "Make agents run Shadscan before every commit",
     })
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Docs" })).toBeVisible();
@@ -28,7 +28,10 @@ test("documents the pre-commit workflow and agent skill", async ({ page }) => {
       .first()
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Copy package.json" })
+    page.getByRole("button", { name: "Copy AGENTS.md" })
+  ).toBeVisible();
+  await expect(
+    page.getByText("The skill changes agent behavior only.", { exact: false })
   ).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
