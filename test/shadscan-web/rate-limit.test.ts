@@ -103,6 +103,7 @@ describe("web scan rate limits", () => {
       "clientShort",
       "repositoryDaily",
     ]);
+    expect(rules.map((rule) => rule.maxRequests)).toEqual([20, 10, 10]);
     expect(
       rules.every((rule) => SHA256_HEX_PATTERN.test(rule.identityHash))
     ).toBe(true);
@@ -110,20 +111,31 @@ describe("web scan rate limits", () => {
     expect(rules[2].identityHash).not.toBe(rules[0].identityHash);
   });
 
-  it("allows three client scans per short window and rejects the fourth", () => {
-    const input = {
-      clientAddress: "203.0.113.4",
-      repositoryKey: "acme/widget",
-    };
-
+  it("allows ten client scans per short window and rejects the eleventh", () => {
     for (let count = 0; count < WEB_RATE_LIMITS.clientShort.limit; count += 1) {
       expect(
-        checkMemoryWebRateLimit(input, 1000, TEST_SALT, "test")
+        checkMemoryWebRateLimit(
+          {
+            clientAddress: "203.0.113.4",
+            repositoryKey: `acme/widget-${count}`,
+          },
+          1000,
+          TEST_SALT,
+          "test"
+        )
       ).toHaveLength(3);
     }
 
     expect(() =>
-      checkMemoryWebRateLimit(input, 1000, TEST_SALT, "test")
+      checkMemoryWebRateLimit(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryKey: "acme/widget-over-limit",
+        },
+        1000,
+        TEST_SALT,
+        "test"
+      )
     ).toThrowError(
       expect.objectContaining({
         code: "RATE_LIMITED",

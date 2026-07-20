@@ -17,7 +17,7 @@ const WEB_RATE_LIMITS = {
   },
   clientShort: {
     bucket: "web-client-short",
-    limit: 3,
+    limit: 10,
     scope: "client",
     windowMs: 600_000,
   },
