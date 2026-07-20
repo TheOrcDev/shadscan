@@ -10,10 +10,21 @@ const REQUIRED_RUNTIME_FILES = new Set([
   "packages/cli/LICENSE",
   "packages/cli/dist/index.js",
 ]);
+const REQUIRED_NEXT_RUNTIME_FILES = [
+  "next/dist/lib/picocolors.js",
+  "next/dist/server/lib/parse-stack.js",
+  "next/dist/server/lib/source-maps.js",
+];
 const ALLOWED_PROJECT_FILES = new Set([
   "package.json",
   ...REQUIRED_RUNTIME_FILES,
 ]);
+
+const toAbsoluteTracePath = (tracePath, tracedFile) =>
+  path
+    .resolve(path.dirname(path.resolve(tracePath)), tracedFile)
+    .split(path.sep)
+    .join("/");
 
 const toProjectPath = (tracePath, tracedFile) => {
   const traceDirectory = path.dirname(path.resolve(tracePath));
@@ -37,6 +48,9 @@ const toProjectPath = (tracePath, tracedFile) => {
 
 for (const tracePath of TRACE_PATHS) {
   const trace = JSON.parse(await readFile(tracePath, "utf8"));
+  const tracedPaths = trace.files.map((tracedFile) =>
+    toAbsoluteTracePath(tracePath, tracedFile)
+  );
   const projectFiles = new Set(
     trace.files
       .map((tracedFile) => toProjectPath(tracePath, tracedFile))
@@ -48,11 +62,24 @@ for (const tracePath of TRACE_PATHS) {
   const unrelatedFiles = [...projectFiles].filter(
     (filePath) => !ALLOWED_PROJECT_FILES.has(filePath)
   );
+  const missingNextRuntimeFiles = REQUIRED_NEXT_RUNTIME_FILES.filter(
+    (filePath) =>
+      !tracedPaths.some((tracedPath) =>
+        tracedPath.endsWith(`/node_modules/${filePath}`)
+      )
+  );
 
-  if (missingRuntimeFiles.length > 0 || unrelatedFiles.length > 0) {
+  if (
+    missingRuntimeFiles.length > 0 ||
+    missingNextRuntimeFiles.length > 0 ||
+    unrelatedFiles.length > 0
+  ) {
     const details = [
       missingRuntimeFiles.length > 0
         ? `missing runtime: ${missingRuntimeFiles.join(", ")}`
+        : null,
+      missingNextRuntimeFiles.length > 0
+        ? `missing Next runtime: ${missingNextRuntimeFiles.join(", ")}`
         : null,
       unrelatedFiles.length > 0
         ? `unrelated source: ${unrelatedFiles.join(", ")}`

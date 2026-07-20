@@ -6,7 +6,8 @@ const SCANNER_TRACE_EXCLUDES = [
   "./design/**/*",
   "./docs/**/*",
   "./hooks/**/*",
-  "./lib/**/*",
+  // A broad lib glob also strips Next's dist/server/lib runtime from traces.
+  "./lib/**/*.ts",
   "./plans/**/*",
   "./packages/cli/src/**/*",
   "./packages/cli/test/**/*",
