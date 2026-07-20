@@ -42,6 +42,8 @@ jobs:
         run: npm install --global npm@11.18.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build CLI
+        run: pnpm cli:build
       - name: Verify release metadata
         run: pnpm cli:release:check -- --tag "$NPM_DIST_TAG" --git-tag "$RELEASE_TAG"
       - name: Check formatting and lint
@@ -49,7 +51,7 @@ jobs:
       - name: Check generated rule catalog
         run: pnpm docs:check
       - name: Typecheck CLI
-        run: pnpm --filter shadscan typecheck
+        run: pnpm --filter ./packages/cli typecheck
       - name: Typecheck site and API
         run: pnpm typecheck
       - name: Test CLI

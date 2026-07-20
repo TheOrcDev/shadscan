@@ -32,8 +32,6 @@ const ALL_FOCUS_PSEUDOS_PATTERN = /:(?:focus-visible|focus-within|focus)\b/g;
 const CLASS_SEPARATOR_PATTERN = /\s+/;
 const FOCUSABLE_CUSTOM_TAG_PATTERN =
   /(?:Button|Trigger|Input|Textarea|Select|Checkbox|Radio|Switch|Slider|Item|Link|Tab)(?:Primitive)?$/;
-const FOCUS_MANAGED_SURFACE_PATTERN =
-  /^(?:AlertDialog|Dialog|Drawer|Sheet)Content$|(?:^|\.)(?:AlertDialog|Dialog|Drawer|Sheet)(?:Primitive)?\.(?:Content|Popup)$/;
 const NATIVE_FOCUSABLE_TAGS = new Set([
   "button",
   "input",
@@ -162,10 +160,7 @@ const isPotentialFocusTarget = (node: JsxOpeningLikeElement): boolean => {
     return true;
   }
 
-  if (
-    FOCUSABLE_CUSTOM_TAG_PATTERN.test(tagName) ||
-    FOCUS_MANAGED_SURFACE_PATTERN.test(tagName)
-  ) {
+  if (FOCUSABLE_CUSTOM_TAG_PATTERN.test(tagName)) {
     return true;
   }
 

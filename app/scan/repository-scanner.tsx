@@ -44,7 +44,7 @@ const CLI_FALLBACK_CODES = new Set<WebScanErrorCode>([
   "SOURCE_TOO_LARGE",
   "SOURCE_UNSUPPORTED",
 ]);
-const LOCAL_SCAN_COMMAND = "npx shadscan";
+const LOCAL_SCAN_COMMAND = "npx @shadscan/cli@next";
 
 function CliFallback() {
   return (

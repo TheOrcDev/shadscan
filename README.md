@@ -6,7 +6,12 @@ If the command menu, theme toggle, keyboard shortcuts, empty states, loading sta
 
 ## Usage
 
-shadscan is currently a source preview; the npm package is not published yet.
+The release candidate is available from npm's `next` channel:
+
+```bash
+pnpm dlx @shadscan/cli@next /path/to/shadcn-app
+```
+
 From a repository checkout:
 
 ```bash
@@ -122,8 +127,6 @@ pnpm cli:pack:dry-run
 pnpm cli:smoke
 ```
 
-The package is not published yet. Public npm release remains blocked until the
-repository owner chooses and adds a license; the source docs intentionally do
-not advertise `pnpm dlx shadscan` before that release exists.
-The complete candidate, stable, trusted-publishing, and recovery process is in
-[docs/releasing.md](docs/releasing.md).
+The MIT-licensed release candidate is published as `@shadscan/cli` under the
+`next` tag. The complete candidate, stable, trusted-publishing, and recovery
+process is in [docs/releasing.md](docs/releasing.md).

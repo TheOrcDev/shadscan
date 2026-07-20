@@ -1,11 +1,36 @@
 import path from "node:path";
-import { findOwnedSourceScopes } from "../ast";
+import {
+  type CallExpression,
+  type CompilerOptions,
+  getParsedCommandLineOfConfigFile,
+  isArrowFunction,
+  isCallExpression,
+  isFunctionDeclaration,
+  isFunctionExpression,
+  isIdentifier,
+  isImportDeclaration,
+  isNamedImports,
+  isStringLiteral,
+  isVariableDeclaration,
+  type Node,
+  type ParseConfigFileHost,
+  resolveModuleName,
+  sys,
+} from "typescript";
+import {
+  findOwnedSourceScopes,
+  type ParsedSourceFile,
+  parseProjectSourceFiles,
+  type SourceScope,
+  walkNodes,
+} from "../ast";
 import type {
   AuditContext,
   AuditEvidence,
   AuditRule,
   AuditRuleResult,
 } from "../audit";
+import type { ProjectDiscovery } from "../discovery";
 import {
   fileExists,
   findFiles,
@@ -18,7 +43,9 @@ import { sourceScopeHasTypingTargetGuard } from "./typing-target-guard";
 
 const THEME_PROVIDER_PATTERN = /(<ThemeProvider\b|next-themes|useTheme\()/;
 const KEYDOWN_HANDLER_PATTERN = /addEventListener\(["']keydown["']|onKeyDown/;
-const THEME_TOGGLE_PATTERN = /(setTheme\(|classList\.toggle\(["']dark["'])/;
+const DIRECT_THEME_TOGGLE_PATTERN =
+  /(?:setTheme\s*\(|classList\.toggle\(["']dark["'])/;
+const EXTRACTED_THEME_TOGGLE_NAME_PATTERN = /^toggle\w*Theme\w*$/i;
 const D_KEY_PATTERN =
   /key\.toLowerCase\(\)\s*!==\s*["']d["']|key\s*===\s*["']d["']/;
 const NEXT_METADATA_PATTERN =
@@ -28,6 +55,232 @@ const HTML_DESCRIPTION_PATTERN = /<meta\s+name=["']description["']/;
 const FAVICON_LINK_PATTERN = /<link\s+rel=["'](?:icon|shortcut icon)["']/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
+const parseConfigHost: ParseConfigFileHost = {
+  ...sys,
+  onUnRecoverableConfigFileDiagnostic: () => undefined,
+};
+
+interface ImportedHelper {
+  importedName: string;
+  moduleName: string;
+}
+
+const getCompilerOptions = (project: ProjectDiscovery): CompilerOptions => {
+  if (!project.paths.tsconfig) {
+    return {};
+  }
+
+  return (
+    getParsedCommandLineOfConfigFile(
+      project.paths.tsconfig,
+      {},
+      parseConfigHost
+    )?.options ?? {}
+  );
+};
+
+const nodeContainsIdentifier = (node: Node, name: string): boolean => {
+  let found = false;
+
+  walkNodes(node, (child) => {
+    if (isIdentifier(child) && child.text === name) {
+      found = true;
+      return false;
+    }
+
+    return true;
+  });
+
+  return found;
+};
+
+const getExtractedThemeToggleCalls = (scope: SourceScope): CallExpression[] => {
+  const calls: CallExpression[] = [];
+
+  walkNodes(scope.file.sourceFile, (node) => {
+    if (
+      isCallExpression(node) &&
+      isIdentifier(node.expression) &&
+      EXTRACTED_THEME_TOGGLE_NAME_PATTERN.test(node.expression.text) &&
+      node.getStart(scope.file.sourceFile) >= scope.start &&
+      node.getEnd() <= scope.end &&
+      node.arguments.some((argument) =>
+        nodeContainsIdentifier(argument, "setTheme")
+      )
+    ) {
+      calls.push(node);
+    }
+  });
+
+  return calls;
+};
+
+const getFunctionDefinitions = (
+  file: ParsedSourceFile,
+  name: string
+): Node[] => {
+  const definitions: Node[] = [];
+
+  walkNodes(file.sourceFile, (node) => {
+    if (isFunctionDeclaration(node) && node.name?.text === name) {
+      definitions.push(node);
+      return;
+    }
+
+    if (
+      isVariableDeclaration(node) &&
+      isIdentifier(node.name) &&
+      node.name.text === name &&
+      node.initializer &&
+      (isArrowFunction(node.initializer) ||
+        isFunctionExpression(node.initializer))
+    ) {
+      definitions.push(node.initializer);
+    }
+  });
+
+  return definitions;
+};
+
+const definitionCallsSetTheme = (
+  file: ParsedSourceFile,
+  definition: Node
+): boolean => {
+  let callsSetTheme = false;
+
+  walkNodes(definition, (node) => {
+    if (
+      isCallExpression(node) &&
+      isIdentifier(node.expression) &&
+      node.expression.text === "setTheme"
+    ) {
+      callsSetTheme = true;
+      return false;
+    }
+
+    return true;
+  });
+
+  return callsSetTheme && definition.getSourceFile() === file.sourceFile;
+};
+
+const getImportedHelper = (
+  file: ParsedSourceFile,
+  localName: string
+): ImportedHelper | null => {
+  const matches: ImportedHelper[] = [];
+
+  for (const statement of file.sourceFile.statements) {
+    if (
+      !(
+        isImportDeclaration(statement) &&
+        isStringLiteral(statement.moduleSpecifier) &&
+        statement.importClause?.namedBindings &&
+        isNamedImports(statement.importClause.namedBindings)
+      )
+    ) {
+      continue;
+    }
+
+    for (const element of statement.importClause.namedBindings.elements) {
+      if (element.name.text === localName) {
+        matches.push({
+          importedName: element.propertyName?.text ?? element.name.text,
+          moduleName: statement.moduleSpecifier.text,
+        });
+      }
+    }
+  }
+
+  return matches.length === 1 ? matches[0] : null;
+};
+
+const isWithinProject = (projectRoot: string, filePath: string): boolean => {
+  const relativePath = path.relative(projectRoot, filePath);
+
+  return (
+    relativePath !== ".." &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath) &&
+    !relativePath.split(path.sep).includes("node_modules")
+  );
+};
+
+const resolveImportedHelperFile = (
+  project: ProjectDiscovery,
+  containingFile: ParsedSourceFile,
+  moduleName: string,
+  compilerOptions: CompilerOptions,
+  filesByPath: Map<string, ParsedSourceFile>
+): ParsedSourceFile | null => {
+  const resolvedFileName = resolveModuleName(
+    moduleName,
+    containingFile.filePath,
+    compilerOptions,
+    sys
+  ).resolvedModule?.resolvedFileName;
+
+  if (
+    !(resolvedFileName && isWithinProject(project.rootDir, resolvedFileName))
+  ) {
+    return null;
+  }
+
+  return filesByPath.get(path.resolve(resolvedFileName)) ?? null;
+};
+
+const sourceScopeCallsVerifiedThemeToggle = (
+  scope: SourceScope,
+  project: ProjectDiscovery,
+  compilerOptions: CompilerOptions,
+  filesByPath: Map<string, ParsedSourceFile>
+): boolean => {
+  for (const call of getExtractedThemeToggleCalls(scope)) {
+    const localName = call.expression.getText(scope.file.sourceFile);
+    const localDefinitions = getFunctionDefinitions(scope.file, localName);
+
+    if (localDefinitions.length === 1) {
+      if (definitionCallsSetTheme(scope.file, localDefinitions[0])) {
+        return true;
+      }
+      continue;
+    }
+
+    if (localDefinitions.length > 1) {
+      continue;
+    }
+
+    const importedHelper = getImportedHelper(scope.file, localName);
+    if (!importedHelper) {
+      continue;
+    }
+
+    const helperFile = resolveImportedHelperFile(
+      project,
+      scope.file,
+      importedHelper.moduleName,
+      compilerOptions,
+      filesByPath
+    );
+    if (!helperFile) {
+      continue;
+    }
+
+    const definitions = getFunctionDefinitions(
+      helperFile,
+      importedHelper.importedName
+    );
+
+    if (
+      definitions.length === 1 &&
+      definitionCallsSetTheme(helperFile, definitions[0])
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 const evidence = (
   message: string,
@@ -157,10 +410,22 @@ const themeHotkeyPresentRule: AuditRule = {
       context.project,
       KEYDOWN_HANDLER_PATTERN
     );
+    const parsedFiles = await parseProjectSourceFiles(context.project);
+    const filesByPath = new Map(
+      parsedFiles.map((file) => [path.resolve(file.filePath), file])
+    );
+    const compilerOptions = getCompilerOptions(context.project);
 
     for (const scope of hotkeyScopes) {
       const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(scope.content);
-      const togglesTheme = THEME_TOGGLE_PATTERN.test(scope.content);
+      const togglesTheme =
+        DIRECT_THEME_TOGGLE_PATTERN.test(scope.content) ||
+        sourceScopeCallsVerifiedThemeToggle(
+          scope,
+          context.project,
+          compilerOptions,
+          filesByPath
+        );
       const checksDKey = D_KEY_PATTERN.test(scope.content);
       const ignoresTypingTargets = sourceScopeHasTypingTargetGuard(scope);
 

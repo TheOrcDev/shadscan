@@ -69,7 +69,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
         suggestedSkills: ["shadcn"],
         verification: {
           projectGates: ["pnpm check", "pnpm build"],
-          shadscanCommand: "pnpm dlx shadscan@0.1.0-rc.1 --json",
+          shadscanCommand: "pnpm dlx @shadscan/cli@0.1.0-rc.1 --json",
         },
         workItems: [
           {

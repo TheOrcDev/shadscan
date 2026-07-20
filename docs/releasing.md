@@ -1,16 +1,24 @@
 # Releasing shadscan
 
-This runbook covers the unscoped public npm package `shadscan`. Run release
-commands from `packages/cli`; the repository root is a private Next.js app and
-must never be published.
+This runbook covers the public scoped npm package `@shadscan/cli`. The product
+and installed executable remain named `shadscan`. Run release commands from
+`packages/cli`; the repository root is a private Next.js app and must never be
+published.
 
 ## Owner Prerequisites
 
 - Keep `packages/cli/LICENSE` and the package manifest aligned on the MIT
   license.
+- Confirm the `@shadscan` npm organization exists and the release account can
+  publish packages in its scope.
 - Use an npm user account with publishing two-factor authentication enabled.
 - Restore GitHub Actions runner access before enabling automated publishing.
-- Confirm `npm view shadscan` still returns `404` before the first publish.
+- Confirm `npm view @shadscan/cli` still returns `404` before the first publish.
+
+The package manifest sets `publishConfig.access` to `public` and pins the
+public npm registry. Keep those settings intact. The first manual publish also
+passes `--access public` explicitly because scoped packages otherwise default
+to restricted visibility.
 
 Never commit an npm access token. The first release candidate is authenticated
 interactively; later releases use npm Trusted Publishing with short-lived OIDC
@@ -24,7 +32,7 @@ From the repository root, run:
 pnpm install --frozen-lockfile
 pnpm check
 pnpm docs:check
-pnpm --filter shadscan typecheck
+pnpm --filter ./packages/cli typecheck
 pnpm cli:test
 pnpm test:api
 pnpm test:web
@@ -46,16 +54,20 @@ registry metadata.
 
 ## First Release Candidate
 
-The first publish claims the unscoped package name and must be performed by the
-owner after reviewing the packed artifact.
+The first publish creates `@shadscan/cli` inside the existing `@shadscan` scope
+and must be performed by an authorized organization member after reviewing the
+packed artifact.
 
 1. Set the CLI package version to `0.1.0-rc.1` and update the changelog.
 2. Commit and push the release-candidate preparation.
 3. Run every release gate above.
 4. Authenticate with `npm login` and confirm the account with `npm whoami`.
-5. From `packages/cli`, run `npm publish --tag next` and complete 2FA.
-6. Verify `npm view shadscan@next` and run the package in clean temporary
-   Next, Vite, and generic React projects.
+5. From `packages/cli`, run `npm publish --tag next --access public` and
+   complete 2FA. The explicit access flag matches the existing
+   `publishConfig.access` safeguard.
+6. Verify `npm view @shadscan/cli@next` and run
+   `npx --yes @shadscan/cli@0.1.0-rc.1 --version` plus representative audits in
+   clean temporary Next, Vite, and generic React projects.
 
 Do not move `latest` during release-candidate testing.
 
@@ -64,7 +76,7 @@ Do not move `latest` during release-candidate testing.
 After the package exists on npm:
 
 1. In the package's npm settings, add a GitHub Actions trusted publisher for
-   `TheOrcDev/headless-shadcn` and `publish.yml`.
+   `TheOrcDev/shadscan` and `publish.yml`.
 2. Allow staged publishing and require two-factor authentication for approval.
 3. Restrict traditional token publishing after the trusted path succeeds.
 4. Protect the GitHub `npm` environment with required reviewer approval.
@@ -81,19 +93,23 @@ required.
 3. Create the matching GitHub release. The publish workflow stages the npm
    artifact rather than publishing it immediately.
 4. Download and inspect the staged tarball, then approve it on npm with 2FA.
-5. Confirm `npm view shadscan@latest version` returns `0.1.0`.
-6. Run `npx --yes shadscan@0.1.0 --version` and representative audits from a
-   clean directory.
+5. Confirm `npm view @shadscan/cli@latest version` returns `0.1.0`.
+6. Run `npx --yes @shadscan/cli@0.1.0 --version` and representative audits from
+   a clean directory.
 7. Only after those checks pass, replace source-preview commands in public
-   documentation and product UI with `npx shadscan` examples.
+   documentation and product UI with `npx @shadscan/cli` or
+   `pnpm dlx @shadscan/cli` examples.
 
 ## Consumer Guidance
 
-- Local one-off: `npx shadscan`
-- Monorepo target: `npx shadscan ./apps/web`
-- Reproducible CI: `npx --yes shadscan@0.1.0 --fail-under 80`
-- Lockfile-managed CI: install `shadscan` as a development dependency and run
-  its bin through the project's package manager.
+- npm one-off: `npx --yes @shadscan/cli`
+- pnpm one-off: `pnpm dlx @shadscan/cli`
+- Monorepo target: `pnpm dlx @shadscan/cli ./apps/web`
+- Reproducible CI: `pnpm dlx @shadscan/cli@0.1.0 --fail-under 80`
+- Lockfile-managed CI: install with
+  `npm install --save-dev @shadscan/cli` or `pnpm add --save-dev @shadscan/cli`,
+  then run the installed `shadscan` binary through a package script or
+  `pnpm exec shadscan`.
 
 CI examples must pin an exact version. npm's `latest` tag is a moving pointer
 and is not a reproducible build input.

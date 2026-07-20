@@ -45,7 +45,7 @@ landmark per viewport.
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| Focused tests | `pnpm --filter shadscan exec vitest run test/interaction-rules.test.ts test/expanded-accessibility-rules.test.ts test/scope-correlation.test.ts` | exit 0 |
+| Focused tests | `pnpm --filter ./packages/cli exec vitest run test/interaction-rules.test.ts test/expanded-accessibility-rules.test.ts test/scope-correlation.test.ts` | exit 0 |
 | Full CLI tests | `pnpm cli:test` | all pass |
 | Typecheck | `pnpm typecheck` | exit 0 |
 | Lint/format check | `pnpm check` | exit 0 |

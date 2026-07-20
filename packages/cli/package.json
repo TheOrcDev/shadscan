@@ -1,17 +1,17 @@
 {
-  "name": "shadscan",
+  "name": "@shadscan/cli",
   "version": "0.1.0-rc.1",
   "description": "Audit React shadcn apps for missing UI fundamentals.",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/TheOrcDev/headless-shadcn#readme",
+  "homepage": "https://github.com/TheOrcDev/shadscan#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TheOrcDev/headless-shadcn.git",
+    "url": "git+https://github.com/TheOrcDev/shadscan.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/TheOrcDev/headless-shadcn/issues"
+    "url": "https://github.com/TheOrcDev/shadscan/issues"
   },
   "keywords": [
     "shadcn",
@@ -53,7 +53,7 @@
     "prepack": "pnpm build",
     "release:check": "node scripts/check-release.mjs",
     "smoke": "node scripts/smoke-package.mjs",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=2 --testTimeout=30000",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix"

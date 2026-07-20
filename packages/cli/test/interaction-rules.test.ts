@@ -331,6 +331,82 @@ describe("interaction rules", () => {
     }
   });
 
+  it("recognizes a named always-visible compact primary navigation row", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "components/site-header.tsx",
+        `
+          const links = [{ href: "/docs", label: "Docs" }, { href: "/scan", label: "Scan" }];
+          export function SiteHeader() {
+            return (
+              <nav aria-label="Primary" className="flex items-center gap-1">
+                {links.map((link) => <a href={link.href} key={link.href}>{link.label}</a>)}
+              </nav>
+            );
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "components/site-header.tsx",
+        `
+          export function SiteHeader() {
+            return (
+              <nav aria-label="Primary" className="flex items-center gap-1">
+                <a href="/one">One</a>
+                <a href="/two">Two</a>
+                <a href="/three">Three</a>
+                <a href="/four">Four</a>
+              </nav>
+            );
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "components/site-header.tsx",
+        `
+          export function SiteHeader({ links }) {
+            return (
+              <nav aria-label="Primary" className="flex items-center gap-1">
+                {links.map((link) => <a href={link.href} key={link.href}>{link.label}</a>)}
+              </nav>
+            );
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "components/site-header.tsx",
+        '<nav aria-label="Primary" className="hidden md:flex"><a href="/docs">Docs</a></nav>'
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "components/site-header.tsx",
+        '<nav aria-label="Utilities" className="flex"><a href="/docs">Docs</a></nav>'
+      );
+      expect(
+        (await runRule(fixture.rootDir, mobileNavPresentRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("recognizes a mounted responsive shadcn sidebar across app files", async () => {
     const fixture = await createRuleFixture();
 
@@ -520,6 +596,18 @@ describe("interaction rules", () => {
         `
           export function DialogContent({ className }) {
             return <DialogPrimitive.Popup className={cn("rounded-md outline-none", className)} />;
+          }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, focusVisibleNotSuppressedRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/button.tsx",
+        `
+          export function TabbableDialogContent({ className }) {
+            return <DialogPrimitive.Popup tabIndex={0} className={cn("rounded-md outline-none", className)} />;
           }
         `
       );

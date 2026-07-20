@@ -3,6 +3,8 @@ import {
   type Expression,
   forEachChild,
   isArrayBindingPattern,
+  isArrayLiteralExpression,
+  isAsExpression,
   isBindingElement,
   isCallExpression,
   isIdentifier,
@@ -11,12 +13,17 @@ import {
   isJsxExpression,
   isJsxSelfClosingElement,
   isJsxText,
+  isParenthesizedExpression,
   isPropertyAccessExpression,
+  isSatisfiesExpression,
+  isSpreadElement,
   isStringLiteral,
   isVariableDeclaration,
+  isVariableDeclarationList,
   type JsxElement,
   type JsxOpeningLikeElement,
   type Node,
+  NodeFlags,
   ScriptKind,
   ScriptTarget,
 } from "typescript";
@@ -61,6 +68,10 @@ const MENU_NAME_PATTERN = /(?:menu|navigation)/i;
 const INTERACTIVE_TRIGGER_PATTERN = /(?:Button|Trigger)$/;
 const DIRECT_MOBILE_LAYOUT_PATTERN =
   /(?:^|\s)(?:grid-cols-[1-4]|flex-wrap|overflow-x-(?:auto|scroll))(?:\s|$)/;
+const COMPACT_PRIMARY_MOBILE_LAYOUT_PATTERN =
+  /(?:^|\s)(?:flex|inline-flex)(?:\s|$)/;
+const PRIMARY_NAVIGATION_LABEL_PATTERN = /^(?:main|primary)$/i;
+const MAX_COMPACT_PRIMARY_LINKS = 3;
 const SHADCN_SIDEBAR_IMPORT_PATTERN =
   /from\s+["'][^"']*\/components\/ui\/sidebar["']/;
 const SHADCN_SIDEBAR_RUNTIME_FILE_PATTERN =
@@ -352,7 +363,164 @@ const hasPrimitiveMobileNavigation = (scopeContent: string): boolean =>
   MOBILE_TRIGGER_PATTERN.test(scopeContent) &&
   RESPONSIVE_PATTERN.test(scopeContent);
 
-const hasDirectMobileNavigation = (scopeContent: string): boolean => {
+const unwrapExpression = (expression: Expression): Expression => {
+  let unwrappedExpression = expression;
+
+  while (
+    isAsExpression(unwrappedExpression) ||
+    isParenthesizedExpression(unwrappedExpression) ||
+    isSatisfiesExpression(unwrappedExpression)
+  ) {
+    unwrappedExpression = unwrappedExpression.expression;
+  }
+
+  return unwrappedExpression;
+};
+
+const getStaticArrayLengths = (
+  fileContent: string
+): ReadonlyMap<string, number | null> => {
+  const sourceFile = createSourceFile(
+    "navigation-file.tsx",
+    fileContent,
+    ScriptTarget.Latest,
+    true,
+    ScriptKind.TSX
+  );
+  const arrayLengths = new Map<string, number | null>();
+
+  walkNodes(sourceFile, (node) => {
+    if (!isVariableDeclaration(node)) {
+      return;
+    }
+
+    if (!(isIdentifier(node.name) && node.initializer)) {
+      return;
+    }
+
+    if (!isVariableDeclarationList(node.parent)) {
+      return;
+    }
+
+    if (node.parent.flags !== NodeFlags.Const) {
+      return;
+    }
+
+    const initializer = unwrapExpression(node.initializer);
+
+    if (!isArrayLiteralExpression(initializer)) {
+      return;
+    }
+
+    const declarationName = node.name.text;
+    const staticLength = initializer.elements.some((element) =>
+      isSpreadElement(element)
+    )
+      ? null
+      : initializer.elements.length;
+
+    if (arrayLengths.has(declarationName)) {
+      arrayLengths.set(declarationName, null);
+      return;
+    }
+
+    arrayLengths.set(declarationName, staticLength);
+  });
+
+  return arrayLengths;
+};
+
+const getMappedCollectionLength = (
+  node: Node,
+  staticArrayLengths: ReadonlyMap<string, number | null>
+): number | null | undefined => {
+  if (
+    !(isCallExpression(node) && isPropertyAccessExpression(node.expression)) ||
+    node.expression.name.text !== "map"
+  ) {
+    return;
+  }
+
+  const collection = unwrapExpression(node.expression.expression);
+
+  if (isArrayLiteralExpression(collection)) {
+    return collection.elements.some((element) => isSpreadElement(element))
+      ? null
+      : collection.elements.length;
+  }
+
+  if (isIdentifier(collection)) {
+    return staticArrayLengths.get(collection.text) ?? null;
+  }
+
+  return null;
+};
+
+const getStaticLinkMultiplicity = (
+  ancestors: Node[],
+  staticArrayLengths: ReadonlyMap<string, number | null>
+): number | null => {
+  let multiplicity = 1;
+
+  for (const ancestor of ancestors) {
+    const collectionLength = getMappedCollectionLength(
+      ancestor,
+      staticArrayLengths
+    );
+
+    if (collectionLength === undefined) {
+      continue;
+    }
+
+    if (collectionLength === null) {
+      return null;
+    }
+
+    multiplicity *= collectionLength;
+  }
+
+  return multiplicity;
+};
+
+const getStaticRenderedLinkCount = (
+  element: JsxElement,
+  staticArrayLengths: ReadonlyMap<string, number | null>
+): number | null => {
+  let hasUnknownMultiplicity = false;
+  let linkCount = 0;
+
+  walkNodes(element, (node, ancestors) => {
+    if (!(isJsxElement(node) || isJsxSelfClosingElement(node))) {
+      return;
+    }
+
+    const openingElement = isJsxElement(node) ? node.openingElement : node;
+    const tagName = getJsxTagName(openingElement);
+
+    if (!(tagName && ACTIONABLE_LINK_TAGS.has(tagName))) {
+      return;
+    }
+
+    const multiplicity = getStaticLinkMultiplicity(
+      ancestors,
+      staticArrayLengths
+    );
+
+    if (multiplicity === null) {
+      hasUnknownMultiplicity = true;
+      return;
+    }
+
+    linkCount += multiplicity;
+  });
+
+  return hasUnknownMultiplicity ? null : linkCount;
+};
+
+const hasDirectMobileNavigation = (
+  scopeContent: string,
+  fileContent: string
+): boolean => {
   const sourceFile = createSourceFile(
     "navigation-scope.tsx",
     scopeContent,
@@ -360,6 +528,7 @@ const hasDirectMobileNavigation = (scopeContent: string): boolean => {
     true,
     ScriptKind.TSX
   );
+  const staticArrayLengths = getStaticArrayLengths(fileContent);
   let hasResponsiveNavigation = false;
 
   walkNodes(sourceFile, (node, ancestors) => {
@@ -372,10 +541,30 @@ const hasDirectMobileNavigation = (scopeContent: string): boolean => {
       className.kind === "static" && typeof className.value === "string"
         ? className.value
         : null;
+    const accessibleName = getJsxAttributeValue(
+      node.openingElement,
+      "aria-label"
+    );
+    const staticLinkCount = getStaticRenderedLinkCount(
+      node,
+      staticArrayLengths
+    );
+    const hasStaticallyBoundedCompactLinks =
+      staticLinkCount !== null &&
+      staticLinkCount > 0 &&
+      staticLinkCount <= MAX_COMPACT_PRIMARY_LINKS;
+    const hasNamedCompactPrimaryLayout =
+      classValue !== null &&
+      COMPACT_PRIMARY_MOBILE_LAYOUT_PATTERN.test(classValue) &&
+      accessibleName.kind === "static" &&
+      typeof accessibleName.value === "string" &&
+      PRIMARY_NAVIGATION_LABEL_PATTERN.test(accessibleName.value.trim()) &&
+      hasStaticallyBoundedCompactLinks;
 
     if (
       classValue &&
-      DIRECT_MOBILE_LAYOUT_PATTERN.test(classValue) &&
+      (DIRECT_MOBILE_LAYOUT_PATTERN.test(classValue) ||
+        hasNamedCompactPrimaryLayout) &&
       hasNavigationAndLink(node) &&
       getResponsiveVisibility(node.openingElement, ancestors).bands[0] ===
         "visible"
@@ -449,7 +638,7 @@ const mobileNavPresentRule: AuditRule = {
         );
       }
 
-      if (hasDirectMobileNavigation(scope.content)) {
+      if (hasDirectMobileNavigation(scope.content, scope.file.content)) {
         return pass(
           "Always-visible navigation links use an explicit small-screen layout.",
           scope.file.filePath,

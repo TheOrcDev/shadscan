@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 
-const SOURCE_CODE_GITHUB_REPO = "TheOrcDev/headless-shadcn";
+const SOURCE_CODE_GITHUB_REPO = "TheOrcDev/shadscan";
 const REVALIDATE_SECONDS = 86_400;
 
 const getGitHubStargazerCount = unstable_cache(

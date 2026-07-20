@@ -40,7 +40,7 @@ jobs:
       - name: Audit production dependencies
         run: pnpm audit:dependencies
       - name: Typecheck CLI
-        run: pnpm --filter shadscan typecheck
+        run: pnpm --filter ./packages/cli typecheck
       - name: Typecheck site and API
         run: pnpm typecheck
       - name: Test CLI

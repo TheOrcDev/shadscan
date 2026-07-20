@@ -547,12 +547,16 @@ const PROJECT_GATE_SCRIPT_NAMES = [
   "build",
 ] as const;
 const PACKAGE_EXECUTORS = {
-  bun: "bunx",
-  npm: "npx --yes",
-  pnpm: "pnpm dlx",
-  unknown: "npx --yes",
-  yarn: "yarn dlx",
-} as const satisfies Record<ProjectDiscovery["packageManager"], string>;
+  bun: (packageSpecifier: string) => `bunx ${packageSpecifier}`,
+  npm: (packageSpecifier: string) => `npx --yes ${packageSpecifier}`,
+  pnpm: (packageSpecifier: string) => `pnpm dlx ${packageSpecifier}`,
+  unknown: (packageSpecifier: string) => `npx --yes ${packageSpecifier}`,
+  yarn: (packageSpecifier: string) =>
+    `yarn dlx --package ${packageSpecifier} shadscan`,
+} as const satisfies Record<
+  ProjectDiscovery["packageManager"],
+  (packageSpecifier: string) => string
+>;
 const SCRIPT_RUNNERS = {
   bun: "bun run",
   npm: "npm run",
@@ -765,7 +769,8 @@ const getShadscanCommand = (
 ): string => {
   const executor = PACKAGE_EXECUTORS[project.packageManager];
   const categoryOption = category ? ` --category ${category}` : "";
-  return `${executor} shadscan@${ENGINE_VERSION} --json${categoryOption}`;
+  const packageSpecifier = `@shadscan/cli@${ENGINE_VERSION}`;
+  return `${executor(packageSpecifier)} --json${categoryOption}`;
 };
 
 const uniqueEvidence = (actionables: AgentActionable[]): AuditEvidence[] => {

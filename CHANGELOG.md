@@ -6,8 +6,22 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.1 - 2026-07-20
+
+### Added
+
+- Deterministic audits across 55 rules and six weighted categories.
+- Human, JSON, and paste-ready agent prompt output.
+- Project-path scanning for Next App Router, Vite React, and generic React apps.
+- Evidence-backed scoring, confidence, remediation, and agent actionables.
+- Optional score thresholds for CI.
+- Hosted scan API with authenticated GitHub and sanitized snapshot sources.
+- MIT licensing for the publishable CLI package.
+
 ### Changed
 
+- The public npm distribution now uses `@shadscan/cli` while preserving
+  `shadscan` as the installed executable and product name.
 - Adopted the shadscan scan-frame and shadcn-slash mark across the install
   screen, repository scanner, social preview, and browser icon.
 - Agent handoffs now group related findings into `fix`, `decide`, and `verify`
@@ -74,18 +88,6 @@ stable releases published under `latest`.
   `radix-ui` Toast export while continuing to reject placeholder toasters.
 - Theme shortcut and global hotkey checks now recognize verified local
   typing-target guard predicates instead of reporting safe shortcuts as missing.
-
-## 0.1.0-rc.1 - 2026-07-18
-
-### Added
-
-- Deterministic audits across 55 rules and six weighted categories.
-- Human, JSON, and paste-ready agent prompt output.
-- Project-path scanning for Next App Router, Vite React, and generic React apps.
-- Evidence-backed scoring, confidence, remediation, and agent actionables.
-- Optional score thresholds for CI.
-- Hosted scan API with authenticated GitHub and sanitized snapshot sources.
-- MIT licensing for the publishable CLI package.
 
 ### Security
 

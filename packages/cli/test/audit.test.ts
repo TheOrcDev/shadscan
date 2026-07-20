@@ -31,7 +31,9 @@ const writeFixtureFile = async (
   await writeFile(absolutePath, content);
 };
 
-const createReactFixture = async (): Promise<string> => {
+const createReactFixture = async (
+  packageManager: "bun" | "pnpm" | "yarn" = "pnpm"
+): Promise<string> => {
   const rootDir = await createFixture();
   await writeFixtureFile(
     rootDir,
@@ -51,7 +53,17 @@ const createReactFixture = async (): Promise<string> => {
       2
     )}\n`
   );
-  await writeFixtureFile(rootDir, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+  if (packageManager === "bun") {
+    await writeFixtureFile(rootDir, "bun.lockb", "");
+  } else if (packageManager === "yarn") {
+    await writeFixtureFile(rootDir, "yarn.lock", "");
+  } else {
+    await writeFixtureFile(
+      rootDir,
+      "pnpm-lock.yaml",
+      "lockfileVersion: '9.0'\n"
+    );
+  }
 
   return rootDir;
 };
@@ -245,7 +257,7 @@ describe("runAudit", () => {
     );
     expect(report.agentHandoff.verification).toEqual({
       projectGates: ["pnpm check", "pnpm build"],
-      shadscanCommand: `pnpm dlx shadscan@${ENGINE_VERSION} --json`,
+      shadscanCommand: `pnpm dlx @shadscan/cli@${ENGINE_VERSION} --json`,
     });
   });
 
@@ -308,6 +320,30 @@ describe("runAudit", () => {
     );
     expect(report.agentHandoff.goal).toContain(
       "making explicit product decisions"
+    );
+  });
+
+  it("names the executable when generating a Bun verification command", async () => {
+    const rootDir = await createReactFixture("bun");
+
+    const report = await runAudit(rootDir, {
+      rules: [createRule({ id: "passing-rule" })],
+    });
+
+    expect(report.agentHandoff.verification.shadscanCommand).toBe(
+      `bunx @shadscan/cli@${ENGINE_VERSION} --json`
+    );
+  });
+
+  it("names the executable when generating a Yarn verification command", async () => {
+    const rootDir = await createReactFixture("yarn");
+
+    const report = await runAudit(rootDir, {
+      rules: [createRule({ id: "passing-rule" })],
+    });
+
+    expect(report.agentHandoff.verification.shadscanCommand).toBe(
+      `yarn dlx --package @shadscan/cli@${ENGINE_VERSION} shadscan --json`
     );
   });
 

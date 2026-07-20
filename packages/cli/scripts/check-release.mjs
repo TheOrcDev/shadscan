@@ -3,9 +3,9 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PACKAGE_NAME = "shadscan";
+const PACKAGE_NAME = "@shadscan/cli";
 const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
-const REPOSITORY_URL = "git+https://github.com/TheOrcDev/headless-shadcn.git";
+const REPOSITORY_URL = "git+https://github.com/TheOrcDev/shadscan.git";
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const UNPUBLISHED_COPY_PATTERN = /not published yet/i;

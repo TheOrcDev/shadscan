@@ -48,7 +48,7 @@ definitions and evaluate common Input/Textarea usage, including shadcn
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| Focused tests | `pnpm --filter shadscan exec vitest run test/accessibility-rules.test.ts` | exit 0 |
+| Focused tests | `pnpm --filter ./packages/cli exec vitest run test/accessibility-rules.test.ts` | exit 0 |
 | Full CLI tests | `pnpm cli:test` | all tests pass |
 | Typecheck | `pnpm typecheck` | exit 0 |
 | Lint/format check | `pnpm check` | exit 0 |

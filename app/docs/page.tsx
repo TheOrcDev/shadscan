@@ -139,7 +139,7 @@ export default function DocsPage() {
           </p>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
-              bun="bunx --bun --package=@shadscan/cli@next shadscan --json"
+              bun="bunx --bun @shadscan/cli@next --json"
               npm="npx --yes @shadscan/cli@next --json"
               pnpm="pnpm dlx @shadscan/cli@next --json"
               yarn="yarn dlx --package @shadscan/cli@next shadscan --json"

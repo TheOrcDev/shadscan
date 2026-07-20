@@ -14,7 +14,7 @@ export default function Page() {
           />
           <div className="w-full">
             <CodeBlockCommand
-              bun="bunx --package=@shadscan/cli@next shadscan"
+              bun="bunx @shadscan/cli@next"
               npm="npx @shadscan/cli@next"
               pnpm="pnpm dlx @shadscan/cli@next"
               yarn="yarn dlx --package @shadscan/cli@next shadscan"

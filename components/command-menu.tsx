@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/command";
 
 const SOURCE_COMMAND = "node packages/cli/dist/cli.js /path/to/app";
-const REPOSITORY_URL = "https://github.com/TheOrcDev/headless-shadcn";
+const REPOSITORY_URL = "https://github.com/TheOrcDev/shadscan";
 
 function CommandMenu() {
   const [open, setOpen] = useState(false);

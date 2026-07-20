@@ -170,6 +170,50 @@ const writePassingNextApp = async (rootDir: string): Promise<void> => {
   );
 };
 
+const writeExtractedThemeHotkey = async (
+  rootDir: string,
+  helperBody: string
+): Promise<void> => {
+  await writeFixtureFile(
+    rootDir,
+    "lib/theme-toggle.ts",
+    `
+      export function toggleThemeWithTransition({ resolvedTheme, setTheme }) {
+        ${helperBody}
+      }
+    `
+  );
+  await writeFixtureFile(
+    rootDir,
+    "components/theme-provider.tsx",
+    `
+      "use client";
+      import { useEffect } from "react";
+      import { useTheme } from "next-themes";
+      import { toggleThemeWithTransition } from "@/lib/theme-toggle";
+
+      function isTypingTarget(target: EventTarget | null) {
+        if (!(target instanceof HTMLElement)) return false;
+        return target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+      }
+
+      export function ThemeHotkey() {
+        const { resolvedTheme, setTheme } = useTheme();
+        useEffect(() => {
+          function onKeyDown(event: KeyboardEvent) {
+            if (event.key.toLowerCase() !== "d") return;
+            if (isTypingTarget(event.target)) return;
+            toggleThemeWithTransition({ resolvedTheme, setTheme });
+          }
+          window.addEventListener("keydown", onKeyDown);
+          return () => window.removeEventListener("keydown", onKeyDown);
+        }, [resolvedTheme, setTheme]);
+        return null;
+      }
+    `
+  );
+};
+
 afterEach(async () => {
   for (const tempDir of tempDirs.splice(0)) {
     await rm(tempDir, { force: true, recursive: true });
@@ -232,6 +276,43 @@ describe("high confidence rules", () => {
       report.findings.find((finding) => finding.id === "theme-hotkey-present")
         ?.status
     ).toBe("pass");
+  });
+
+  it("recognizes a theme hotkey that calls an extracted toggle helper", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir);
+    await writeComponentsJson(rootDir);
+    await writeAliasTsconfig(rootDir);
+    await writeExtractedThemeHotkey(
+      rootDir,
+      'setTheme(resolvedTheme === "dark" ? "light" : "dark");'
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "theme-hotkey-present")
+        ?.status
+    ).toBe("pass");
+  });
+
+  it("rejects a no-op extracted theme toggle helper", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir);
+    await writeComponentsJson(rootDir);
+    await writeAliasTsconfig(rootDir);
+    await writeExtractedThemeHotkey(rootDir, "return resolvedTheme;");
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "theme-hotkey-present")
+        ?.status
+    ).toBe("fail");
   });
 
   it("reports missing Next fundamentals with evidence and remediation", async () => {
