@@ -10,6 +10,7 @@ const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const UNPUBLISHED_COPY_PATTERN = /not published yet/i;
 const FORBIDDEN_LIFECYCLE_SCRIPTS = ["install", "postinstall", "preinstall"];
+const COMMANDER_RUNTIME_IMPORT_PATTERN = /^import .* from ["']commander["'];$/m;
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packageDirectory = path.resolve(scriptDirectory, "..");
@@ -79,6 +80,12 @@ const main = async () => {
     );
   }
 
+  assert.equal(
+    manifest.dependencies?.commander,
+    undefined,
+    "Commander must stay bundled instead of becoming a consumer dependency."
+  );
+
   for (const [dependencyName, dependencyVersion] of Object.entries(
     manifest.dependencies ?? {}
   )) {
@@ -131,6 +138,11 @@ const main = async () => {
   assert.ok(
     cliSource.startsWith("#!/usr/bin/env node\n"),
     "The packaged CLI must start with the Node.js shebang."
+  );
+  assert.doesNotMatch(
+    cliSource,
+    COMMANDER_RUNTIME_IMPORT_PATTERN,
+    "The packaged CLI must not import Commander at runtime."
   );
 
   process.stdout.write(

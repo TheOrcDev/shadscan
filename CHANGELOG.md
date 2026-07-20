@@ -6,6 +6,17 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.2 - 2026-07-20
+
+### Fixed
+
+- Bundled the CLI argument parser so clean consumer installs no longer depend
+  on Commander's expired historical npm registry signing key while preserving
+  Node 18 support.
+- Kept Yarn's JSON command machine-readable with quiet dependency resolution
+  and standardized Bun examples on the package's Node shebang.
+- Corrected the downloadable agent skill to use the published scoped package.
+
 ## 0.1.0-rc.1 - 2026-07-20
 
 ### Added

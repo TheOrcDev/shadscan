@@ -95,7 +95,10 @@ test("renders the aligned square-ended mark across product surfaces", async ({
   expect(slashCenterOffsets).toEqual([0, 0]);
 
   await page.goto("/scan");
-  const brandLink = page.getByRole("link", { name: "shadscan" });
+  const brandLink = page.getByRole("link", {
+    name: "shadscan",
+    exact: true,
+  });
   await expect(brandLink).toBeVisible();
   await expect(brandLink.locator("svg")).toBeVisible();
 });

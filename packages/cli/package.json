@@ -1,6 +1,6 @@
 {
   "name": "@shadscan/cli",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Audit React shadcn apps for missing UI fundamentals.",
   "license": "MIT",
   "type": "module",
@@ -59,7 +59,6 @@
     "fix": "ultracite fix"
   },
   "dependencies": {
-    "commander": "13.1.0",
     "jsonc-parser": "3.3.1",
     "picocolors": "1.1.1",
     "tinyglobby": "0.2.15",
@@ -68,6 +67,7 @@
   },
   "devDependencies": {
     "@types/node": "20.19.25",
+    "commander": "13.1.0",
     "execa": "9.6.1",
     "tsup": "8.5.1",
     "tsx": "4.21.0",

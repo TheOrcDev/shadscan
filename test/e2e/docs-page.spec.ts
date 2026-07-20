@@ -34,6 +34,16 @@ test("documents the agent-only commit workflow", async ({ page }) => {
     page.getByText("The skill changes agent behavior only.", { exact: false })
   ).toBeVisible();
 
+  const protocol = page.locator("#protocol");
+  await protocol.getByRole("tab", { name: "bun", exact: true }).click();
+  await expect(protocol.locator('[data-slot="code-block"]')).toContainText(
+    "bunx @shadscan/cli@next --json"
+  );
+  await protocol.getByRole("tab", { name: "yarn", exact: true }).click();
+  await expect(protocol.locator('[data-slot="code-block"]')).toContainText(
+    "yarn dlx --quiet --package @shadscan/cli@next shadscan --json"
+  );
+
   const results = await new AxeBuilder({ page }).analyze();
   const severeViolations = results.violations.filter(
     ({ impact }) => impact === "serious" || impact === "critical"

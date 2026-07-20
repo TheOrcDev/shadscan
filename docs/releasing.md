@@ -43,7 +43,7 @@ pnpm audit:dependencies
 pnpm audit:self
 pnpm build
 pnpm cli:smoke
-pnpm cli:release:check -- --tag next --git-tag v0.1.0-rc.1
+pnpm cli:release:check -- --tag next --git-tag v0.1.0-rc.2
 ```
 
 For a stable release, replace `next` with `latest` and supply the matching
@@ -70,6 +70,14 @@ packed artifact.
    clean temporary Next, Vite, and generic React projects.
 
 Do not move `latest` during release-candidate testing.
+
+After approving a release candidate, inspect the complete tag map with
+`npm view @shadscan/cli dist-tags --json`. If npm assigns the first public
+version to `latest` as well as `next`, remove only the accidental stable tag:
+
+```bash
+npm dist-tag rm @shadscan/cli latest
+```
 
 ## Trusted Publishing
 
