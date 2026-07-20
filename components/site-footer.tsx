@@ -15,6 +15,15 @@ function SiteFooter() {
             OrcDev
           </a>{" "}
           with <span aria-hidden="true">🪓</span>
+          <span aria-hidden="true" className="px-1.5">
+            ·
+          </span>
+          <a
+            className="underline underline-offset-4"
+            href="mailto:orc@orcdev.com"
+          >
+            orc@orcdev.com
+          </a>
         </p>
         <nav aria-label="Legal" className="flex items-center gap-4 text-sm">
           <Link
