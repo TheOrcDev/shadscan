@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import type { AuditReport } from "shadscan";
+import type { AuditReport } from "@shadscan/cli";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { maxDuration, POST } from "../../app/v1/scans/route";
 import { hashApiKey } from "../../lib/shadscan-api/auth";

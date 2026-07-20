@@ -4,7 +4,7 @@ import {
   ProjectDiscoveryError,
   renderAgentPrompt,
   scanProject,
-} from "shadscan";
+} from "@shadscan/cli";
 import {
   type HostedScanResponse,
   HostedScanResponseSchema,

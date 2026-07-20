@@ -3,7 +3,7 @@ import {
   AuditReportSchema,
   AGENT_PROMPT_VERSION as SCANNER_PROMPT_VERSION,
   AUDIT_REPORT_SCHEMA_VERSION as SCANNER_REPORT_SCHEMA_VERSION,
-} from "shadscan";
+} from "@shadscan/cli";
 import { z } from "zod";
 import {
   PUBLIC_CONTRACT_VERSIONS as CONTRACT_VERSIONS,
