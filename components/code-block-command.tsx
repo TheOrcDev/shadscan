@@ -68,7 +68,7 @@ export function CodeBlockCommand({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-code">
+    <div className="relative overflow-hidden rounded-none bg-code">
       <Tabs
         className="gap-0"
         onValueChange={(value) => {
@@ -93,7 +93,7 @@ export function CodeBlockCommand({
 
             {tabsFiltered.map(([key]) => (
               <TabsTrigger
-                className="h-7 rounded-lg p-0 px-2 font-mono"
+                className="h-7 rounded-none p-0 px-2 font-mono"
                 key={key}
                 value={key}
               >
@@ -127,7 +127,7 @@ export function CodeBlockCommand({
       </Tabs>
 
       <CopyButton
-        className="absolute top-2 right-2 z-10 size-6 rounded-md border-none [&_svg:not([class*='size-'])]:size-3.5"
+        className="absolute top-2 right-2 z-10 size-6 rounded-none border-none [&_svg:not([class*='size-'])]:size-3.5"
         onCopyError={onCopyError}
         onCopySuccess={(copiedCommand) => {
           onCopySuccess?.({
