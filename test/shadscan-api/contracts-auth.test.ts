@@ -4,6 +4,7 @@ import {
   AUDIT_REPORT_SCHEMA_VERSION,
 } from "@shadscan/cli";
 import { describe, expect, it, vi } from "vitest";
+import type { DatabaseRateLimitRule } from "../../lib/rate-limit/database";
 import {
   authenticateApiRequest,
   hashApiKey,
@@ -21,6 +22,7 @@ import {
   PUBLIC_CONTRACT_VERSIONS,
 } from "../../lib/shadscan-api/protocol";
 import {
+  checkDatabaseRateLimit,
   enforceRateLimit,
   getRateLimitHeaders,
 } from "../../lib/shadscan-api/rate-limit";
@@ -35,6 +37,7 @@ const OPENAPI_GITHUB_REVISION_PATTERN = new RegExp(
 const OPENAPI_SUBDIRECTORY_PATTERN = new RegExp(
   OPENAPI_DOCUMENT.components.schemas.PortableSubdirectory.pattern
 );
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 const createAuthenticatedRequest = (authorization?: string): Request =>
   new Request("https://shadscan.dev/v1/scans", {
@@ -42,10 +45,7 @@ const createAuthenticatedRequest = (authorization?: string): Request =>
   });
 
 const restoreEnvironmentValue = (
-  name:
-    | "SHADSCAN_RATE_LIMIT_MODE"
-    | "UPSTASH_REDIS_REST_TOKEN"
-    | "UPSTASH_REDIS_REST_URL",
+  name: "DATABASE_URL" | "SHADSCAN_RATE_LIMIT_MODE",
   value: string | undefined
 ): void => {
   if (value === undefined) {
@@ -254,18 +254,43 @@ describe("hosted API production limiting", () => {
     ).toMatchObject({ "RateLimit-Reset": "0" });
   });
 
+  it("maps hosted limits to one hashed API-key identity", async () => {
+    const consume = vi.fn((rules: readonly DatabaseRateLimitRule[]) =>
+      Promise.resolve(
+        rules.map((rule) => ({
+          allowed: true,
+          limit: rule.maxRequests,
+          name: rule.name,
+          remaining: rule.maxRequests - 1,
+          resetAt: 90_000_000,
+        }))
+      )
+    );
+
+    await expect(
+      checkDatabaseRateLimit("beta", 1000, consume)
+    ).resolves.toEqual({
+      limit: 10,
+      remaining: 9,
+      resetAt: 90_000_000,
+    });
+
+    const rules = consume.mock.calls[0][0];
+    expect(rules.map((rule) => rule.name)).toEqual(["minute", "daily"]);
+    expect(rules[0].identityHash).toMatch(SHA256_HEX_PATTERN);
+    expect(rules[0].identityHash).toBe(rules[1].identityHash);
+  });
+
   it("cannot enable the process-local limiter in production", async () => {
     const originalEnvironment = {
+      databaseUrl: process.env.DATABASE_URL,
       rateLimitMode: process.env.SHADSCAN_RATE_LIMIT_MODE,
-      redisToken: process.env.UPSTASH_REDIS_REST_TOKEN,
-      redisUrl: process.env.UPSTASH_REDIS_REST_URL,
     };
 
     try {
       vi.stubEnv("NODE_ENV", "production");
       process.env.SHADSCAN_RATE_LIMIT_MODE = "memory";
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
-      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.DATABASE_URL;
 
       await expect(enforceRateLimit("production-key")).rejects.toMatchObject({
         code: "RATE_LIMIT_NOT_CONFIGURED",
@@ -277,14 +302,7 @@ describe("hosted API production limiting", () => {
         "SHADSCAN_RATE_LIMIT_MODE",
         originalEnvironment.rateLimitMode
       );
-      restoreEnvironmentValue(
-        "UPSTASH_REDIS_REST_TOKEN",
-        originalEnvironment.redisToken
-      );
-      restoreEnvironmentValue(
-        "UPSTASH_REDIS_REST_URL",
-        originalEnvironment.redisUrl
-      );
+      restoreEnvironmentValue("DATABASE_URL", originalEnvironment.databaseUrl);
     }
   });
 });

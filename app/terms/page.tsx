@@ -163,10 +163,10 @@ export default function TermsPage() {
         <section>
           <h2>Third-party services</h2>
           <p>
-            Shadscan relies on services such as GitHub, Vercel, Upstash, and
-            npm. Your use of those services may be subject to their own terms
-            and policies. We are not responsible for third-party services or
-            content outside our control.
+            Shadscan relies on services such as GitHub, Vercel, Neon, and npm.
+            Your use of those services may be subject to their own terms and
+            policies. We are not responsible for third-party services or content
+            outside our control.
           </p>
         </section>
 

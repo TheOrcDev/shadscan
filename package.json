@@ -1,15 +1,15 @@
 {
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@neondatabase/serverless": "^1.1.0",
     "@phosphor-icons/react": "^2.1.10",
     "@rexa-developer/tiks": "^0.3.0",
     "@shadscan/cli": "workspace:*",
-    "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "drizzle-orm": "^0.45.2",
     "jotai": "^2.20.2",
     "motion": "^12.42.2",
     "next": "16.2.10",
@@ -27,12 +27,14 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@biomejs/biome": "2.4.16",
+    "@next/env": "16.2.10",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/tar-stream": "^3.1.4",
+    "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4",
     "typescript": "^5",
     "ultracite": "7.8.3",
@@ -48,7 +50,10 @@
       "brace-expansion": "5.0.7",
       "js-yaml": "4.3.0",
       "next>postcss": "8.5.15"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "scripts": {
     "predev": "pnpm cli:build",
@@ -75,6 +80,10 @@
     "pretest:e2e": "pnpm cli:build",
     "test:e2e": "playwright test",
     "api:keygen": "node scripts/generate-api-key.mjs",
+    "db:check": "drizzle-kit check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:verify": "node scripts/verify-rate-limit-database.mjs",
     "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js --fail-under 100",
     "audit:dependencies": "pnpm audit --prod --audit-level moderate",
     "verify:trace": "node scripts/verify-production-trace.mjs",

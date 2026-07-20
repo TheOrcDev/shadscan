@@ -1,6 +1,8 @@
-import { createHash, createHmac } from "node:crypto";
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { createHmac } from "node:crypto";
+import {
+  consumeDatabaseRateLimits,
+  hashRateLimitIdentity,
+} from "../rate-limit/database";
 import { WebScanServiceError } from "./errors";
 
 const DEVELOPMENT_RATE_LIMIT_SALT = "shadscan-web-development-rate-limit-salt";
@@ -8,19 +10,19 @@ const MINIMUM_PRODUCTION_SALT_LENGTH = 32;
 
 const WEB_RATE_LIMITS = {
   clientDaily: {
-    duration: "1 d",
+    bucket: "web-client-daily",
     limit: 20,
     scope: "client",
     windowMs: 86_400_000,
   },
   clientShort: {
-    duration: "10 m",
+    bucket: "web-client-short",
     limit: 3,
     scope: "client",
     windowMs: 600_000,
   },
   repositoryDaily: {
-    duration: "1 d",
+    bucket: "web-repository-daily",
     limit: 10,
     scope: "repository",
     windowMs: 86_400_000,
@@ -47,11 +49,7 @@ interface MemoryWindowState {
   startedAt: number;
 }
 
-type RedisRateLimiters = Record<WebRateLimitName, Ratelimit>;
-
 const memoryWindows = new Map<string, MemoryWindowState>();
-let cachedRedisLimiters: RedisRateLimiters | null = null;
-let cachedRedisSignature: string | null = null;
 
 const getClientRateLimitKey = (
   clientAddress: string,
@@ -150,80 +148,38 @@ const checkMemoryWebRateLimit = (
   return decisions;
 };
 
-const getRedisRateLimiters = (): RedisRateLimiters => {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!(url && token)) {
-    throw new WebScanServiceError(
-      "The web scanner is temporarily unavailable. Try again shortly.",
-      { code: "SERVICE_NOT_CONFIGURED", retryable: true }
-    );
-  }
-
-  const signature = createHash("sha256")
-    .update(`${url}\0${token}`, "utf8")
-    .digest("hex");
-  if (cachedRedisLimiters && cachedRedisSignature === signature) {
-    return cachedRedisLimiters;
-  }
-
-  const redis = new Redis({ token, url });
-  cachedRedisLimiters = {
-    clientDaily: new Ratelimit({
-      analytics: false,
-      limiter: Ratelimit.slidingWindow(
-        WEB_RATE_LIMITS.clientDaily.limit,
-        WEB_RATE_LIMITS.clientDaily.duration
-      ),
-      prefix: "shadscan:web:client:daily",
-      redis,
-    }),
-    clientShort: new Ratelimit({
-      analytics: false,
-      limiter: Ratelimit.slidingWindow(
-        WEB_RATE_LIMITS.clientShort.limit,
-        WEB_RATE_LIMITS.clientShort.duration
-      ),
-      prefix: "shadscan:web:client:short",
-      redis,
-    }),
-    repositoryDaily: new Ratelimit({
-      analytics: false,
-      limiter: Ratelimit.slidingWindow(
-        WEB_RATE_LIMITS.repositoryDaily.limit,
-        WEB_RATE_LIMITS.repositoryDaily.duration
-      ),
-      prefix: "shadscan:web:repository:daily",
-      redis,
-    }),
-  };
-  cachedRedisSignature = signature;
-  return cachedRedisLimiters;
-};
-
-const checkRedisWebRateLimit = async (
+const checkDatabaseWebRateLimit = async (
   input: WebRateLimitInput,
-  now = Date.now()
+  now = Date.now(),
+  consume: typeof consumeDatabaseRateLimits = consumeDatabaseRateLimits
 ): Promise<WebRateLimitDecision[]> => {
   try {
     const clientKey = getClientRateLimitKey(input.clientAddress);
-    const limiters = getRedisRateLimiters();
+    const repositoryKey = hashRateLimitIdentity(
+      "web-repository",
+      input.repositoryKey
+    );
     const names = Object.keys(WEB_RATE_LIMITS) as WebRateLimitName[];
-    const results = await Promise.all(
-      names.map((name) =>
-        limiters[name].limit(
-          getLimitIdentity(name, clientKey, input.repositoryKey)
-        )
-      )
+    const results = await consume(
+      names.map((name) => {
+        const rule = WEB_RATE_LIMITS[name];
+        return {
+          bucket: rule.bucket,
+          identityHash: getLimitIdentity(name, clientKey, repositoryKey),
+          maxRequests: rule.limit,
+          name,
+          windowMs: rule.windowMs,
+        };
+      })
     );
     const decisions = results.map((result, index) => ({
       limit: result.limit,
       name: names[index],
       remaining: result.remaining,
-      resetAt: result.reset,
+      resetAt: result.resetAt,
     }));
     const failedDecision = decisions
-      .filter((_decision, index) => !results[index].success)
+      .filter((_decision, index) => !results[index].allowed)
       .sort((left, right) => right.resetAt - left.resetAt)[0];
     if (failedDecision) {
       return throwWebRateLimitError(failedDecision, now);
@@ -251,10 +207,10 @@ const enforceWebScanRateLimit = (
 ): Promise<WebRateLimitDecision[]> => {
   const configuredMode = process.env.SHADSCAN_WEB_RATE_LIMIT_MODE;
   const useMemory =
-    process.env.NODE_ENV !== "production" && configuredMode !== "redis";
+    process.env.NODE_ENV !== "production" && configuredMode !== "database";
   return useMemory
     ? Promise.resolve(checkMemoryWebRateLimit(input))
-    : checkRedisWebRateLimit(input);
+    : checkDatabaseWebRateLimit(input);
 };
 
 const resetMemoryWebRateLimits = (): void => {
@@ -263,6 +219,7 @@ const resetMemoryWebRateLimits = (): void => {
 
 export type { WebRateLimitDecision, WebRateLimitInput, WebRateLimitName };
 export {
+  checkDatabaseWebRateLimit,
   checkMemoryWebRateLimit,
   enforceWebScanRateLimit,
   getClientRateLimitKey,

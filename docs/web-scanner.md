@@ -11,28 +11,43 @@ Configure these variables on every production deployment:
 
 | Variable | Requirement |
 | --- | --- |
+| `DATABASE_URL` | Server-only Neon Postgres connection used for distributed web and hosted-API limits. |
 | `SHADSCAN_WEB_RATE_LIMIT_SALT` | Secret random value of at least 32 characters. It HMACs client addresses before rate-limit storage and must not be exposed through `NEXT_PUBLIC_*`. |
-| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST endpoint for distributed web and hosted-API limits. |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token paired with the endpoint. |
 
 Optional server-only variables:
 
 | Variable | Purpose |
 | --- | --- |
+| `DATABASE_MIGRATION_URL` | Optional owner connection used by Drizzle migrations. `db:migrate` falls back to `DATABASE_URL`. |
 | `GITHUB_TOKEN` | Raises GitHub metadata limits. Public repositories remain the only web-supported source, and authorization is not forwarded to `codeload.github.com`. |
-| `SHADSCAN_WEB_RATE_LIMIT_MODE=redis` | Exercises the production web limiter outside `NODE_ENV=production`. |
-| `SHADSCAN_RATE_LIMIT_MODE=redis` | Exercises the authenticated `/v1/scans` limiter outside production. |
+| `SHADSCAN_WEB_RATE_LIMIT_MODE=database` | Exercises the production web limiter outside `NODE_ENV=production`. |
+| `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the authenticated `/v1/scans` limiter outside production. |
 | `SHADSCAN_API_KEY_HASHES` | Required for `/v1/scans`, but not used by the public Server Action. |
 
 Generate a deployment salt with a secret manager or a cryptographically secure
 command such as `openssl rand -base64 48`. Rotate it deliberately: changing the
 salt changes every client rate-limit identity.
 
-Production fails closed when the salt, Redis URL, or Redis token is missing or
-when Redis is unavailable. Development uses an in-memory limiter and a fixed
-development salt unless Redis mode is explicitly enabled. The public limits are
+Production fails closed when the salt or database connection is missing or when
+Postgres is unavailable. Development uses an in-memory limiter and a fixed
+development salt unless database mode is explicitly enabled. The public limits are
 three scans per client per 10 minutes, 20 per client per day, and 10 per
 repository per day.
+
+The Drizzle migrations create a bounded sliding-window counter table and its
+atomic consumption function. Apply and verify them before deploying code that
+uses the database:
+
+```bash
+pnpm db:check
+pnpm db:migrate
+pnpm db:verify
+```
+
+Runtime identities are SHA-256 or HMAC-SHA-256 digests. Raw client addresses,
+repository names, API keys, source archives, and scan reports are not stored in
+the rate-limit table. Expired windows are removed in bounded batches during
+normal traffic.
 
 ## Runtime Boundaries
 

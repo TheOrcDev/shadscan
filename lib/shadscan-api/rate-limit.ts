@@ -1,6 +1,8 @@
-import { createHash } from "node:crypto";
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import {
+  consumeDatabaseRateLimits,
+  DatabaseRateLimitError,
+  hashRateLimitIdentity,
+} from "../rate-limit/database";
 import { HostedScanError } from "./errors";
 
 const MINUTE_LIMIT = 10;
@@ -24,14 +26,7 @@ interface MemoryKeyState {
   minute: FixedWindowState;
 }
 
-interface RedisRateLimiters {
-  daily: Ratelimit;
-  minute: Ratelimit;
-}
-
 const memoryStates = new Map<string, MemoryKeyState>();
-let cachedRedisLimiters: RedisRateLimiters | null = null;
-let cachedRedisSignature: string | null = null;
 
 const createWindowState = (now: number): FixedWindowState => ({
   count: 0,
@@ -119,70 +114,47 @@ const checkMemoryRateLimit = (
   return minuteDecision;
 };
 
-const getRedisRateLimiters = (): RedisRateLimiters => {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!(url && token)) {
-    throw new HostedScanError("Distributed rate limiting is not configured.", {
-      code: "RATE_LIMIT_NOT_CONFIGURED",
-      status: 503,
-    });
-  }
-
-  const signature = createHash("sha256")
-    .update(`${url}\0${token}`, "utf8")
-    .digest("hex");
-  if (cachedRedisLimiters && cachedRedisSignature === signature) {
-    return cachedRedisLimiters;
-  }
-
-  const redis = new Redis({ token, url });
-  cachedRedisLimiters = {
-    daily: new Ratelimit({
-      analytics: false,
-      limiter: Ratelimit.slidingWindow(DAILY_LIMIT, "1 d"),
-      prefix: "shadscan:daily",
-      redis,
-    }),
-    minute: new Ratelimit({
-      analytics: false,
-      limiter: Ratelimit.slidingWindow(MINUTE_LIMIT, "1 m"),
-      prefix: "shadscan:minute",
-      redis,
-    }),
-  };
-  cachedRedisSignature = signature;
-  return cachedRedisLimiters;
-};
-
-const checkRedisRateLimit = async (
+const checkDatabaseRateLimit = async (
   keyId: string,
-  now = Date.now()
+  now = Date.now(),
+  consume: typeof consumeDatabaseRateLimits = consumeDatabaseRateLimits
 ): Promise<RateLimitDecision> => {
   try {
-    const limiters = getRedisRateLimiters();
-    const [minute, daily] = await Promise.all([
-      limiters.minute.limit(keyId),
-      limiters.daily.limit(keyId),
+    const identityHash = hashRateLimitIdentity("api-key", keyId);
+    const [minute, daily] = await consume([
+      {
+        bucket: "api-key-minute",
+        identityHash,
+        maxRequests: MINUTE_LIMIT,
+        name: "minute",
+        windowMs: MINUTE_MS,
+      },
+      {
+        bucket: "api-key-daily",
+        identityHash,
+        maxRequests: DAILY_LIMIT,
+        name: "daily",
+        windowMs: DAY_MS,
+      },
     ]);
 
-    if (!minute.success) {
+    if (!minute.allowed) {
       throwRateLimitError(
         {
           limit: minute.limit,
           remaining: minute.remaining,
-          resetAt: minute.reset,
+          resetAt: minute.resetAt,
         },
         now
       );
     }
 
-    if (!daily.success) {
+    if (!daily.allowed) {
       throwRateLimitError(
         {
           limit: daily.limit,
           remaining: daily.remaining,
-          resetAt: daily.reset,
+          resetAt: daily.resetAt,
         },
         now
       );
@@ -191,11 +163,25 @@ const checkRedisRateLimit = async (
     return {
       limit: minute.limit,
       remaining: minute.remaining,
-      resetAt: minute.reset,
+      resetAt: minute.resetAt,
     };
   } catch (error) {
     if (error instanceof HostedScanError) {
       throw error;
+    }
+
+    if (
+      error instanceof DatabaseRateLimitError &&
+      error.code === "NOT_CONFIGURED"
+    ) {
+      throw new HostedScanError(
+        "Distributed rate limiting is not configured.",
+        {
+          cause: error,
+          code: "RATE_LIMIT_NOT_CONFIGURED",
+          status: 503,
+        }
+      );
     }
 
     throw new HostedScanError("The rate limiter is temporarily unavailable.", {
@@ -210,13 +196,13 @@ const checkRedisRateLimit = async (
 const enforceRateLimit = (keyId: string): Promise<RateLimitDecision> => {
   const configuredMode = process.env.SHADSCAN_RATE_LIMIT_MODE;
   const useMemory =
-    process.env.NODE_ENV !== "production" && configuredMode !== "redis";
+    process.env.NODE_ENV !== "production" && configuredMode !== "database";
 
   if (useMemory) {
     return Promise.resolve(checkMemoryRateLimit(keyId));
   }
 
-  return checkRedisRateLimit(keyId);
+  return checkDatabaseRateLimit(keyId);
 };
 
 const resetMemoryRateLimits = (): void => {
@@ -225,6 +211,7 @@ const resetMemoryRateLimits = (): void => {
 
 export type { RateLimitDecision };
 export {
+  checkDatabaseRateLimit,
   checkMemoryRateLimit,
   enforceRateLimit,
   getRateLimitHeaders,

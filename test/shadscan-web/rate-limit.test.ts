@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DatabaseRateLimitRule } from "../../lib/rate-limit/database";
 import {
+  checkDatabaseWebRateLimit,
   checkMemoryWebRateLimit,
   enforceWebScanRateLimit,
   getClientRateLimitKey,
@@ -45,9 +47,8 @@ describe("web scan rate limits", () => {
 
   it("fails closed through the production limiter when configuration is absent", async () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DATABASE_URL", "");
     vi.stubEnv("SHADSCAN_WEB_RATE_LIMIT_SALT", "");
-    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
-    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
 
     await expect(
       enforceWebScanRateLimit({
@@ -59,9 +60,8 @@ describe("web scan rate limits", () => {
 
   it("uses predictable in-memory limits in development", async () => {
     vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("DATABASE_URL", "");
     vi.stubEnv("SHADSCAN_WEB_RATE_LIMIT_MODE", "");
-    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
-    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
 
     await expect(
       enforceWebScanRateLimit({
@@ -69,6 +69,45 @@ describe("web scan rate limits", () => {
         repositoryKey: "acme/widget",
       })
     ).resolves.toHaveLength(3);
+  });
+
+  it("maps public limits to hashed database rules", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SHADSCAN_WEB_RATE_LIMIT_SALT", TEST_SALT);
+    const consume = vi.fn((rules: readonly DatabaseRateLimitRule[]) =>
+      Promise.resolve(
+        rules.map((rule) => ({
+          allowed: true,
+          limit: rule.maxRequests,
+          name: rule.name,
+          remaining: rule.maxRequests - 1,
+          resetAt: 90_000_000,
+        }))
+      )
+    );
+
+    await expect(
+      checkDatabaseWebRateLimit(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryKey: "acme/widget",
+        },
+        1000,
+        consume
+      )
+    ).resolves.toHaveLength(3);
+
+    const rules = consume.mock.calls[0][0];
+    expect(rules.map((rule) => rule.name)).toEqual([
+      "clientDaily",
+      "clientShort",
+      "repositoryDaily",
+    ]);
+    expect(
+      rules.every((rule) => SHA256_HEX_PATTERN.test(rule.identityHash))
+    ).toBe(true);
+    expect(rules[0].identityHash).toBe(rules[1].identityHash);
+    expect(rules[2].identityHash).not.toBe(rules[0].identityHash);
   });
 
   it("allows three client scans per short window and rejects the fourth", () => {

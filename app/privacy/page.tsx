@@ -153,8 +153,8 @@ export default function PrivacyPage() {
               website hosting, delivery, and runtime infrastructure;
             </li>
             <li>
-              <a href="https://upstash.com/static/trust/privacy.pdf">Upstash</a>{" "}
-              for distributed rate-limit records;
+              <a href="https://neon.tech/privacy-policy">Neon</a> for
+              distributed rate-limit records;
             </li>
             <li>
               <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
@@ -179,9 +179,10 @@ export default function PrivacyPage() {
               scan completes or fails.
             </li>
             <li>
-              Application rate-limit records are designed to expire with their
-              configured windows, no longer than twenty-four hours, subject to
-              provider backup and operational practices.
+              Application rate-limit records contain hashed identifiers, are
+              marked to expire after two configured windows, and are pruned in
+              bounded batches, subject to provider backup and operational
+              practices.
             </li>
             <li>
               Runtime logs are retained according to our hosting configuration
