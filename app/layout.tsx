@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono, Nunito_Sans, Outfit } from "next/font/google";
 
 import "./globals.css";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -79,6 +80,7 @@ export default async function RootLayout({
             stargazersCount={stargazersCount}
           />
           {children}
+          <SiteFooter />
           <Toaster />
         </ThemeProvider>
       </body>
