@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const SCANNER_TRACE_EXCLUDES = [
   "./app/**/*",
   "./components/**/*",
+  "./design/**/*",
   "./docs/**/*",
   "./hooks/**/*",
   "./lib/**/*",

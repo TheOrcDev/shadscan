@@ -8,6 +8,8 @@ stable releases published under `latest`.
 
 ### Changed
 
+- Adopted the Shadscan scan-frame and shadcn-slash mark across the install
+  screen, repository scanner, social preview, and browser icon.
 - Agent handoffs now group related findings into `fix`, `decide`, and `verify`
   work items, include discovered project gates and a version-pinned rerun
   command, and allow verified-no-change outcomes for score-neutral advisories.

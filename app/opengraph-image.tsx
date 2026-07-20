@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { ShadscanMark } from "@/components/shadscan-mark";
 
 const size = {
   height: 630,
@@ -38,8 +39,17 @@ export default function OpenGraphImage() {
           paddingLeft: "48px",
         }}
       >
-        <div style={{ display: "flex", fontSize: "30px", fontWeight: 700 }}>
-          SHADSCAN
+        <div
+          style={{
+            alignItems: "center",
+            display: "flex",
+            fontSize: "30px",
+            fontWeight: 700,
+            gap: "18px",
+          }}
+        >
+          <ShadscanMark style={{ height: "52px", width: "52px" }} />
+          <div style={{ display: "flex" }}>SHADSCAN</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div

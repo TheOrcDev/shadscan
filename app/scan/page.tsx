@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ShadscanMark } from "@/components/shadscan-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { RepositoryScanner } from "./repository-scanner";
 
@@ -22,8 +23,12 @@ export default function ScanPage() {
     <div className="min-h-svh bg-background text-foreground">
       <header className="border-border border-b">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link className="font-heading font-medium" href="/">
-            Shadscan
+          <Link
+            className="flex items-center gap-2 font-heading font-medium"
+            href="/"
+          >
+            <ShadscanMark className="size-7" />
+            <span>Shadscan</span>
           </Link>
           <ThemeToggle />
         </div>

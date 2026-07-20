@@ -72,6 +72,18 @@ const expectNoSevereAxeViolations = async (page: Page): Promise<void> => {
   );
 };
 
+test("renders the Shadscan mark on the install and scan surfaces", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("img", { name: "Shadscan" })).toBeVisible();
+
+  await page.goto("/scan");
+  const brandLink = page.getByRole("link", { name: "Shadscan" });
+  await expect(brandLink).toBeVisible();
+  await expect(brandLink.locator("svg")).toBeVisible();
+});
+
 test("renders the empty state and passes the serious axe gate", async ({
   page,
 }) => {
