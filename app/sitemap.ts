@@ -25,5 +25,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
       url: new URL("/sponsors", siteUrl).href,
     },
+    {
+      changeFrequency: "yearly",
+      priority: 0.2,
+      url: new URL("/privacy", siteUrl).href,
+    },
+    {
+      changeFrequency: "yearly",
+      priority: 0.2,
+      url: new URL("/terms", siteUrl).href,
+    },
   ];
 }

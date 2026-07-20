@@ -1,0 +1,6 @@
+const LEGAL_CONTACT_URL =
+  "https://github.com/TheOrcDev/headless-shadcn/issues/new";
+const LEGAL_LAST_UPDATED = "July 20, 2026";
+const LEGAL_LAST_UPDATED_ISO = "2026-07-20";
+
+export { LEGAL_CONTACT_URL, LEGAL_LAST_UPDATED, LEGAL_LAST_UPDATED_ISO };
