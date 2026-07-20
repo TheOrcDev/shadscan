@@ -72,11 +72,23 @@ const expectNoSevereAxeViolations = async (page: Page): Promise<void> => {
   );
 };
 
-test("renders the Shadscan mark on the install and scan surfaces", async ({
+test("renders the aligned square-ended mark across product surfaces", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByRole("img", { name: "Shadscan" })).toBeVisible();
+  const mark = page.getByRole("img", { name: "Shadscan" });
+  await expect(mark).toBeVisible();
+  await expect(mark).toHaveAttribute("stroke-linecap", "square");
+  const slashCenterOffsets = await mark.locator("path").evaluateAll((paths) =>
+    paths.slice(-2).map((path) => {
+      if (!(path instanceof SVGGeometryElement)) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const center = path.getPointAtLength(path.getTotalLength() / 2);
+      return Math.abs(center.x - center.y);
+    })
+  );
+  expect(slashCenterOffsets).toEqual([0, 0]);
 
   await page.goto("/scan");
   const brandLink = page.getByRole("link", { name: "Shadscan" });

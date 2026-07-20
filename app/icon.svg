@@ -6,7 +6,7 @@
 >
   <rect width="64" height="64" fill="#ffffff" />
   <path
-    d="M23 11H11v12 M41 11h12v12 M11 41v12h12 M53 41v12H41 M22 41l19-19 M35 41l8-8"
+    d="M23 11H11v12 M41 11h12v12 M11 41v12h12 M53 41v12H41 M22 41l19-19 M35 43l8-8"
     fill="none"
     stroke="#09090b"
     stroke-linecap="square"
