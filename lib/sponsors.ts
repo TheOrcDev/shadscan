@@ -88,4 +88,4 @@ const SPONSOR_TIERS = [
 ] as const;
 
 export type { SponsorTier };
-export { SPONSOR_CONTACT_EMAIL, SPONSOR_TIERS };
+export { SPONSOR_TIERS };

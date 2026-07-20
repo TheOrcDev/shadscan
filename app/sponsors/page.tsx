@@ -2,11 +2,7 @@ import { ShadscanMark } from "@/components/shadscan-mark";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { createPageMetadata } from "@/lib/site-metadata";
-import {
-  SPONSOR_CONTACT_EMAIL,
-  SPONSOR_TIERS,
-  type SponsorTier,
-} from "@/lib/sponsors";
+import { SPONSOR_TIERS, type SponsorTier } from "@/lib/sponsors";
 import { cn } from "@/lib/utils";
 
 export const metadata = createPageMetadata({
@@ -80,16 +76,6 @@ export default function SponsorsPage() {
             <SponsorSection key={tier.id} tier={tier} />
           ))}
         </div>
-
-        <p className="pt-14 text-center text-muted-foreground text-sm">
-          Questions, invoices, or a custom arrangement?{" "}
-          <a
-            className="underline underline-offset-4 hover:text-foreground"
-            href={`mailto:${SPONSOR_CONTACT_EMAIL}`}
-          >
-            {SPONSOR_CONTACT_EMAIL}
-          </a>
-        </p>
       </div>
     </main>
   );
