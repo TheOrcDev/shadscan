@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Roboto } from "next/font/google";
+import { Geist_Mono, Nunito_Sans, Outfit } from "next/font/google";
 
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
@@ -8,12 +8,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { getSiteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
-const geistHeading = Geist({
+const nunitoSansHeading = Nunito_Sans({
   subsets: ["latin"],
   variable: "--font-heading",
 });
 
-const roboto = Roboto({
+const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-sans",
 });
@@ -60,8 +60,8 @@ export default function RootLayout({
         "antialiased",
         fontMono.variable,
         "font-sans",
-        roboto.variable,
-        geistHeading.variable
+        outfit.variable,
+        nunitoSansHeading.variable
       )}
       lang="en"
       suppressHydrationWarning
