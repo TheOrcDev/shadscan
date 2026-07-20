@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CodeBlockCommand } from "@/components/code-block-command";
 import { CopyButton } from "@/components/copy-button";
+import { DocsOnThisPage } from "@/components/docs-on-this-page";
 
 const PACKAGE_SCRIPT = `{
   "scripts": {
@@ -19,7 +20,7 @@ const sections = [
   { href: "#existing-hooks", label: "Existing hooks" },
   { href: "#agent-skill", label: "Agent skill" },
   { href: "#verify", label: "Verify the gate" },
-] as const;
+] as const satisfies ReadonlyArray<{ href: `#${string}`; label: string }>;
 
 interface DocsCodeBlockProps {
   code: string;
@@ -69,26 +70,10 @@ export default function DocsPage() {
   return (
     <main className="mx-auto grid min-h-[calc(100svh-3.5rem)] w-full max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-16">
       <aside className="hidden lg:block">
-        <nav aria-label="On this page" className="sticky top-8">
-          <p className="mb-3 font-medium text-foreground text-sm">
-            On this page
-          </p>
-          <ul className="space-y-1 border-l">
-            {sections.map((section) => (
-              <li key={section.href}>
-                <a
-                  className="block border-transparent border-l px-3 py-1.5 text-muted-foreground text-sm hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-                  href={section.href}
-                >
-                  {section.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <DocsOnThisPage sections={sections} />
       </aside>
 
-      <article className="typeset min-w-0 max-w-3xl pb-20">
+      <article className="typeset min-w-0 max-w-3xl pb-20 [&_section[id]]:scroll-mt-10">
         <header>
           <p className="not-typeset font-mono text-muted-foreground text-sm">
             Commit automation
