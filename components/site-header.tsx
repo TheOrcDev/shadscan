@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GitHubStars } from "@/components/github-stars";
+import { ModeSwitcher } from "@/components/mode-switcher";
 import { ShadscanMark } from "@/components/shadscan-mark";
-import { ThemeSwitcherControl } from "@/components/theme-switcher-control";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,7 @@ function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <GitHubStars repo={githubRepo} stargazersCount={stargazersCount} />
-          <ThemeSwitcherControl />
+          <ModeSwitcher />
         </div>
       </div>
     </header>

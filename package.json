@@ -2,7 +2,6 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@phosphor-icons/react": "^2.1.10",
-    "@radix-ui/react-use-controllable-state": "^1.2.4",
     "@rexa-developer/tiks": "^0.3.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
@@ -12,7 +11,6 @@
     "jotai": "^2.20.2",
     "motion": "^12.42.2",
     "next": "16.2.10",
-    "next-themes": "^0.4.6",
     "radix-ui": "^1.6.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",

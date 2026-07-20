@@ -37,7 +37,7 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
           variant="ghost"
         />
       </div>
-      <pre className="overflow-x-auto overscroll-x-contain p-4 text-sm leading-6">
+      <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-6">
         <code
           className="font-mono text-code-foreground"
           data-language={language}
