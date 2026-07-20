@@ -74,7 +74,7 @@ merging under `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/
 
 **Out of scope**:
 
-- Running a Next build as part of Shadscan
+- Running a Next build as part of shadscan
 - Reading `.next` artifacts in production rule logic
 - Requiring route-specific SEO copy when inherited metadata is complete
 - Changing the `metadata-configured` rule

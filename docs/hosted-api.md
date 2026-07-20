@@ -1,6 +1,6 @@
 # Hosted scan API
 
-Shadscan exposes one synchronous, authenticated scan endpoint for AI agents and
+shadscan exposes one synchronous, authenticated scan endpoint for AI agents and
 other API clients:
 
 - `POST /v1/scans`

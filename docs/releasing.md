@@ -1,4 +1,4 @@
-# Releasing Shadscan
+# Releasing shadscan
 
 This runbook covers the unscoped public npm package `shadscan`. Run release
 commands from `packages/cli`; the repository root is a private Next.js app and

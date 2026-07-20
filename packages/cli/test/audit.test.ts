@@ -120,7 +120,7 @@ describe("runAudit", () => {
     expect(report.framework.adapter).toBe("generic-react");
     expect(report.agentHandoff.actionables).toEqual([]);
     expect(report.agentHandoff.goal).toContain(
-      "Keep audit-fixture's Shadscan score at 100/100"
+      "Keep audit-fixture's shadscan score at 100/100"
     );
     expect(report.findings[0]?.evidence[0]?.filePath).toBe("src/App.tsx");
     expect(report.shadcn.configPath).toBe("components.json");
@@ -238,7 +238,7 @@ describe("runAudit", () => {
       },
     ]);
     expect(report.agentHandoff.actionables[0]?.acceptanceCriteria[0]).toBe(
-      "The Shadscan finding `interaction-fail` reports pass when rerun with the same ruleset and category scope."
+      "The shadscan finding `interaction-fail` reports pass when rerun with the same ruleset and category scope."
     );
     expect(report.agentHandoff.actionables[1]?.acceptanceCriteria).toContain(
       "Do not edit solely to force a score-neutral static advisory to report pass; it may remain advisory after successful verification."

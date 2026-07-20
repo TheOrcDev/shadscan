@@ -6,7 +6,7 @@ const size = {
   width: 1200,
 };
 
-const alt = "Shadscan, the UI audit CLI for shadcn apps";
+const alt = "shadscan, the UI audit CLI for shadcn apps";
 const contentType = "image/png";
 
 export default function OpenGraphImage() {

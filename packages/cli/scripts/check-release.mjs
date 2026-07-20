@@ -134,7 +134,7 @@ const main = async () => {
   );
 
   process.stdout.write(
-    `Shadscan ${manifest.version} is ready for the${releaseTag ? ` ${releaseTag}` : ""} release path.\n`
+    `shadscan ${manifest.version} is ready for the${releaseTag ? ` ${releaseTag}` : ""} release path.\n`
   );
 };
 

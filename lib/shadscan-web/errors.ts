@@ -72,7 +72,7 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
 
   if (error.code === "PRIVATE_REPOSITORY_UNSUPPORTED") {
     return new WebScanServiceError(
-      "The web scanner supports public repositories only. Run Shadscan locally for private code.",
+      "The web scanner supports public repositories only. Run shadscan locally for private code.",
       { cause: error, code: "PRIVATE_REPOSITORY_UNSUPPORTED" }
     );
   }
@@ -89,7 +89,7 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
 
   if (SOURCE_TOO_LARGE_CODES.has(error.code)) {
     return new WebScanServiceError(
-      "This repository exceeds the web scanner's source limits. Run Shadscan locally instead.",
+      "This repository exceeds the web scanner's source limits. Run shadscan locally instead.",
       { cause: error, code: "SOURCE_TOO_LARGE" }
     );
   }

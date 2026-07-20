@@ -25,7 +25,7 @@ const normalizeCliFailure = (error: unknown): CliFailure => {
 
   return {
     code: "AUDIT_FAILED",
-    message: "Shadscan could not complete the audit.",
+    message: "shadscan could not complete the audit.",
   };
 };
 

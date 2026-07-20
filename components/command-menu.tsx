@@ -83,10 +83,10 @@ function CommandMenu() {
         </kbd>
       </Button>
       <CommandDialog
-        description="Navigate Shadscan and copy common commands."
+        description="Navigate shadscan and copy common commands."
         onOpenChange={setOpen}
         open={open}
-        title="Shadscan commands"
+        title="shadscan commands"
       >
         <Command>
           <CommandInput placeholder="Search commands..." />

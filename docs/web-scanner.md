@@ -2,7 +2,7 @@
 
 The public `/scan` page accepts `owner/repository` or a canonical GitHub URL and
 audits the default branch of a public repository. It uses a React Server Action;
-the browser receives no Shadscan API key, GitHub token, source archive, or
+the browser receives no shadscan API key, GitHub token, source archive, or
 internal filesystem detail.
 
 ## Production Environment

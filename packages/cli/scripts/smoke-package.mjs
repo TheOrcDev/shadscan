@@ -191,7 +191,7 @@ try {
   await run(process.execPath, [importCheckPath], { cwd: consumerDirectory });
 
   process.stdout.write(
-    `Packed Shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, and import smoke tests.\n`
+    `Packed shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, and import smoke tests.\n`
   );
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });

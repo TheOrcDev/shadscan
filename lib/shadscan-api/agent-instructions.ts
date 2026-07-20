@@ -5,9 +5,9 @@ const SHADSCAN_OPENAPI_URL = `${SHADSCAN_PUBLIC_ORIGIN}/openapi.json`;
 const HOSTED_SCAN_MAX_DURATION_SECONDS = 30;
 const SNAPSHOT_MAX_COMPRESSED_MEBIBYTES = 4;
 
-const AGENT_INSTRUCTIONS_MARKDOWN = `# Shadscan hosted scan instructions for AI agents
+const AGENT_INSTRUCTIONS_MARKDOWN = `# shadscan hosted scan instructions for AI agents
 
-Use the Shadscan hosted API to audit a React shadcn repository, turn the result into a remediation task, edit the repository, verify the changes, and scan again. The API never needs Shadscan installed in the target repository.
+Use the shadscan hosted API to audit a React shadcn repository, turn the result into a remediation task, edit the repository, verify the changes, and scan again. The API never needs shadscan installed in the target repository.
 
 - Scan endpoint: ${SHADSCAN_SCAN_ENDPOINT}
 - OpenAPI 3.1 document: ${SHADSCAN_OPENAPI_URL}

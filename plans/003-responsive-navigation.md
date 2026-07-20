@@ -19,7 +19,7 @@
 
 ## Why This Matters
 
-Shadscan currently recognizes only Sheet/Drawer/Sidebar mobile panels and
+shadscan currently recognizes only Sheet/Drawer/Sidebar mobile panels and
 globally counts every nav-like JSX element as simultaneously rendered. OrcDev
 uses a working state-controlled custom panel, and its desktop/mobile landmarks
 are mutually exclusive at the `lg` breakpoint. The two rules remove five raw
@@ -69,7 +69,7 @@ landmark per viewport.
 
 **Out of scope**:
 
-- Browser execution inside Shadscan
+- Browser execution inside shadscan
 - A complete Tailwind compiler
 - Requiring Sheet/Drawer adoption in custom apps
 - Fixing missing `aria-expanded` on OrcDev's trigger

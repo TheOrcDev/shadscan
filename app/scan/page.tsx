@@ -6,9 +6,9 @@ export const maxDuration = 30;
 
 export const metadata: Metadata = {
   alternates: { canonical: "/scan" },
-  description: "Scan a public GitHub repository with Shadscan.",
+  description: "Scan a public GitHub repository with shadscan.",
   openGraph: {
-    description: "Scan a public GitHub repository with Shadscan.",
+    description: "Scan a public GitHub repository with shadscan.",
     title: "Scan a GitHub repository",
     url: "/scan",
   },

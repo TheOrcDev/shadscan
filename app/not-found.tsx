@@ -10,7 +10,7 @@ export default function NotFound() {
           Missing route
         </h1>
         <p className="mt-3 text-muted-foreground leading-7">
-          Shadscan checked the route table. This one is not in it.
+          shadscan checked the route table. This one is not in it.
         </p>
         <Button asChild className="mt-5">
           <Link href="/">Back to audit</Link>

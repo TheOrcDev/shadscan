@@ -49,12 +49,12 @@ const OPENAPI_DOCUMENT = {
   openapi: OPENAPI_VERSION,
   jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema",
   info: {
-    title: "Shadscan Hosted Scan API",
+    title: "shadscan Hosted Scan API",
     version: HOSTED_API_DOCUMENT_VERSION,
-    description: `Scan a public GitHub repository or a sanitized current-working-tree snapshot and receive both a structured Shadscan report and a paste-ready AI-agent prompt. See [the agent instructions](${SHADSCAN_AGENT_INSTRUCTIONS_URL}) before uploading source.`,
+    description: `Scan a public GitHub repository or a sanitized current-working-tree snapshot and receive both a structured shadscan report and a paste-ready AI-agent prompt. See [the agent instructions](${SHADSCAN_AGENT_INSTRUCTIONS_URL}) before uploading source.`,
   },
   servers: [
-    { description: "Shadscan production API", url: SHADSCAN_PUBLIC_ORIGIN },
+    { description: "shadscan production API", url: SHADSCAN_PUBLIC_ORIGIN },
   ],
   tags: [
     {
@@ -206,7 +206,7 @@ const OPENAPI_DOCUMENT = {
           ),
           "401": {
             ...createErrorResponse(
-              "Missing or invalid Shadscan Bearer API key."
+              "Missing or invalid shadscan Bearer API key."
             ),
             headers: {
               "WWW-Authenticate": {
@@ -256,7 +256,7 @@ const OPENAPI_DOCUMENT = {
       bearerAuth: {
         type: "http",
         scheme: "bearer",
-        bearerFormat: "Shadscan API key",
+        bearerFormat: "shadscan API key",
         description:
           "Read the key from SHADSCAN_API_KEY and send it only in the Authorization header. Never put it in a request body or source archive.",
       },

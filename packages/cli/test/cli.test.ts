@@ -147,7 +147,7 @@ describe("CLI contract", () => {
     });
     expect(normalizeCliFailure(new Error("private runtime detail"))).toEqual({
       code: "AUDIT_FAILED",
-      message: "Shadscan could not complete the audit.",
+      message: "shadscan could not complete the audit.",
     });
   });
 });

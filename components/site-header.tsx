@@ -13,7 +13,7 @@ function SiteHeader() {
           href="/"
         >
           <ShadscanMark className="size-7" />
-          <span>Shadscan</span>
+          <span>shadscan</span>
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
           <Link

@@ -1,12 +1,12 @@
-# Shadscan
+# shadscan
 
 The CLI that inspects a React shadcn app and tells you what your UI is missing.
 
-If the command menu, theme toggle, keyboard shortcuts, empty states, loading states, error boundaries, toast setup, labels, metadata, and route states are missing, Shadscan scores the app and shows the receipts.
+If the command menu, theme toggle, keyboard shortcuts, empty states, loading states, error boundaries, toast setup, labels, metadata, and route states are missing, shadscan scores the app and shows the receipts.
 
 ## Usage
 
-Shadscan is currently a source preview; the npm package is not published yet.
+shadscan is currently a source preview; the npm package is not published yet.
 From a repository checkout:
 
 ```bash

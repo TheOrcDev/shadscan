@@ -120,7 +120,7 @@ const renderAgentHandoff = (report: AuditReport): string[] => {
       (context) => `    - ${sanitizeTerminalText(context)}`
     ),
     "  Verification:",
-    `    - Shadscan: ${sanitizeTerminalText(report.agentHandoff.verification.shadscanCommand)}`,
+    `    - shadscan: ${sanitizeTerminalText(report.agentHandoff.verification.shadscanCommand)}`,
     ...(report.agentHandoff.verification.projectGates.length > 0
       ? report.agentHandoff.verification.projectGates.map(
           (command) => `    - Project gate: ${sanitizeTerminalText(command)}`
@@ -177,9 +177,9 @@ const renderHumanReport = (
   options: RenderHumanReportOptions
 ): string => {
   const lines: string[] = [
-    `Your Shadscan score: ${report.score === null ? "unassessed" : `${report.score}/100`}`,
+    `Your shadscan score: ${report.score === null ? "unassessed" : `${report.score}/100`}`,
     `Grade: ${report.grade ?? "n/a"}`,
-    "Shadscan has entered the chat.",
+    "shadscan has entered the chat.",
     "",
     `Adapter: ${report.framework.adapter}`,
     `Package: ${sanitizeTerminalText(report.packageName ?? "unknown")}`,

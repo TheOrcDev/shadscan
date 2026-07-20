@@ -20,7 +20,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
   repositoryUrl: "https://github.com/acme/widget",
   result: {
     handoff: {
-      promptMarkdown: "You are improving acme/widget from a Shadscan audit.",
+      promptMarkdown: "You are improving acme/widget from a shadscan audit.",
       promptVersion: 2,
     },
     report: {
@@ -65,7 +65,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
           },
         ],
         context: ["Framework: Next.js App Router", "Package manager: pnpm"],
-        goal: "Raise widget's Shadscan score from 72/100 (C).",
+        goal: "Raise widget's shadscan score from 72/100 (C).",
         suggestedSkills: ["shadcn"],
         verification: {
           projectGates: ["pnpm check", "pnpm build"],

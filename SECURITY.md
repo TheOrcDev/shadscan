@@ -18,7 +18,7 @@ reproduction, impact, and any known mitigation. Reports will be acknowledged as
 soon as an owner reviews them. Confirmed issues will be fixed in a new immutable
 package version; affected versions may be deprecated with upgrade guidance.
 
-Shadscan's local CLI is designed to read source from the selected project and
+shadscan's local CLI is designed to read source from the selected project and
 write reports to stdout or errors to stderr. Any unexpected network request,
 project-file mutation, install-time execution, or machine-local path disclosure
 is considered a security bug.

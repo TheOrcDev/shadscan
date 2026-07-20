@@ -679,10 +679,10 @@ const getActionableSummary = (
   }
 
   if (disposition === "verify") {
-    return `Verify ${finding.title}; Shadscan has low-confidence evidence and did not reduce the score.`;
+    return `Verify ${finding.title}; shadscan has low-confidence evidence and did not reduce the score.`;
   }
 
-  return `Fix ${finding.title}; Shadscan marked this as a ${finding.confidence}-confidence missing UI fundamental.`;
+  return `Fix ${finding.title}; shadscan marked this as a ${finding.confidence}-confidence missing UI fundamental.`;
 };
 
 const getActionableTitle = (
@@ -730,14 +730,14 @@ const getActionableAcceptanceCriteria = ({
   if (disposition === "decide") {
     return [
       "Record an explicit implement-or-waive product decision based on the app's current workflows.",
-      `If implemented, the Shadscan finding \`${finding.id}\` reports pass; if waived, keep it visible and report the rationale.`,
+      `If implemented, the shadscan finding \`${finding.id}\` reports pass; if waived, keep it visible and report the rationale.`,
       "Do not add unused infrastructure solely to increase the audit score.",
       getProjectGateCriterion(projectGates, "If code changes,"),
     ];
   }
 
   const criteria = [
-    `The Shadscan finding \`${finding.id}\` reports pass when rerun with the same ruleset and category scope.`,
+    `The shadscan finding \`${finding.id}\` reports pass when rerun with the same ruleset and category scope.`,
   ];
 
   if (finding.remediation) {
@@ -828,7 +828,7 @@ const getWorkItemAcceptanceCriteria = ({
   return [
     ...findingIds.map(
       (findingId) =>
-        `The Shadscan finding ${findingId} reports pass when rerun with the same ruleset and category scope.`
+        `The shadscan finding ${findingId} reports pass when rerun with the same ruleset and category scope.`
     ),
     "The implementation addresses the user-facing problem described by the related remediations, not only the detector syntax.",
     getProjectGateCriterion(projectGates, "After the change,"),
@@ -1024,8 +1024,8 @@ const createAgentHandoff = ({
   const goal = (() => {
     if (score === null) {
       return actionables.length === 0
-        ? `${packageName}'s Shadscan score is unassessed because no score-impacting rules applied; preserve the existing UI and verify the scan scope.`
-        : `${packageName}'s Shadscan score is unassessed; fix confirmed defects, make explicit product decisions, and verify advisories without unnecessary code changes.`;
+        ? `${packageName}'s shadscan score is unassessed because no score-impacting rules applied; preserve the existing UI and verify the scan scope.`
+        : `${packageName}'s shadscan score is unassessed; fix confirmed defects, make explicit product decisions, and verify advisories without unnecessary code changes.`;
     }
 
     const hasScoreImpactingActionables = actionables.some(
@@ -1037,8 +1037,8 @@ const createAgentHandoff = ({
     }
 
     return actionables.length === 0
-      ? `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}); no missing fundamentals were found.`
-      : `Keep ${packageName}'s Shadscan score at ${score}/100 (${grade}) while verifying the score-neutral advisories.`;
+      ? `Keep ${packageName}'s shadscan score at ${score}/100 (${grade}); no missing fundamentals were found.`
+      : `Keep ${packageName}'s shadscan score at ${score}/100 (${grade}) while verifying the score-neutral advisories.`;
   })();
   const configPath = project.shadcn.configPath
     ? (getProjectRelativePath(project.rootDir, project.shadcn.configPath) ??

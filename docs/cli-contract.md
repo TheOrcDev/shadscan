@@ -1,4 +1,4 @@
-# Shadscan CLI Contract
+# shadscan CLI Contract
 
 This contract applies to the `shadscan` executable, whether it is invoked from
 a local install, a packed tarball, or npm through `npx`.
@@ -12,7 +12,7 @@ shadscan [path] [options]
 - `path` selects the React project to scan and defaults to the current working
   directory.
 - Relative paths resolve from the invoking process's working directory.
-- Shadscan performs a read-only static source audit. It does not start the app,
+- shadscan performs a read-only static source audit. It does not start the app,
   edit project files, call an AI model, or require application secrets.
 
 ## Output

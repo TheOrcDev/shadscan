@@ -71,7 +71,7 @@ the complete truth table across all five detector fixes.
 **Out of scope**:
 
 - Turning either advisory into a score-affecting rule
-- Runtime browser automation inside Shadscan
+- Runtime browser automation inside shadscan
 - Suppressing all `destructive` variants
 - Suppressing real `w-screen`, fixed-width, or CSS `100vw` layout risks
 - Resolving the score-neutral dynamic alt/title/contrast/target advisories
@@ -211,6 +211,6 @@ Expected external outcome:
 ## Maintenance Notes
 
 The integrated fixture is a regression contract, not a snapshot of OrcDev.
-Keep only the minimal source patterns that previously fooled Shadscan. Update
+Keep only the minimal source patterns that previously fooled shadscan. Update
 the truth table when a deliberate rule-policy decision changes, not merely to
 make a failing test green.

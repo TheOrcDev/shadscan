@@ -6,7 +6,7 @@ export default function Page() {
     <main className="grid min-h-[calc(100svh-3.5rem)] place-items-center bg-background px-4">
       <div className="flex w-full max-w-2xl flex-col items-center gap-6">
         <ShadscanMark
-          accessibleTitle="Shadscan"
+          accessibleTitle="shadscan"
           className="size-16 text-foreground"
         />
         <div className="w-full">

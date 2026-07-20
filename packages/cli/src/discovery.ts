@@ -280,7 +280,7 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
 
   if (!dependencies.react) {
     throw new ProjectDiscoveryError(
-      "The nearest package does not declare React; run Shadscan from a React application package.",
+      "The nearest package does not declare React; run shadscan from a React application package.",
       "UNSUPPORTED_PROJECT"
     );
   }

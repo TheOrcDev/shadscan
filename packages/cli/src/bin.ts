@@ -19,7 +19,7 @@ try {
         null,
         2
       )
-    : `Shadscan could not audit this project: ${failure.message}`;
+    : `shadscan could not audit this project: ${failure.message}`;
 
   process.stderr.write(`${output}\n`);
   process.exitCode = 1;

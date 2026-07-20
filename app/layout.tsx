@@ -32,20 +32,20 @@ export const metadata: Metadata = {
   openGraph: {
     description:
       "Audit command menus, UI states, accessibility basics, metadata, and more with deterministic evidence.",
-    siteName: "Shadscan",
-    title: "Shadscan",
+    siteName: "shadscan",
+    title: "shadscan",
     type: "website",
     url: "/",
   },
   title: {
-    default: "Shadscan",
-    template: "%s | Shadscan",
+    default: "shadscan",
+    template: "%s | shadscan",
   },
   twitter: {
     card: "summary_large_image",
     description:
       "Audit command menus, UI states, accessibility basics, metadata, and more with deterministic evidence.",
-    title: "Shadscan",
+    title: "shadscan",
   },
 };
 

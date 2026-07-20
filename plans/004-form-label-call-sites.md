@@ -19,7 +19,7 @@
 
 ## Why This Matters
 
-OrcDev genuinely has two unlabeled newsletter inputs, but Shadscan reports the
+OrcDev genuinely has two unlabeled newsletter inputs, but shadscan reports the
 generic `<input {...props}>` inside `components/ui/input.tsx`. An executor
 following the handoff would incorrectly add a label to a reusable primitive
 instead of fixing its call sites. The rule must ignore pass-through primitive

@@ -7,7 +7,7 @@ const createReport = (): AuditReport => ({
     actionables: [
       {
         acceptanceCriteria: [
-          "The Shadscan finding `metadata-configured` reports pass.",
+          "The shadscan finding `metadata-configured` reports pass.",
         ],
         category: "foundation",
         confidence: "high",
@@ -26,7 +26,7 @@ const createReport = (): AuditReport => ({
         status: "fail",
         suggestedFix: "Export metadata.",
         summary:
-          "Fix metadata configured; Shadscan marked this as a high-confidence missing UI fundamental.",
+          "Fix metadata configured; shadscan marked this as a high-confidence missing UI fundamental.",
         title: "Fix metadata configured",
       },
     ],
@@ -36,7 +36,7 @@ const createReport = (): AuditReport => ({
       "shadcn confidence: high; config: /tmp/components.json",
       "Warnings: none",
     ],
-    goal: "Raise demo's Shadscan score from 50/100 (F) by addressing agent-ready UI audit findings.",
+    goal: "Raise demo's shadscan score from 50/100 (F) by addressing agent-ready UI audit findings.",
     suggestedSkills: ["shadscan"],
     verification: {
       projectGates: ["pnpm check", "pnpm build"],
@@ -45,7 +45,7 @@ const createReport = (): AuditReport => ({
     workItems: [
       {
         acceptanceCriteria: [
-          "The Shadscan finding `metadata-configured` reports pass.",
+          "The shadscan finding `metadata-configured` reports pass.",
         ],
         categories: ["foundation"],
         disposition: "fix",
@@ -62,7 +62,7 @@ const createReport = (): AuditReport => ({
         rawScoreImpact: 3,
         suggestedFixes: ["Export metadata."],
         summary:
-          "Fix metadata configured; Shadscan marked this as a high-confidence missing UI fundamental.",
+          "Fix metadata configured; shadscan marked this as a high-confidence missing UI fundamental.",
         title: "Fix metadata configured",
       },
     ],
@@ -148,12 +148,12 @@ describe("renderHumanReport", () => {
   it("renders score, category bars, evidence, and fixes", () => {
     const output = renderHumanReport(createReport(), { includeRoast: false });
 
-    expect(output).toContain("Your Shadscan score: 50/100");
+    expect(output).toContain("Your shadscan score: 50/100");
     expect(output).toContain("Foundation: [########--------] 10/20 (50%)");
     expect(output).toContain("Missing: metadata configured");
     expect(output).toContain("Agent handoff:");
     expect(output).toContain("Suggested skills: shadscan");
-    expect(output).toContain("Shadscan: pnpm dlx shadscan@0.0.1");
+    expect(output).toContain("shadscan: pnpm dlx shadscan@0.0.1");
     expect(output).toContain("Project gate: pnpm check");
     expect(output).toContain("1. [P1] Fix metadata configured");
     expect(output).toContain("Disposition: fix");
@@ -181,7 +181,7 @@ describe("renderHumanReport", () => {
       { includeRoast: false }
     );
 
-    expect(output).toContain("Your Shadscan score: unassessed");
+    expect(output).toContain("Your shadscan score: unassessed");
     expect(output).toContain("Grade: n/a");
   });
 

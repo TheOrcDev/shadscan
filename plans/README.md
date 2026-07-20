@@ -1,7 +1,7 @@
-# Shadscan Implementation Plans
+# shadscan Implementation Plans
 
-Generated from an audit of OrcDev on 2026-07-19. The audit used Shadscan
-ruleset `2026.07.3` at Shadscan commit `07a9eae` against OrcDev commit
+Generated from an audit of OrcDev on 2026-07-19. The audit used shadscan
+ruleset `2026.07.3` at shadscan commit `07a9eae` against OrcDev commit
 `50ef95b`, plus rendered checks against `https://orcdev.com` at 320px and
 1280px.
 
@@ -61,11 +61,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
 ## Confirmed OrcDev Backlog
 
-These are app issues, not Shadscan defects. They are intentionally outside the
+These are app issues, not shadscan defects. They are intentionally outside the
 five scanner plans:
 
 1. Add `app/error.tsx` with a recovery action.
-2. Decide whether this portfolio should adopt Shadscan's opinionated command
+2. Decide whether this portfolio should adopt shadscan's opinionated command
    menu requirement; if yes, add the menu and Cmd/Ctrl+K together.
 3. Add loading UI for the force-dynamic videos route.
 4. Add a visible Suspense fallback to unsubscribe.
@@ -74,7 +74,7 @@ five scanner plans:
 7. Replace the nested 404 Link/Button composition with `Button asChild`.
 8. Add visible `FormLabel` elements to both newsletter fields.
 9. Change the second setup `h1` to `h2`; separately inspect the duplicated
-   blog `h1` produced by the markdown body, which Shadscan currently misses.
+   blog `h1` produced by the markdown body, which shadscan currently misses.
 
 ## Dependency Notes
 
@@ -96,4 +96,4 @@ five scanner plans:
   command menu belongs in a small portfolio is a product-policy decision, not a
   detector bug.
 - Do not change OrcDev source while executing these plans. OrcDev is the
-  external validation target; fixes belong in Shadscan.
+  external validation target; fixes belong in shadscan.

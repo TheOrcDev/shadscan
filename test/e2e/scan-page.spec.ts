@@ -76,7 +76,7 @@ test("renders the aligned square-ended mark across product surfaces", async ({
   page,
 }) => {
   await page.goto("/");
-  const mark = page.getByRole("img", { name: "Shadscan" });
+  const mark = page.getByRole("img", { name: "shadscan" });
   await expect(mark).toBeVisible();
   await expect(mark).toHaveAttribute("stroke-linecap", "square");
   await expect(mark.locator("g")).toHaveAttribute(
@@ -95,7 +95,7 @@ test("renders the aligned square-ended mark across product surfaces", async ({
   expect(slashCenterOffsets).toEqual([0, 0]);
 
   await page.goto("/scan");
-  const brandLink = page.getByRole("link", { name: "Shadscan" });
+  const brandLink = page.getByRole("link", { name: "shadscan" });
   await expect(brandLink).toBeVisible();
   await expect(brandLink.locator("svg")).toBeVisible();
 });
@@ -235,7 +235,7 @@ test("supports result keyboard navigation, copying, and axe", async ({
   await page.keyboard.press("Enter");
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toContain("Shadscan");
+    .toContain("shadscan");
 
   const actionablesTab = page.getByRole("tab", {
     name: ACTIONABLES_TAB_NAME,

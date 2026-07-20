@@ -1,4 +1,4 @@
-# Shadscan CLI
+# shadscan CLI
 
 Audit a React shadcn app for missing UI fundamentals.
 
@@ -33,7 +33,7 @@ npx --yes shadscan@next /path/to/shadcn-app --prompt
 
 Prompt output is deterministic, neutral, repository-relative Markdown. It asks
 the agent to confirm source identity, process grouped work items by disposition,
-run every discovered project gate, and rescan with the exact Shadscan version.
+run every discovered project gate, and rescan with the exact shadscan version.
 Verified advisories may remain advisory; the prompt explicitly forbids code
 churn whose only purpose is forcing a static pass.
 
