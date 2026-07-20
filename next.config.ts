@@ -34,6 +34,7 @@ const SCANNER_TRACE_EXCLUDES = [
   "./skills-lock.json",
   "./tsconfig.json",
   "./tsconfig.tsbuildinfo",
+  "./vercel.json",
   "./vitest.config.ts",
 ] as const;
 
