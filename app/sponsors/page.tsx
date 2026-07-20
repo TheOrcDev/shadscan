@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { ShadscanMark } from "@/components/shadscan-mark";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { createPageMetadata } from "@/lib/site-metadata";
 import {
   SPONSOR_CONTACT_EMAIL,
   SPONSOR_TIERS,
@@ -9,24 +9,14 @@ import {
 } from "@/lib/sponsors";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/sponsors" },
+export const metadata = createPageMetadata({
   description:
-    "Sponsor shadscan and support deterministic open-source UI auditing for React shadcn applications.",
-  keywords: [
-    "sponsor shadscan",
-    "open source sponsorship",
-    "shadcn sponsorship",
-    "React accessibility tooling",
-  ],
-  openGraph: {
-    description:
-      "Sponsor shadscan and support deterministic open-source UI auditing for React shadcn applications.",
-    title: "Sponsor shadscan",
-    url: "/sponsors",
-  },
+    "Support deterministic, open-source UI auditing for React and shadcn applications.",
+  imageAlt: "Sponsor deterministic UI audits with shadscan",
+  imagePath: "/sponsors/opengraph-image",
+  path: "/sponsors",
   title: "Sponsor shadscan",
-};
+});
 
 interface SponsorSectionProps {
   tier: SponsorTier;

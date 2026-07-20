@@ -6,15 +6,15 @@ const size = {
   width: 1200,
 };
 
-const alt = "shadscan, the UI audit CLI for shadcn apps";
+const alt = "Make AI agents run shadscan before every commit";
 const contentType = "image/png";
 
 export default function OpenGraphImage() {
   return new ImageResponse(
     <SocialCard
-      detail="Deterministic checks. Evidence. Agent-ready fixes."
-      footer="Static audit. No AI required."
-      headline="Find the UI fundamentals your shadcn app forgot."
+      detail="Baseline first. Audit immediately before each commit."
+      footer="Agent workflow. No Git hooks."
+      headline="Make agents run Shadscan before every commit."
     />,
     size
   );

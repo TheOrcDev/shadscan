@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
 import { CodeBlockCommand } from "@/components/code-block-command";
 import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
+import { createPageMetadata } from "@/lib/site-metadata";
 
 const AGENT_PROMPT =
   "Use $shadscan-pre-commit for this task. Establish the current score before editing, run Shadscan immediately before every commit, and do not commit if the audit is unassessed or below the task floor.";
@@ -49,18 +49,14 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
   );
 }
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/docs" },
+export const metadata = createPageMetadata({
   description:
-    "Make AI agents run a deterministic Shadscan audit before every commit without changing project tooling.",
-  openGraph: {
-    description:
-      "Make AI agents run a deterministic Shadscan audit before every commit without changing project tooling.",
-    title: "Shadscan agent commit guide",
-    url: "/docs",
-  },
-  title: "Agent commit guide",
-};
+    "Install the Shadscan agent skill and require a deterministic UI audit before every AI-generated commit.",
+  imageAlt: "Make AI agents run shadscan before every commit",
+  imagePath: "/docs/opengraph-image",
+  path: "/docs",
+  title: "Shadscan for AI agents",
+});
 
 export default function DocsPage() {
   return (
@@ -143,10 +139,10 @@ export default function DocsPage() {
           </p>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
-              bun="bunx --bun shadscan@latest --json"
-              npm="npx --yes shadscan@latest --json"
-              pnpm="pnpm dlx shadscan@latest --json"
-              yarn="yarn dlx shadscan@latest --json"
+              bun="bunx --bun --package=@shadscan/cli@next shadscan --json"
+              npm="npx --yes @shadscan/cli@next --json"
+              pnpm="pnpm dlx @shadscan/cli@next --json"
+              yarn="yarn dlx --package @shadscan/cli@next shadscan --json"
             />
           </div>
         </section>

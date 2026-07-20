@@ -1,23 +1,17 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import {
   LEGAL_CONTACT_URL,
   LEGAL_LAST_UPDATED,
   LEGAL_LAST_UPDATED_ISO,
 } from "@/lib/legal";
+import { createPageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/terms" },
+export const metadata = createPageMetadata({
   description:
     "Terms governing use of the Shadscan website, CLI, hosted scanner, and API.",
-  openGraph: {
-    description:
-      "Terms governing use of the Shadscan website, CLI, hosted scanner, and API.",
-    title: "Terms of Service",
-    url: "/terms",
-  },
+  path: "/terms",
   title: "Terms of Service",
-};
+});
 
 export default function TermsPage() {
   return (

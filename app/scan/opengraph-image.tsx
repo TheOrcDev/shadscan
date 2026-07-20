@@ -6,15 +6,15 @@ const size = {
   width: 1200,
 };
 
-const alt = "shadscan, the UI audit CLI for shadcn apps";
+const alt = "Scan a public shadcn repository with shadscan";
 const contentType = "image/png";
 
 export default function OpenGraphImage() {
   return new ImageResponse(
     <SocialCard
-      detail="Deterministic checks. Evidence. Agent-ready fixes."
-      footer="Static audit. No AI required."
-      headline="Find the UI fundamentals your shadcn app forgot."
+      detail="Deterministic score. Cited evidence. Actionable fixes."
+      footer="Paste a public GitHub repository."
+      headline="Scan a public shadcn repository."
     />,
     size
   );

@@ -11,6 +11,7 @@ const SCANNER_TRACE_EXCLUDES = [
   "./packages/cli/src/**/*",
   "./packages/cli/test/**/*",
   "./playwright-report/**/*",
+  "./public/**/*",
   "./scripts/**/*",
   "./test/**/*",
   "./test-results/**/*",
@@ -45,7 +46,7 @@ const nextConfig: NextConfig = {
     "/scan": [...SCANNER_TRACE_EXCLUDES],
     "/v1/scans": [...SCANNER_TRACE_EXCLUDES],
   },
-  serverExternalPackages: ["shadscan"],
+  serverExternalPackages: ["@shadscan/cli"],
   turbopack: {
     ignoreIssue: [{ path: "**/next.config.ts" }],
   },

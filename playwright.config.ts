@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const E2E_PORT = 3210;
-const baseURL = `http://127.0.0.1:${E2E_PORT}`;
+const baseURL = `http://localhost:${E2E_PORT}`;
 
 export default defineConfig({
   expect: { timeout: 10_000 },
@@ -27,6 +27,7 @@ export default defineConfig({
     command: `node_modules/.bin/next dev --hostname 127.0.0.1 --port ${E2E_PORT}`,
     env: {
       NEXT_TELEMETRY_DISABLED: "1",
+      NEXT_PUBLIC_SITE_URL: baseURL,
       SHADSCAN_E2E: "1",
     },
     reuseExistingServer: false,

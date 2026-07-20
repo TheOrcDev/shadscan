@@ -1,22 +1,16 @@
-import type { Metadata } from "next";
 import {
   LEGAL_CONTACT_URL,
   LEGAL_LAST_UPDATED,
   LEGAL_LAST_UPDATED_ISO,
 } from "@/lib/legal";
+import { createPageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/privacy" },
+export const metadata = createPageMetadata({
   description:
     "How Shadscan processes repository scans, request data, local preferences, and communications.",
-  openGraph: {
-    description:
-      "How Shadscan processes repository scans, request data, local preferences, and communications.",
-    title: "Privacy Policy",
-    url: "/privacy",
-  },
+  path: "/privacy",
   title: "Privacy Policy",
-};
+});
 
 export default function PrivacyPage() {
   return (

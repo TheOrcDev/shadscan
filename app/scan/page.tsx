@@ -1,19 +1,17 @@
-import type { Metadata } from "next";
+import { createPageMetadata } from "@/lib/site-metadata";
 import { RepositoryScanner } from "./repository-scanner";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/scan" },
-  description: "Scan a public GitHub repository with shadscan.",
-  openGraph: {
-    description: "Scan a public GitHub repository with shadscan.",
-    title: "Scan a GitHub repository",
-    url: "/scan",
-  },
-  title: "Scan a GitHub repository",
-};
+export const metadata = createPageMetadata({
+  description:
+    "Paste a public GitHub repository to get a deterministic Shadscan score, cited evidence, and actionable fixes.",
+  imageAlt: "Scan a public shadcn repository with shadscan",
+  imagePath: "/scan/opengraph-image",
+  path: "/scan",
+  title: "Scan a shadcn app",
+});
 
 export default function ScanPage() {
   return (
