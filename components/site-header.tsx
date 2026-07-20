@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
   { href: "/scan", label: "Scan" },
+  { href: "/sponsors", label: "Sponsors" },
 ] as const;
 
 interface SiteHeaderProps {
@@ -34,7 +35,7 @@ function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
             href="/"
           >
             <ShadscanMark className="size-7" />
-            <span>shadscan</span>
+            <span className="hidden sm:inline">shadscan</span>
           </Link>
           <nav aria-label="Primary" className="flex items-center gap-1">
             {NAV_LINKS.map((link) => {
@@ -45,6 +46,7 @@ function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
                     buttonVariants({ size: "sm", variant: "ghost" }),
+                    "px-2 sm:px-4",
                     isActive && "bg-muted text-foreground"
                   )}
                   href={link.href}
@@ -57,7 +59,9 @@ function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
           </nav>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
-          <GitHubStars repo={githubRepo} stargazersCount={stargazersCount} />
+          <div className="hidden sm:block">
+            <GitHubStars repo={githubRepo} stargazersCount={stargazersCount} />
+          </div>
           <ModeSwitcher />
         </div>
       </div>

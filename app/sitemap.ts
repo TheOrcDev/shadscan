@@ -20,5 +20,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
       url: new URL("/scan", siteUrl).href,
     },
+    {
+      changeFrequency: "monthly",
+      priority: 0.6,
+      url: new URL("/sponsors", siteUrl).href,
+    },
   ];
 }
