@@ -11,8 +11,9 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
   { href: "/scan", label: "Scan" },
-  { href: "/sponsors", label: "Sponsors" },
 ] as const;
+
+const SPONSORS_HREF = "/sponsors";
 
 interface SiteHeaderProps {
   githubRepo: string;
@@ -24,6 +25,7 @@ const isActivePath = (pathname: string, href: string): boolean =>
 
 function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
   const pathname = usePathname();
+  const isSponsorsActive = isActivePath(pathname, SPONSORS_HREF);
 
   return (
     <header>
@@ -59,6 +61,17 @@ function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
           </nav>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
+          <Link
+            aria-current={isSponsorsActive ? "page" : undefined}
+            className={cn(
+              buttonVariants({ size: "sm", variant: "ghost" }),
+              "px-2 sm:px-4",
+              isSponsorsActive && "bg-muted text-foreground"
+            )}
+            href={SPONSORS_HREF}
+          >
+            Sponsors
+          </Link>
           <div className="hidden sm:block">
             <GitHubStars repo={githubRepo} stargazersCount={stargazersCount} />
           </div>
