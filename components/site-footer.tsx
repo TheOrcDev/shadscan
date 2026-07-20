@@ -1,5 +1,4 @@
-const linkClassName =
-  "font-medium text-foreground underline-offset-4 hover:underline";
+const linkClassName = "underline underline-offset-4";
 
 function ExternalLink({
   children,
@@ -22,11 +21,11 @@ function ExternalLink({
 
 function SiteFooter() {
   return (
-    <footer className="border-border border-t">
+    <footer>
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-1 px-4 py-6 text-center sm:px-6">
         <p className="text-muted-foreground text-sm">
           Made by <ExternalLink href="https://orcdev.com">OrcDev</ExternalLink>{" "}
-          <span aria-hidden="true">🪓</span>
+          with <span aria-hidden="true">🪓</span>
         </p>
         <p className="max-w-2xl text-muted-foreground text-sm">
           OrcDev is the creator of{" "}

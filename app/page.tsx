@@ -3,7 +3,7 @@ import { ShadscanMark } from "@/components/shadscan-mark";
 
 export default function Page() {
   return (
-    <main className="grid min-h-[calc(100svh-3.5rem)] place-items-center bg-background px-4">
+    <main className="grid flex-1 place-items-center bg-background px-4">
       <div className="flex w-full max-w-2xl flex-col items-center gap-6">
         <ShadscanMark
           accessibleTitle="shadscan"

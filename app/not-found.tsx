@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <main className="grid min-h-svh place-items-center px-5">
+    <main className="grid flex-1 place-items-center px-5">
       <div className="w-full max-w-md border bg-card p-6">
         <p className="font-mono text-muted-foreground text-sm">404</p>
         <h1 className="mt-3 font-heading font-medium text-3xl">

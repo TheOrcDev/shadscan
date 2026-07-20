@@ -64,7 +64,7 @@ export const metadata: Metadata = {
 
 export default function DocsPage() {
   return (
-    <main className="mx-auto grid min-h-[calc(100svh-3.5rem)] w-full max-w-6xl gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-16">
+    <main className="mx-auto grid w-full max-w-6xl flex-1 gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-16">
       <aside className="hidden lg:block">
         <DocsOnThisPage sections={sections} />
       </aside>

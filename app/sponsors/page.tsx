@@ -68,7 +68,7 @@ function SponsorSection({ tier }: SponsorSectionProps) {
 
 export default function SponsorsPage() {
   return (
-    <main className="min-h-[calc(100svh-3.5rem)] overflow-x-clip bg-background text-foreground">
+    <main className="flex-1 overflow-x-clip bg-background text-foreground">
       <div className="mx-auto w-full max-w-4xl px-4 pt-12 pb-24 sm:px-6 sm:pt-16">
         <header className="flex flex-col items-center gap-4 pb-12 text-center">
           <ShadscanMark

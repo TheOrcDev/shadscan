@@ -75,12 +75,14 @@ export default async function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <SiteHeader
-            githubRepo={SOURCE_CODE_GITHUB_REPO}
-            stargazersCount={stargazersCount}
-          />
-          {children}
-          <SiteFooter />
+          <div className="flex min-h-svh flex-col">
+            <SiteHeader
+              githubRepo={SOURCE_CODE_GITHUB_REPO}
+              stargazersCount={stargazersCount}
+            />
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+            <SiteFooter />
+          </div>
           <Toaster />
         </ThemeProvider>
       </body>

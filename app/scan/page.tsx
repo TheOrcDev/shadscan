@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function ScanPage() {
   return (
-    <div className="min-h-[calc(100svh-3.5rem)] bg-background text-foreground">
+    <div className="flex-1 bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14">
         <h1 className="font-heading font-medium text-3xl">
           Scan a GitHub repository
