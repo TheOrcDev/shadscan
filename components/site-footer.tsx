@@ -1,37 +1,18 @@
-const linkClassName = "underline underline-offset-4";
-
-function ExternalLink({
-  children,
-  href,
-}: {
-  children: React.ReactNode;
-  href: string;
-}) {
-  return (
-    <a
-      className={linkClassName}
-      href={href}
-      rel="noopener noreferrer"
-      target="_blank"
-    >
-      {children}
-    </a>
-  );
-}
-
 function SiteFooter() {
   return (
     <footer>
-      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-1 px-4 py-6 text-center sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-center px-4 py-6 text-center sm:px-6">
         <p className="text-muted-foreground text-sm">
-          Made by <ExternalLink href="https://orcdev.com">OrcDev</ExternalLink>{" "}
+          Made by{" "}
+          <a
+            className="underline underline-offset-4"
+            href="https://orcdev.com"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            OrcDev
+          </a>{" "}
           with <span aria-hidden="true">🪓</span>
-        </p>
-        <p className="max-w-2xl text-muted-foreground text-sm">
-          OrcDev is the creator of{" "}
-          <ExternalLink href="https://agentpacks.ai">Agent Packs</ExternalLink>,{" "}
-          <ExternalLink href="https://8bitcn.com">8bitcn</ExternalLink>, and{" "}
-          <ExternalLink href="https://videorc.com">Videorc</ExternalLink>.
         </p>
       </div>
     </footer>
