@@ -28,8 +28,10 @@ function ShadscanMark({
       <path d="M41 11h12v12" />
       <path d="M11 41v12h12" />
       <path d="M53 41v12H41" />
-      <path d="m22 41 19-19" />
-      <path d="m35 43 8-8" />
+      <g transform="translate(3.4 3.4) scale(.864)">
+        <path d="m22 41 19-19" />
+        <path d="m35 43 8-8" />
+      </g>
     </svg>
   );
 }

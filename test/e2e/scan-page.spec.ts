@@ -79,6 +79,10 @@ test("renders the aligned square-ended mark across product surfaces", async ({
   const mark = page.getByRole("img", { name: "Shadscan" });
   await expect(mark).toBeVisible();
   await expect(mark).toHaveAttribute("stroke-linecap", "square");
+  await expect(mark.locator("g")).toHaveAttribute(
+    "transform",
+    "translate(3.4 3.4) scale(.864)"
+  );
   const slashCenterOffsets = await mark.locator("path").evaluateAll((paths) =>
     paths.slice(-2).map((path) => {
       if (!(path instanceof SVGGeometryElement)) {

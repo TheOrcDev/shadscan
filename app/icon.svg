@@ -5,12 +5,17 @@
   viewBox="0 0 64 64"
 >
   <rect width="64" height="64" fill="#ffffff" />
-  <path
-    d="M23 11H11v12 M41 11h12v12 M11 41v12h12 M53 41v12H41 M22 41l19-19 M35 43l8-8"
+  <g
     fill="none"
     stroke="#09090b"
     stroke-linecap="square"
     stroke-linejoin="miter"
     stroke-width="6"
-  />
+  >
+    <path d="M23 11H11v12 M41 11h12v12 M11 41v12h12 M53 41v12H41" />
+    <path
+      d="M22 41l19-19 M35 43l8-8"
+      transform="translate(3.4 3.4) scale(.864)"
+    />
+  </g>
 </svg>
