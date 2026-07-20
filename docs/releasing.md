@@ -69,15 +69,18 @@ packed artifact.
    `npx --yes @shadscan/cli@0.1.0-rc.1 --version` plus representative audits in
    clean temporary Next, Vite, and generic React projects.
 
-Do not move `latest` during release-candidate testing.
+Do not intentionally move `latest` during release-candidate testing. Inspect
+the complete tag map with `npm view @shadscan/cli dist-tags --json` after every
+publish.
 
-After approving a release candidate, inspect the complete tag map with
-`npm view @shadscan/cli dist-tags --json`. If npm assigns the first public
-version to `latest` as well as `next`, remove only the accidental stable tag:
-
-```bash
-npm dist-tag rm @shadscan/cli latest
-```
+npm requires every package to retain a `latest` tag. For a brand-new package,
+the registry can therefore assign the first public version to both `latest`
+and `next`, even when it was published with `--tag next`; attempting to delete
+that sole `latest` pointer is rejected by the registry. Leave the unavoidable
+pointer in place until the first stable release, keep all release-candidate
+instructions pinned to `@next` or an exact version, and never advertise the
+unqualified package command during this window. The stable publish replaces
+the prerelease pointer with `0.1.0`.
 
 ## Trusted Publishing
 
