@@ -2,11 +2,11 @@ import type { NextConfig } from "next";
 
 const SCANNER_TRACE_EXCLUDES = [
   "./app/**/*",
-  "./components/**/*",
+  // Common directory names must not strip matching JavaScript from Next.
+  "./components/**/*.{ts,tsx}",
   "./design/**/*",
   "./docs/**/*",
   "./hooks/**/*",
-  // A broad lib glob also strips Next's dist/server/lib runtime from traces.
   "./lib/**/*.ts",
   "./plans/**/*",
   "./packages/cli/src/**/*",
