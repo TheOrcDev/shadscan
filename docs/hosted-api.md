@@ -35,14 +35,13 @@ Required in production:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Server-only Neon Postgres connection used for distributed limits. |
+| `DATABASE_URL` | Server-only Neon connection for a restricted runtime login that can execute only the rate-limit function. |
 | `SHADSCAN_API_KEY_HASHES` | JSON object mapping key IDs to lowercase SHA-256 hashes of complete API keys. |
 
 Optional:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_MIGRATION_URL` | Optional owner connection used by Drizzle migrations. `db:migrate` falls back to `DATABASE_URL`. |
 | `GITHUB_TOKEN` | Server-side token for GitHub metadata and revision resolution. It is never forwarded to archive downloads. Public repositories only remain enforced. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the distributed limiter outside production. Development otherwise uses an in-memory limiter. |
 
@@ -50,9 +49,12 @@ Production fails closed when authentication or distributed rate limiting is not
 configured. Limits are 10 requests per key per minute and 100 requests per key
 per day.
 
-Run `pnpm db:migrate` and `pnpm db:verify` against Neon before deploying a new
-database migration. Migrations are an explicit release step and do not run from
-`next build`.
+Keep the owner credential in the release secret store as
+`DATABASE_MIGRATION_URL`; do not deploy it to the application. Run
+`pnpm db:migrate`, `pnpm db:provision-runtime`, and `pnpm db:verify` against
+Neon before deploying a database migration. Migrations are an explicit release
+step and do not run from `next build`. The full credential and rotation process
+is documented in [database-roles.md](database-roles.md).
 
 For local development, configure `SHADSCAN_API_KEY_HASHES`, leave
 `SHADSCAN_RATE_LIMIT_MODE` unset to use the in-memory limiter, and run:

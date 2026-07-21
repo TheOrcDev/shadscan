@@ -11,14 +11,13 @@ Configure these variables on every production deployment:
 
 | Variable | Requirement |
 | --- | --- |
-| `DATABASE_URL` | Server-only Neon Postgres connection used for distributed web and hosted-API limits. |
+| `DATABASE_URL` | Server-only Neon connection for a restricted runtime login that can execute only the rate-limit function. |
 | `SHADSCAN_WEB_RATE_LIMIT_SALT` | Secret random value of at least 32 characters. It HMACs client addresses before rate-limit storage and must not be exposed through `NEXT_PUBLIC_*`. |
 
 Optional server-only variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_MIGRATION_URL` | Optional owner connection used by Drizzle migrations. `db:migrate` falls back to `DATABASE_URL`. |
 | `GITHUB_TOKEN` | Raises GitHub metadata limits. Public repositories remain the only web-supported source, and authorization is not forwarded to `codeload.github.com`. |
 | `SHADSCAN_WEB_RATE_LIMIT_MODE=database` | Exercises the production web limiter outside `NODE_ENV=production`. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the authenticated `/v1/scans` limiter outside production. |
@@ -34,15 +33,21 @@ development salt unless database mode is explicitly enabled. The public limits a
 10 scans per client per 10 minutes, 20 per client per day, and 10 per
 repository per day.
 
-The Drizzle migrations create a bounded sliding-window counter table and its
-atomic consumption function. Apply and verify them before deploying code that
-uses the database:
+The Drizzle migrations create a bounded sliding-window counter table, its
+atomic consumption function, and a no-login permission role. Keep the owner
+credential in the release secret store as `DATABASE_MIGRATION_URL`; do not
+deploy it to Vercel. Apply migrations, provision the runtime login, and verify
+least privilege before deploying code that uses the database:
 
 ```bash
 pnpm db:check
 pnpm db:migrate
+pnpm db:provision-runtime
 pnpm db:verify
 ```
+
+See [database-roles.md](database-roles.md) for the credential and rotation
+workflow.
 
 Runtime identities are SHA-256 or HMAC-SHA-256 digests. Raw client addresses,
 repository names, API keys, source archives, and scan reports are not stored in

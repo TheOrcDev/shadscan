@@ -2,22 +2,23 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 
-const databaseUrl =
-  process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
-if (!databaseUrl) {
+const migrationUrl = process.env.DATABASE_MIGRATION_URL?.trim();
+const runtimeUrl = process.env.DATABASE_URL?.trim();
+if (!(migrationUrl && runtimeUrl)) {
   throw new Error(
-    "DATABASE_MIGRATION_URL or DATABASE_URL is required to verify rate limiting."
+    "DATABASE_MIGRATION_URL and the restricted runtime DATABASE_URL are required."
   );
 }
 
-const sql = neon(databaseUrl);
+const ownerSql = neon(migrationUrl);
+const runtimeSql = neon(runtimeUrl);
 const verificationId = randomUUID();
 const bucketPrefix = `verification-${verificationId}`;
 const hashIdentity = (value) =>
   createHash("sha256").update(value, "utf8").digest("hex");
 
 const consume = (rules) =>
-  sql`select * from consume_shadscan_rate_limits(${JSON.stringify(rules)}::jsonb)`;
+  runtimeSql`select * from consume_shadscan_rate_limits(${JSON.stringify(rules)}::jsonb)`;
 
 const primaryRule = {
   bucket: `${bucketPrefix}-concurrent`,
@@ -28,6 +29,78 @@ const primaryRule = {
 };
 
 try {
+  const ownerIdentity = await ownerSql`select current_user as role_name`;
+  const runtimeIdentity = await runtimeSql`
+    select
+      current_user as role_name,
+      has_schema_privilege(current_user, 'public', 'CREATE') as can_create,
+      has_table_privilege(
+        current_user,
+        'public.rate_limit_windows',
+        'SELECT'
+      ) as can_select,
+      has_table_privilege(
+        current_user,
+        'public.rate_limit_windows',
+        'INSERT'
+      ) as can_insert,
+      has_table_privilege(
+        current_user,
+        'public.rate_limit_windows',
+        'UPDATE'
+      ) as can_update,
+      has_table_privilege(
+        current_user,
+        'public.rate_limit_windows',
+        'DELETE'
+      ) as can_delete,
+      has_function_privilege(
+        current_user,
+        'public.consume_shadscan_rate_limits(jsonb)',
+        'EXECUTE'
+      ) as can_execute
+  `;
+  const ownerRole = ownerIdentity[0]?.role_name;
+  const runtimeRole = runtimeIdentity[0]?.role_name;
+  assert.equal(typeof ownerRole, "string");
+  assert.equal(typeof runtimeRole, "string");
+  assert.notEqual(runtimeRole, ownerRole);
+  assert.equal(runtimeIdentity[0]?.can_create, false);
+  assert.equal(runtimeIdentity[0]?.can_select, false);
+  assert.equal(runtimeIdentity[0]?.can_insert, false);
+  assert.equal(runtimeIdentity[0]?.can_update, false);
+  assert.equal(runtimeIdentity[0]?.can_delete, false);
+  assert.equal(runtimeIdentity[0]?.can_execute, true);
+
+  const runtimeRoleAttributes = await ownerSql`
+    select
+      roles.rolsuper,
+      roles.rolcreatedb,
+      roles.rolcreaterole,
+      roles.rolreplication,
+      roles.rolbypassrls,
+      pg_has_role(
+        ${runtimeRole},
+        'shadscan_runtime',
+        'MEMBER'
+      ) as has_runtime_membership,
+      case
+        when exists (
+          select 1 from pg_catalog.pg_roles where rolname = 'neon_superuser'
+        ) then pg_has_role(${runtimeRole}, 'neon_superuser', 'MEMBER')
+        else false
+      end as has_neon_superuser_membership
+    from pg_catalog.pg_roles as roles
+    where roles.rolname = ${runtimeRole}
+  `;
+  assert.equal(runtimeRoleAttributes[0]?.rolsuper, false);
+  assert.equal(runtimeRoleAttributes[0]?.rolcreatedb, false);
+  assert.equal(runtimeRoleAttributes[0]?.rolcreaterole, false);
+  assert.equal(runtimeRoleAttributes[0]?.rolreplication, false);
+  assert.equal(runtimeRoleAttributes[0]?.rolbypassrls, false);
+  assert.equal(runtimeRoleAttributes[0]?.has_runtime_membership, true);
+  assert.equal(runtimeRoleAttributes[0]?.has_neon_superuser_membership, false);
+
   const concurrentResults = await Promise.all(
     Array.from({ length: 10 }, () => consume([primaryRule]))
   );
@@ -36,7 +109,7 @@ try {
   ).length;
   assert.equal(allowedCount, primaryRule.maxRequests);
 
-  const storedWindows = await sql`
+  const storedWindows = await ownerSql`
     select request_count
     from rate_limit_windows
     where bucket = ${primaryRule.bucket}
@@ -72,7 +145,7 @@ try {
     true
   );
 
-  const companionWindows = await sql`
+  const companionWindows = await ownerSql`
     select count(*)::integer as count
     from rate_limit_windows
     where bucket = ${companionRule.bucket}
@@ -80,7 +153,7 @@ try {
   `;
   assert.equal(companionWindows[0]?.count, 0);
 
-  const blockedWindow = await sql`
+  const blockedWindow = await ownerSql`
     select floor(extract(epoch from window_started_at) * 1000)::bigint as started_at_ms
     from rate_limit_windows
     where bucket = ${blockedRule.bucket}
@@ -106,7 +179,7 @@ try {
   assert.equal(independentResults[0]?.allowed, true);
 
   const expiredBucket = `${bucketPrefix}-expired`;
-  await sql`
+  await ownerSql`
     insert into rate_limit_windows (
       bucket,
       expires_at,
@@ -131,7 +204,7 @@ try {
       ruleName: "cleanup",
     },
   ]);
-  const expiredRows = await sql`
+  const expiredRows = await ownerSql`
     select count(*)::integer as count
     from rate_limit_windows
     where bucket = ${expiredBucket}
@@ -142,7 +215,7 @@ try {
     `Verified database rate limiting: ${allowedCount}/${concurrentResults.length} concurrent requests allowed.`
   );
 } finally {
-  await sql`
+  await ownerSql`
     delete from rate_limit_windows
     where bucket like ${`${bucketPrefix}%`}
   `;

@@ -83,6 +83,7 @@
     "db:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:provision-runtime": "node scripts/provision-database-runtime.mjs",
     "db:verify": "node scripts/verify-rate-limit-database.mjs",
     "audit:self": "pnpm cli:build && node packages/cli/dist/cli.js --fail-under 100",
     "audit:dependencies": "pnpm audit --prod --audit-level moderate",
