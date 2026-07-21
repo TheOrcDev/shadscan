@@ -1,5 +1,7 @@
+import path from "node:path";
 import type { AuditRule } from "../audit";
 import { findFumadocsCommandRuntime } from "./fumadocs-command-runtime";
+import { getMountedComponentFilePaths } from "./mounted-component-files";
 import { fail, pass } from "./rule-result";
 import { getProjectSourceFiles, getTextLineNumber } from "./source-files";
 
@@ -20,9 +22,13 @@ const commandMenuPresentRule: AuditRule = {
   maxScore: 5,
   run: async ({ project }) => {
     const files = await getProjectSourceFiles(project);
+    const mountedFiles = await getMountedComponentFilePaths(project);
 
     for (const file of files) {
-      if (GENERATED_COMMAND_FILE_PATTERN.test(file.path)) {
+      if (
+        GENERATED_COMMAND_FILE_PATTERN.test(file.path) ||
+        !mountedFiles.has(path.resolve(file.path))
+      ) {
         continue;
       }
 
@@ -40,7 +46,7 @@ const commandMenuPresentRule: AuditRule = {
         hasItem
       ) {
         return pass(
-          "App-level command menu composition found.",
+          "Mounted app-level command menu composition found.",
           file.path,
           getTextLineNumber(file.content, COMMAND_CONTAINER_PATTERN)
         );
@@ -57,7 +63,7 @@ const commandMenuPresentRule: AuditRule = {
     }
 
     return fail(
-      "No complete app-level command menu was found.",
+      "No complete mounted app-level command menu was found.",
       "Compose CommandDialog with an input, empty state, and actionable items, or mount an integrated command-search provider.",
       {
         roast:

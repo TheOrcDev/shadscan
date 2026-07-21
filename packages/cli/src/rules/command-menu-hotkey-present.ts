@@ -1,6 +1,8 @@
+import path from "node:path";
 import { findOwnedSourceScopes, getSourceScopeMatchLine } from "../ast";
 import type { AuditRule } from "../audit";
 import { findFumadocsCommandRuntime } from "./fumadocs-command-runtime";
+import { getMountedComponentFilePaths } from "./mounted-component-files";
 import { fail, pass } from "./rule-result";
 
 const COMMAND_HOTKEY_LIBRARY_PATTERN =
@@ -28,8 +30,13 @@ const commandMenuHotkeyPresentRule: AuditRule = {
       project,
       COMMAND_HOTKEY_TRIGGER_PATTERN
     );
+    const mountedFiles = await getMountedComponentFilePaths(project);
 
     for (const scope of hotkeyScopes) {
+      if (!mountedFiles.has(path.resolve(scope.file.filePath))) {
+        continue;
+      }
+
       if (COMMAND_HOTKEY_LIBRARY_PATTERN.test(scope.content)) {
         return pass(
           "Command-menu shortcut registered through a hotkey helper.",
@@ -69,7 +76,7 @@ const commandMenuHotkeyPresentRule: AuditRule = {
     }
 
     return fail(
-      "No complete Cmd/Ctrl+K command-menu shortcut was found.",
+      "No complete mounted Cmd/Ctrl+K command-menu shortcut was found.",
       "Register a Cmd/Ctrl+K keydown handler that prevents the browser default and toggles the command menu."
     );
   },

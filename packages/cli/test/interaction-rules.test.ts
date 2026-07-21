@@ -57,6 +57,17 @@ describe("interaction rules", () => {
       );
       expect(
         (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        `
+          import { CommandMenu } from "../components/command-menu";
+          export function App() { return <CommandMenu />; }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, commandMenuPresentRule)).status
       ).toBe("pass");
 
       await fixture.write(
@@ -105,6 +116,17 @@ describe("interaction rules", () => {
             }, []);
             return <CommandDialog open={open} />;
           }
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, commandMenuHotkeyPresentRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        `
+          import { CommandMenu } from "../components/command-menu";
+          export function App() { return <CommandMenu />; }
         `
       );
       const passingResult = await runRule(
