@@ -31,7 +31,7 @@ const Hero = ({
   media,
   className,
 }: HeroProps) => (
-  <section className={cn("py-32", className)}>
+  <section className={cn("pt-20 pb-32", className)}>
     <div className="overflow-hidden">
       <div className="container mx-auto">
         <div className="mx-auto max-w-5xl">
@@ -42,7 +42,7 @@ const Hero = ({
             <h1 className="max-w-xl text-pretty font-semibold text-4xl tracking-tight md:text-5xl lg:max-w-3xl lg:text-6xl">
               {heading}
             </h1>
-            <p className="mx-auto max-w-3xl text-balance text-muted-foreground lg:text-xl">
+            <p className="mx-auto max-w-3xl text-balance text-muted-foreground text-sm lg:text-base">
               {description}
             </p>
             {(buttons?.primary || buttons?.secondary) && (
