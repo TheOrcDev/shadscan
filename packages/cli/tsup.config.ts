@@ -10,6 +10,9 @@ export default defineConfig({
     cli: "src/bin.ts",
     index: "src/index.ts",
   },
+  esbuildOptions: (options) => {
+    options.sourcesContent = false;
+  },
   format: ["esm"],
   noExternal: ["commander"],
   platform: "node",

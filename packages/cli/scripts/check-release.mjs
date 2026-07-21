@@ -13,6 +13,7 @@ const SEMVER_PATTERN =
 const UNPUBLISHED_COPY_PATTERN = /not published yet/i;
 const FORBIDDEN_LIFECYCLE_SCRIPTS = ["install", "postinstall", "preinstall"];
 const COMMANDER_RUNTIME_IMPORT_PATTERN = /^import .* from ["']commander["'];$/m;
+const PUBLISHED_SOURCE_MAPS = ["cli.js.map", "index.js.map"];
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packageDirectory = path.resolve(scriptDirectory, "..");
@@ -153,6 +154,17 @@ const main = async () => {
     COMMANDER_RUNTIME_IMPORT_PATTERN,
     "The packaged CLI must not import Commander at runtime."
   );
+
+  for (const sourceMapName of PUBLISHED_SOURCE_MAPS) {
+    const sourceMap = JSON.parse(
+      await readFile(path.join(packageDirectory, "dist", sourceMapName), "utf8")
+    );
+    assert.equal(
+      Object.hasOwn(sourceMap, "sourcesContent"),
+      false,
+      `${sourceMapName} must not embed original source content.`
+    );
+  }
 
   process.stdout.write(
     `shadscan ${manifest.version} is ready for the${releaseTag ? ` ${releaseTag}` : ""} release path.\n`
