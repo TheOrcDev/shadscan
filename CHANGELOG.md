@@ -13,6 +13,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Use locale-independent code-unit ordering throughout reports and prompts so
+  deterministic output remains byte-stable across runtime locales.
 - Keep product decisions and confirmed fixes in separate agent work items so a
   grouped handoff never turns an optional decision into a mandatory pass gate.
 - Discover package managers from bounded monorepo roots, recognize `bun.lock`,

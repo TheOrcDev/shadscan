@@ -2,6 +2,7 @@ import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { glob } from "tinyglobby";
 import type { AuditContext } from "../audit";
+import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
 
 interface SourceFile {
@@ -129,7 +130,7 @@ const findSafeFiles = async (
   const files: SafeFile[] = [];
   let skippedUnsafe = 0;
 
-  for (const candidate of candidates.sort()) {
+  for (const candidate of candidates.sort(compareCodeUnits)) {
     if (files.length === MAX_PROJECT_FILES) {
       return { files, skippedUnsafe, truncated: true };
     }

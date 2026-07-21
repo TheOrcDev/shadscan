@@ -1,5 +1,6 @@
 import type { AgentWorkItem, AuditEvidence, AuditReport } from "./audit";
 import { AuditReportSchema } from "./audit";
+import { compareCodeUnits } from "./deterministic-order";
 
 const AGENT_PROMPT_VERSION = 4 as const;
 
@@ -41,9 +42,9 @@ const escapeBoundaryCharacters = (value: string): string =>
 const sortEvidence = (evidence: AuditEvidence[]): AuditEvidence[] =>
   [...evidence].sort(
     (left, right) =>
-      (left.filePath ?? "").localeCompare(right.filePath ?? "") ||
+      compareCodeUnits(left.filePath ?? "", right.filePath ?? "") ||
       (left.line ?? 0) - (right.line ?? 0) ||
-      left.message.localeCompare(right.message)
+      compareCodeUnits(left.message, right.message)
   );
 
 const sortWorkItems = (workItems: AgentWorkItem[]): AgentWorkItem[] =>
@@ -51,7 +52,7 @@ const sortWorkItems = (workItems: AgentWorkItem[]): AgentWorkItem[] =>
     .map((workItem) => ({
       ...workItem,
       evidence: sortEvidence(workItem.evidence),
-      findingIds: [...workItem.findingIds].sort(),
+      findingIds: [...workItem.findingIds].sort(compareCodeUnits),
     }))
     .sort(
       (left, right) =>
@@ -59,7 +60,7 @@ const sortWorkItems = (workItems: AgentWorkItem[]): AgentWorkItem[] =>
         DISPOSITION_ORDER[left.disposition] -
           DISPOSITION_ORDER[right.disposition] ||
         right.rawScoreImpact - left.rawScoreImpact ||
-        left.id.localeCompare(right.id)
+        compareCodeUnits(left.id, right.id)
     );
 
 const renderAgentPrompt = (input: AuditReport): string => {

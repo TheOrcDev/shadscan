@@ -25,6 +25,7 @@ import {
   type SourceFile as TypeScriptSourceFile,
 } from "typescript";
 import type { AuditRule } from "../audit";
+import { compareCodeUnits } from "../deterministic-order";
 import { fail, notApplicable, pass } from "./rule-result";
 import { fileExists, findFiles } from "./source-files";
 
@@ -354,7 +355,7 @@ const routeLoadingBoundaryPresentRule: AuditRule = {
         path.join(relativeAppDir, "**/page.{js,jsx,ts,tsx}"),
         path.join(relativeAppDir, "page.{js,jsx,ts,tsx}"),
       ])
-    ).sort((left, right) => left.localeCompare(right));
+    ).sort(compareCodeUnits);
     let dynamicRouteCount = 0;
 
     for (const pagePath of pagePaths) {

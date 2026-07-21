@@ -32,6 +32,7 @@ import {
   type SourceFile as TypeScriptSourceFile,
 } from "typescript";
 import type { AuditRule, AuditRuleResult } from "../audit";
+import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
@@ -406,7 +407,7 @@ const evaluateNextMetadata = async (
         file.path.startsWith(`${appDir}${path.sep}`) &&
         APP_METADATA_FILE_PATTERN.test(path.basename(file.path))
     )
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .sort((left, right) => compareCodeUnits(left.path, right.path));
   const metadataExports = files
     .map(findMetadataExport)
     .filter((metadata): metadata is MetadataExport => metadata !== null);

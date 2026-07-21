@@ -1,5 +1,5 @@
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AuditFinding, AuditReport } from "../src/audit";
 import { createAuditReport } from "../src/audit";
 import type { ProjectDiscovery } from "../src/discovery";
@@ -122,6 +122,20 @@ describe("renderAgentPrompt", () => {
     expect(
       renderAgentPrompt({ ...report, durationMs: report.durationMs + 500 })
     ).toBe(prompt);
+  });
+
+  it("does not depend on locale-sensitive string ordering", () => {
+    const localeCompare = vi
+      .spyOn(String.prototype, "localeCompare")
+      .mockImplementation(() => {
+        throw new Error("localeCompare must not be used");
+      });
+
+    try {
+      expect(() => renderAgentPrompt(createPromptReport())).not.toThrow();
+    } finally {
+      localeCompare.mockRestore();
+    }
   });
 
   it("keeps repository-controlled text inside the data boundary", () => {

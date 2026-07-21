@@ -2,6 +2,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
 import packageJson from "../package.json";
+import { compareCodeUnits } from "./deterministic-order";
 import {
   type Confidence,
   discoverProject,
@@ -417,9 +418,9 @@ const normalizeEvidencePaths = (
     })
     .sort(
       (left, right) =>
-        (left.filePath ?? "").localeCompare(right.filePath ?? "") ||
+        compareCodeUnits(left.filePath ?? "", right.filePath ?? "") ||
         (left.line ?? 0) - (right.line ?? 0) ||
-        left.message.localeCompare(right.message)
+        compareCodeUnits(left.message, right.message)
     );
 
 const normalizeFindingPaths = (
@@ -804,7 +805,7 @@ const getProjectGateCommands = (project: ProjectDiscovery): string[] => {
   );
   const namespacedTestGates = Object.keys(project.scripts)
     .filter(isNamespacedTestGate)
-    .sort((left, right) => left.localeCompare(right))
+    .sort(compareCodeUnits)
     .slice(0, MAX_NAMESPACED_TEST_GATES);
 
   return [...standardGates, ...namespacedTestGates].map(
@@ -1006,7 +1007,7 @@ const createWorkItems = (
       DISPOSITION_ORDER[left.disposition] -
         DISPOSITION_ORDER[right.disposition] ||
       right.rawScoreImpact - left.rawScoreImpact ||
-      left.id.localeCompare(right.id)
+      compareCodeUnits(left.id, right.id)
   );
 };
 
@@ -1089,7 +1090,7 @@ const createAgentHandoff = ({
       (left, right) =>
         PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority] ||
         right.scoreImpact - left.scoreImpact ||
-        left.findingId.localeCompare(right.findingId)
+        compareCodeUnits(left.findingId, right.findingId)
     );
   const goal = (() => {
     if (score === null) {
