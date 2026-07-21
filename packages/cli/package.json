@@ -4,14 +4,14 @@
   "description": "Audit React shadcn apps for missing UI fundamentals.",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/TheOrcDev/shadscan#readme",
+  "homepage": "https://www.shadscan.com/docs",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TheOrcDev/shadscan.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/TheOrcDev/shadscan/issues"
+    "email": "orc@orcdev.com"
   },
   "keywords": [
     "shadcn",

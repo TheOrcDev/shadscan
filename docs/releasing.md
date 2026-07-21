@@ -93,8 +93,9 @@ After the package exists on npm:
 4. Protect the GitHub `npm` environment with required reviewer approval.
 
 The workflow must use a GitHub-hosted runner and `id-token: write`. Trusted
-Publishing creates package provenance automatically; no npm token secret is
-required.
+Publishing does not require an npm token secret. npm provenance is unavailable
+while the source repository is private; it starts automatically only after the
+repository is public.
 
 ## Stable Release
 

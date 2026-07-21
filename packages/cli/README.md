@@ -43,8 +43,8 @@ churn whose only purpose is forcing a static pass.
 The executable is read-only and static: it does not start the app, edit project
 files, call an AI model, or send source over the network. Findings return exit
 status `0` unless `--fail-under` is not satisfied; discovery and audit failures
-return `1`. The complete command contract is maintained at
-<https://github.com/TheOrcDev/shadscan/blob/main/docs/cli-contract.md>.
+return `1`. Public usage and output documentation is available at
+<https://www.shadscan.com/docs>.
 
 ## Contracts
 
@@ -54,8 +54,7 @@ return `1`. The complete command contract is maintained at
 - Reports identify the exact bundled ruleset version that produced them.
 - `RULE_CATALOG` exposes immutable rule metadata without exposing the internal
   custom-rule runner.
-- The full generated catalog lives at
-  <https://github.com/TheOrcDev/shadscan/blob/main/docs/rules.md>.
+- The exported `RULE_CATALOG` contains every bundled rule's immutable metadata.
 
 The first release is read-only. It does not edit project files.
 

@@ -7,10 +7,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  getGitHubStargazerCount,
-  SOURCE_CODE_GITHUB_REPO,
-} from "@/lib/github-stars";
+import { getPublicGitHubRepository } from "@/lib/public-github-repository";
 import {
   createPageMetadata,
   createRobotsMetadata,
@@ -84,7 +81,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const stargazersCount = await getGitHubStargazerCount();
+  const githubRepository = await getPublicGitHubRepository();
 
   return (
     <html
@@ -101,10 +98,7 @@ export default async function RootLayout({
       <body>
         <ThemeProvider>
           <div className="flex min-h-svh flex-col">
-            <SiteHeader
-              githubRepo={SOURCE_CODE_GITHUB_REPO}
-              stargazersCount={stargazersCount}
-            />
+            <SiteHeader githubRepository={githubRepository} />
             <div className="flex min-h-0 flex-1 flex-col">{children}</div>
             <SiteFooter />
           </div>

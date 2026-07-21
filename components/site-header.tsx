@@ -16,14 +16,16 @@ const NAV_LINKS = [
 const SPONSORS_HREF = "/sponsors";
 
 interface SiteHeaderProps {
-  githubRepo: string;
-  stargazersCount: number;
+  githubRepository: {
+    name: string;
+    stargazersCount: number;
+  } | null;
 }
 
 const isActivePath = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
 
-function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
+function SiteHeader({ githubRepository }: SiteHeaderProps) {
   const pathname = usePathname();
   const isSponsorsActive = isActivePath(pathname, SPONSORS_HREF);
 
@@ -72,9 +74,14 @@ function SiteHeader({ githubRepo, stargazersCount }: SiteHeaderProps) {
           >
             Sponsors
           </Link>
-          <div className="hidden sm:block">
-            <GitHubStars repo={githubRepo} stargazersCount={stargazersCount} />
-          </div>
+          {githubRepository ? (
+            <div className="hidden sm:block">
+              <GitHubStars
+                repo={githubRepository.name}
+                stargazersCount={githubRepository.stargazersCount}
+              />
+            </div>
+          ) : null}
           <ModeSwitcher />
         </div>
       </div>

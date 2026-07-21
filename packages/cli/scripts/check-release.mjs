@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 const PACKAGE_NAME = "@shadscan/cli";
 const PUBLIC_REGISTRY = "https://registry.npmjs.org/";
 const REPOSITORY_URL = "git+https://github.com/TheOrcDev/shadscan.git";
+const PUBLIC_HOMEPAGE_URL = "https://www.shadscan.com/docs";
+const SUPPORT_EMAIL = "orc@orcdev.com";
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const UNPUBLISHED_COPY_PATTERN = /not published yet/i;
@@ -69,6 +71,9 @@ const main = async () => {
   );
   assert.equal(manifest.publishConfig?.access, "public");
   assert.equal(manifest.publishConfig?.registry, PUBLIC_REGISTRY);
+  assert.equal(manifest.homepage, PUBLIC_HOMEPAGE_URL);
+  assert.equal(manifest.bugs?.email, SUPPORT_EMAIL);
+  assert.equal(manifest.bugs?.url, undefined);
   assert.equal(manifest.repository?.url, REPOSITORY_URL);
   assert.ok(manifest.engines?.node, "Declare the supported Node.js range.");
 

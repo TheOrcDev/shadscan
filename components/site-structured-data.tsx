@@ -1,5 +1,5 @@
+import { getPublicGitHubRepository } from "@/lib/public-github-repository";
 import {
-  GITHUB_REPOSITORY_URL,
   NPM_PACKAGE_URL,
   ORCDEV_URL,
   SITE_DESCRIPTION,
@@ -10,8 +10,9 @@ import { getSiteUrl } from "@/lib/site-url";
 const serializeStructuredData = (value: unknown): string =>
   JSON.stringify(value).replaceAll("<", "\\u003c");
 
-function SiteStructuredData() {
+async function SiteStructuredData() {
   const siteUrl = getSiteUrl().href;
+  const githubRepository = await getPublicGitHubRepository();
   const organizationId = `${siteUrl}#organization`;
   const websiteId = `${siteUrl}#website`;
   const softwareId = `${siteUrl}#software`;
@@ -48,7 +49,10 @@ function SiteStructuredData() {
         },
         operatingSystem: "macOS, Windows, Linux",
         publisher: { "@id": organizationId },
-        sameAs: [GITHUB_REPOSITORY_URL, NPM_PACKAGE_URL],
+        sameAs: [
+          NPM_PACKAGE_URL,
+          ...(githubRepository ? [githubRepository.url] : []),
+        ],
         url: siteUrl,
       },
     ],

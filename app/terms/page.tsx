@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  LEGAL_CONTACT_EMAIL,
   LEGAL_CONTACT_URL,
   LEGAL_LAST_UPDATED,
   LEGAL_LAST_UPDATED_ISO,
@@ -273,8 +274,8 @@ export default function TermsPage() {
         <section>
           <h2>Contact</h2>
           <p>
-            Questions about these terms can be submitted through the{" "}
-            <a href={LEGAL_CONTACT_URL}>project issue tracker</a>.
+            Questions about these terms can be sent to{" "}
+            <a href={LEGAL_CONTACT_URL}>{LEGAL_CONTACT_EMAIL}</a>.
           </p>
         </section>
       </article>

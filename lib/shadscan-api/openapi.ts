@@ -151,7 +151,7 @@ const OPENAPI_DOCUMENT = {
                     category: "accessibility",
                     source: {
                       kind: "github",
-                      repository: "TheOrcDev/shadscan",
+                      repository: "shadcn-ui/next-template",
                       revision: "main",
                       subdirectory: ".",
                     },
@@ -317,7 +317,7 @@ const OPENAPI_DOCUMENT = {
               "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$",
             description:
               "Canonical owner/repository name for a public GitHub repository.",
-            examples: ["TheOrcDev/shadscan"],
+            examples: ["shadcn-ui/next-template"],
           },
           revision: {
             type: "string",

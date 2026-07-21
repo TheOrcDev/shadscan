@@ -6,7 +6,6 @@ const SITE_DESCRIPTION =
   "Audit accessibility, UI states, navigation, forms, metadata, and production polish with deterministic evidence and agent-ready fixes.";
 const SITE_LOCALE = "en_US";
 const ORCDEV_URL = "https://orcdev.com";
-const GITHUB_REPOSITORY_URL = "https://github.com/TheOrcDev/shadscan";
 const NPM_PACKAGE_URL = "https://www.npmjs.com/package/@shadscan/cli";
 
 interface PageMetadataOptions {
@@ -90,7 +89,6 @@ const createRobotsMetadata = (
 export {
   createPageMetadata,
   createRobotsMetadata,
-  GITHUB_REPOSITORY_URL,
   NPM_PACKAGE_URL,
   ORCDEV_URL,
   SITE_DEFAULT_TITLE,

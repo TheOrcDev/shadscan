@@ -160,6 +160,15 @@ test("publishes app identity and structured data", async ({ page }) => {
       }),
     ])
   );
+  const softwareApplication = structuredData["@graph"].find(
+    (entry) => entry["@type"] === "SoftwareApplication"
+  );
+  expect(softwareApplication?.sameAs).toEqual([
+    "https://www.npmjs.com/package/@shadscan/cli",
+  ]);
+  await expect(
+    page.locator('a[href="https://github.com/TheOrcDev/shadscan"]')
+  ).toHaveCount(0);
 });
 
 test("serves a complete web app manifest and install icons", async ({

@@ -13,7 +13,7 @@ const LEGAL_PAGES = [
     ],
   },
   {
-    lastUpdated: "2026-07-20",
+    lastUpdated: "2026-07-21",
     path: "/terms",
     title: "Terms of Service",
     visibleStatements: ["Scan results are guidance"],
@@ -41,6 +41,9 @@ for (const legalPage of LEGAL_PAGES) {
       "datetime",
       legalPage.lastUpdated
     );
+    await expect(
+      page.getByRole("link", { name: "orc@orcdev.com" }).last()
+    ).toHaveAttribute("href", "mailto:orc@orcdev.com");
 
     const legalNavigation = page.getByRole("navigation", { name: "Legal" });
     await expect(

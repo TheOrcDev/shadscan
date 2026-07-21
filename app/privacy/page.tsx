@@ -1,4 +1,5 @@
 import {
+  LEGAL_CONTACT_EMAIL,
   LEGAL_CONTACT_URL,
   PRIVACY_LAST_UPDATED,
   PRIVACY_LAST_UPDATED_ISO,
@@ -272,17 +273,16 @@ export default function PrivacyPage() {
           <p>
             We may update this policy as Shadscan changes. We will post the
             current version here and change the date above. Material changes may
-            also be announced through the project repository or website.
+            also be announced on this website.
           </p>
         </section>
 
         <section>
           <h2>Contact</h2>
           <p>
-            For privacy questions or requests, contact us through the{" "}
-            <a href={LEGAL_CONTACT_URL}>project issue tracker</a>. Because
-            issues are public, do not include sensitive personal information;
-            ask for a private reply channel when needed.
+            For privacy questions or requests, email{" "}
+            <a href={LEGAL_CONTACT_URL}>{LEGAL_CONTACT_EMAIL}</a>. Do not send
+            repository secrets or source code with your request.
           </p>
         </section>
       </article>

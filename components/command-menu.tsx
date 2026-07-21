@@ -22,9 +22,11 @@ import {
 } from "@/components/ui/command";
 
 const SOURCE_COMMAND = "node packages/cli/dist/cli.js /path/to/app";
-const REPOSITORY_URL = "https://github.com/TheOrcDev/shadscan";
+interface CommandMenuProps {
+  repositoryUrl?: string;
+}
 
-function CommandMenu() {
+function CommandMenu({ repositoryUrl }: CommandMenuProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -53,8 +55,12 @@ function CommandMenu() {
   };
 
   const openRepository = () => {
+    if (!repositoryUrl) {
+      return;
+    }
+
     setOpen(false);
-    window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer");
+    window.open(repositoryUrl, "_blank", "noopener,noreferrer");
   };
 
   const copySourceCommand = async () => {
@@ -98,11 +104,13 @@ function CommandMenu() {
                 View audit checks
                 <CommandShortcut>Enter</CommandShortcut>
               </CommandItem>
-              <CommandItem onSelect={openRepository}>
-                <GithubLogo weight="bold" />
-                Open GitHub repository
-                <ArrowSquareOut className="ml-auto" weight="bold" />
-              </CommandItem>
+              {repositoryUrl ? (
+                <CommandItem onSelect={openRepository}>
+                  <GithubLogo weight="bold" />
+                  Open GitHub repository
+                  <ArrowSquareOut className="ml-auto" weight="bold" />
+                </CommandItem>
+              ) : null}
             </CommandGroup>
             <CommandGroup heading="CLI">
               <CommandItem onSelect={copySourceCommand}>
