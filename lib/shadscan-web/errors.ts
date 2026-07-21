@@ -1,4 +1,5 @@
 import { HostedScanError } from "../shadscan-api/errors";
+import type { SourceLimitDetail } from "../shadscan-api/source-limits";
 import { WebScanErrorSchema } from "./contracts";
 import type { WebScanError, WebScanErrorCode } from "./types";
 
@@ -7,6 +8,7 @@ interface WebScanServiceErrorOptions {
   code: WebScanErrorCode;
   retryAfterSeconds?: number;
   retryable?: boolean;
+  sourceLimit?: SourceLimitDetail;
 }
 
 const SOURCE_TOO_LARGE_CODES = new Set([
@@ -41,6 +43,7 @@ class WebScanServiceError extends Error {
   readonly code: WebScanErrorCode;
   readonly retryable: boolean;
   readonly retryAfterSeconds: number | undefined;
+  readonly sourceLimit: SourceLimitDetail | undefined;
 
   constructor(message: string, options: WebScanServiceErrorOptions) {
     super(message, { cause: options.cause });
@@ -48,8 +51,44 @@ class WebScanServiceError extends Error {
     this.code = options.code;
     this.retryable = options.retryable ?? false;
     this.retryAfterSeconds = options.retryAfterSeconds;
+    this.sourceLimit = options.sourceLimit;
   }
 }
+
+const formatByteCount = (bytes: number): string => {
+  const mebibytes = bytes / (1024 * 1024);
+  if (mebibytes >= 0.1) {
+    return `${Number(mebibytes.toFixed(1))} MiB`;
+  }
+  return `${bytes.toLocaleString("en-US")} bytes`;
+};
+
+const formatSourceLimitMessage = (detail?: SourceLimitDetail): string => {
+  if (!detail) {
+    return "This repository exceeds the web scanner's source limits. Run shadscan locally instead.";
+  }
+
+  const observedPrefix =
+    detail.observed === detail.limit + 1 ? "more than " : "";
+  if (detail.kind === "archive_entries") {
+    return `The repository archive has ${observedPrefix}${detail.observed.toLocaleString("en-US")} entries; the web limit is ${detail.limit.toLocaleString("en-US")}. Run shadscan locally instead.`;
+  }
+
+  if (detail.kind === "retained_file_bytes") {
+    const pathLabel = detail.path
+      ? `The file ${detail.path}`
+      : "A retained source file";
+    return `${pathLabel} is ${observedPrefix}${formatByteCount(detail.observed)}; the per-file web limit is ${formatByteCount(detail.limit)}. Run shadscan locally instead.`;
+  }
+
+  let subject = "The relevant repository source";
+  if (detail.kind === "compressed_bytes") {
+    subject = "The compressed repository archive";
+  } else if (detail.kind === "expanded_bytes") {
+    subject = "The expanded repository source";
+  }
+  return `${subject} is ${observedPrefix}${formatByteCount(detail.observed)}; the web limit is ${formatByteCount(detail.limit)}. Run shadscan locally instead.`;
+};
 
 const getRetryAfterSeconds = (error: HostedScanError): number | undefined => {
   const retryAfter = error.headers.get("retry-after");
@@ -124,8 +163,12 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
 
   if (SOURCE_TOO_LARGE_CODES.has(error.code)) {
     return new WebScanServiceError(
-      "This repository exceeds the web scanner's source limits. Run shadscan locally instead.",
-      { cause: error, code: "SOURCE_TOO_LARGE" }
+      formatSourceLimitMessage(error.sourceLimit),
+      {
+        cause: error,
+        code: "SOURCE_TOO_LARGE",
+        sourceLimit: error.sourceLimit,
+      }
     );
   }
 
@@ -209,6 +252,7 @@ const toWebScanError = (error: unknown): WebScanError => {
     message: serviceError.message,
     retryable: serviceError.retryable,
     retryAfterSeconds: serviceError.retryAfterSeconds,
+    sourceLimit: serviceError.sourceLimit,
   });
 };
 

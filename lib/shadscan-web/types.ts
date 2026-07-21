@@ -1,4 +1,5 @@
 import type { HostedScanResponse } from "../shadscan-api/contracts";
+import type { SourceLimitDetail } from "../shadscan-api/source-limits";
 
 const MAX_REPOSITORY_INPUT_LENGTH = 256;
 const WEB_SCAN_ERROR_CODES = [
@@ -31,6 +32,7 @@ interface WebScanError {
   message: string;
   retryAfterSeconds?: number;
   retryable: boolean;
+  sourceLimit?: SourceLimitDetail;
 }
 
 interface WebScanIdleState {

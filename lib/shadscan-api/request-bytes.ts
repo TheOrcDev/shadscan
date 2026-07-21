@@ -1,4 +1,5 @@
 import { HostedScanError } from "./errors";
+import type { SourceLimitDetail } from "./source-limits";
 
 interface ReadBytesOptions {
   emptyCode?: string;
@@ -10,6 +11,7 @@ interface ReadBytesOptions {
   tooLargeCode: string;
   tooLargeMessage: string;
   tooLargeRetryable?: boolean;
+  tooLargeSourceLimit?: Pick<SourceLimitDetail, "kind" | "unit">;
   tooLargeStatus?: number;
 }
 
@@ -20,10 +22,20 @@ const createEmptyBodyError = (options: ReadBytesOptions): HostedScanError =>
     status: options.emptyStatus ?? 400,
   });
 
-const createTooLargeError = (options: ReadBytesOptions): HostedScanError =>
+const createTooLargeError = (
+  options: ReadBytesOptions,
+  observedBytes: number
+): HostedScanError =>
   new HostedScanError(options.tooLargeMessage, {
     code: options.tooLargeCode,
     retryable: options.tooLargeRetryable,
+    sourceLimit: options.tooLargeSourceLimit
+      ? {
+          ...options.tooLargeSourceLimit,
+          limit: options.maxBytes,
+          observed: observedBytes,
+        }
+      : undefined,
     status: options.tooLargeStatus ?? 413,
   });
 
@@ -35,7 +47,7 @@ const readStreamBytes = async (
   if (contentLength) {
     const parsedLength = Number.parseInt(contentLength, 10);
     if (Number.isFinite(parsedLength) && parsedLength > options.maxBytes) {
-      throw createTooLargeError(options);
+      throw createTooLargeError(options, parsedLength);
     }
   }
 
@@ -64,7 +76,7 @@ const readStreamBytes = async (
       totalBytes += result.value.byteLength;
       if (totalBytes > options.maxBytes) {
         await reader.cancel();
-        throw createTooLargeError(options);
+        throw createTooLargeError(options, totalBytes);
       }
 
       chunks.push(result.value);

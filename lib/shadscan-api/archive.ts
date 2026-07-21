@@ -9,6 +9,7 @@ import {
   normalizeArchivePath,
   resolveContainedPath,
 } from "./path-safety";
+import type { SourceLimitDetail } from "./source-limits";
 
 const gunzipArchive = promisify(gunzip);
 
@@ -17,6 +18,7 @@ const DEFAULT_ARCHIVE_LIMITS = {
   maxEntries: 2500,
   maxExpandedBytes: 32 * 1024 * 1024,
   maxFileBytes: 2 * 1024 * 1024,
+  maxRawEntries: 10_000,
 } as const;
 
 interface ArchiveLimits {
@@ -24,9 +26,14 @@ interface ArchiveLimits {
   maxEntries: number;
   maxExpandedBytes: number;
   maxFileBytes: number;
+  maxRawEntries: number;
 }
 
+type ArchiveEntryRetention = "content" | "ignore" | "presence";
+type ArchiveEntryPolicy = (relativePath: string) => ArchiveEntryRetention;
+
 interface ExtractArchiveOptions {
+  entryPolicy?: ArchiveEntryPolicy;
   forbiddenPathBehavior: "reject" | "skip";
   limits?: Partial<ArchiveLimits>;
   signal?: AbortSignal;
@@ -35,16 +42,37 @@ interface ExtractArchiveOptions {
 
 interface ExtractionState {
   directoryPaths: Set<string>;
-  entryCount: number;
   extractedBytes: number;
   filePaths: Set<string>;
+  rawEntryCount: number;
+  retainedEntryCount: number;
   seenPaths: Set<string>;
 }
 
 type ArchiveEntryPlan =
   | { kind: "directory"; destinationPath: string }
-  | { kind: "file"; destinationPath: string; fileSize: number }
+  | {
+      kind: "file";
+      destinationPath: string;
+      fileSize: number;
+      relativePath: string;
+    }
+  | { kind: "presence"; destinationPath: string }
   | { kind: "skip" };
+
+const createSourceLimitDetail = (
+  kind: SourceLimitDetail["kind"],
+  limit: number,
+  observed: number,
+  unit: SourceLimitDetail["unit"],
+  relativePath?: string
+): SourceLimitDetail => ({
+  kind,
+  limit,
+  observed,
+  ...(relativePath ? { path: relativePath } : {}),
+  unit,
+});
 
 const hasErrorCode = (error: unknown): error is Error & { code: string } =>
   error instanceof Error && "code" in error && typeof error.code === "string";
@@ -53,6 +81,7 @@ const collectEntry = async (
   stream: NodeJS.ReadableStream,
   expectedBytes: number,
   maxFileBytes: number,
+  relativePath: string,
   signal?: AbortSignal
 ): Promise<Buffer> => {
   const chunks: Buffer[] = [];
@@ -65,6 +94,13 @@ const collectEntry = async (
     if (totalBytes > maxFileBytes) {
       throw new HostedScanError("An archive file exceeds the size limit.", {
         code: "ARCHIVE_FILE_TOO_LARGE",
+        sourceLimit: createSourceLimitDetail(
+          "retained_file_bytes",
+          maxFileBytes,
+          totalBytes,
+          "bytes",
+          relativePath
+        ),
         status: 422,
       });
     }
@@ -97,12 +133,18 @@ const trackEntryPath = (
   state: ExtractionState,
   options: Required<
     Pick<ExtractArchiveOptions, "forbiddenPathBehavior" | "stripComponents">
-  > & { limits: ArchiveLimits }
+  > & { entryPolicy?: ArchiveEntryPolicy; limits: ArchiveLimits }
 ): string | null => {
-  state.entryCount += 1;
-  if (state.entryCount > options.limits.maxEntries) {
+  state.rawEntryCount += 1;
+  if (state.rawEntryCount > options.limits.maxRawEntries) {
     throw new HostedScanError("The archive contains too many entries.", {
       code: "ARCHIVE_TOO_MANY_ENTRIES",
+      sourceLimit: createSourceLimitDetail(
+        "archive_entries",
+        options.limits.maxRawEntries,
+        state.rawEntryCount,
+        "entries"
+      ),
       status: 422,
     });
   }
@@ -122,6 +164,28 @@ const trackEntryPath = (
   }
   state.seenPaths.add(relativePath);
   return relativePath;
+};
+
+const trackRetainedEntry = (
+  state: ExtractionState,
+  limits: ArchiveLimits
+): void => {
+  state.retainedEntryCount += 1;
+  if (state.retainedEntryCount > limits.maxEntries) {
+    throw new HostedScanError(
+      "The archive contains too many retained entries.",
+      {
+        code: "ARCHIVE_TOO_MANY_ENTRIES",
+        sourceLimit: createSourceLimitDetail(
+          "archive_entries",
+          limits.maxEntries,
+          state.retainedEntryCount,
+          "entries"
+        ),
+        status: 422,
+      }
+    );
+  }
 };
 
 const throwArchivePathConflict = (): never => {
@@ -164,6 +228,7 @@ const trackArchivePathShape = (
 const planFileEntry = (
   header: Headers,
   destinationPath: string,
+  relativePath: string,
   state: ExtractionState,
   limits: ArchiveLimits
 ): ArchiveEntryPlan => {
@@ -171,6 +236,13 @@ const planFileEntry = (
   if (fileSize < 0 || fileSize > limits.maxFileBytes) {
     throw new HostedScanError("An archive file exceeds the size limit.", {
       code: "ARCHIVE_FILE_TOO_LARGE",
+      sourceLimit: createSourceLimitDetail(
+        "retained_file_bytes",
+        limits.maxFileBytes,
+        Math.max(fileSize, 0),
+        "bytes",
+        relativePath
+      ),
       status: 422,
     });
   }
@@ -179,11 +251,17 @@ const planFileEntry = (
   if (state.extractedBytes > limits.maxExpandedBytes) {
     throw new HostedScanError("The archive exceeds the expanded size limit.", {
       code: "ARCHIVE_EXPANDED_TOO_LARGE",
+      sourceLimit: createSourceLimitDetail(
+        "expanded_bytes",
+        limits.maxExpandedBytes,
+        state.extractedBytes,
+        "bytes"
+      ),
       status: 422,
     });
   }
 
-  return { destinationPath, fileSize, kind: "file" };
+  return { destinationPath, fileSize, kind: "file", relativePath };
 };
 
 const planArchiveEntry = (
@@ -192,7 +270,7 @@ const planArchiveEntry = (
   state: ExtractionState,
   options: Required<
     Pick<ExtractArchiveOptions, "forbiddenPathBehavior" | "stripComponents">
-  > & { limits: ArchiveLimits }
+  > & { entryPolicy?: ArchiveEntryPolicy; limits: ArchiveLimits }
 ): ArchiveEntryPlan => {
   const relativePath = trackEntryPath(header, state, options);
   if (relativePath === null) {
@@ -217,6 +295,9 @@ const planArchiveEntry = (
   const entryType = header.type ?? "file";
   if (entryType === "directory") {
     trackArchivePathShape(relativePath, "directory", state);
+    if (!options.entryPolicy) {
+      trackRetainedEntry(state, options.limits);
+    }
     return { destinationPath, kind: "directory" };
   }
 
@@ -231,7 +312,23 @@ const planArchiveEntry = (
   }
 
   trackArchivePathShape(relativePath, "file", state);
-  return planFileEntry(header, destinationPath, state, options.limits);
+  const retention = options.entryPolicy?.(relativePath) ?? "content";
+  if (retention === "ignore") {
+    return { kind: "skip" };
+  }
+
+  trackRetainedEntry(state, options.limits);
+  if (retention === "presence") {
+    return { destinationPath, kind: "presence" };
+  }
+
+  return planFileEntry(
+    header,
+    destinationPath,
+    relativePath,
+    state,
+    options.limits
+  );
 };
 
 const applyArchiveEntryPlan = async (
@@ -253,10 +350,19 @@ const applyArchiveEntryPlan = async (
     return;
   }
 
+  if (plan.kind === "presence") {
+    await drainEntry(stream, signal);
+    signal?.throwIfAborted();
+    await mkdir(path.dirname(plan.destinationPath), { recursive: true });
+    await writeFile(plan.destinationPath, "", { flag: "wx", mode: 0o600 });
+    return;
+  }
+
   const contents = await collectEntry(
     stream,
     plan.fileSize,
     limits.maxFileBytes,
+    plan.relativePath,
     signal
   );
   signal?.throwIfAborted();
@@ -270,6 +376,7 @@ const extractTarBuffer = async (
   options: Required<
     Pick<ExtractArchiveOptions, "forbiddenPathBehavior" | "stripComponents">
   > & {
+    entryPolicy?: ArchiveEntryPolicy;
     limits: ArchiveLimits;
     signal?: AbortSignal;
   }
@@ -278,9 +385,10 @@ const extractTarBuffer = async (
   let entryFailure: unknown;
   const state: ExtractionState = {
     directoryPaths: new Set<string>(),
-    entryCount: 0,
     extractedBytes: 0,
     filePaths: new Set<string>(),
+    rawEntryCount: 0,
+    retainedEntryCount: 0,
     seenPaths: new Set<string>(),
   };
 
@@ -354,6 +462,12 @@ const extractTarGzip = async (
       "The archive exceeds the compressed size limit.",
       {
         code: "ARCHIVE_COMPRESSED_TOO_LARGE",
+        sourceLimit: createSourceLimitDetail(
+          "compressed_bytes",
+          limits.maxCompressedBytes,
+          archiveBuffer.byteLength,
+          "bytes"
+        ),
         status: 413,
       }
     );
@@ -371,6 +485,12 @@ const extractTarGzip = async (
         {
           cause: error,
           code: "ARCHIVE_EXPANDED_TOO_LARGE",
+          sourceLimit: createSourceLimitDetail(
+            "expanded_bytes",
+            limits.maxExpandedBytes,
+            limits.maxExpandedBytes + 1,
+            "bytes"
+          ),
           status: 422,
         }
       );
@@ -390,6 +510,12 @@ const extractTarGzip = async (
   if (tarBuffer.byteLength > limits.maxExpandedBytes) {
     throw new HostedScanError("The archive exceeds the expanded size limit.", {
       code: "ARCHIVE_EXPANDED_TOO_LARGE",
+      sourceLimit: createSourceLimitDetail(
+        "expanded_bytes",
+        limits.maxExpandedBytes,
+        tarBuffer.byteLength,
+        "bytes"
+      ),
       status: 422,
     });
   }
@@ -397,6 +523,7 @@ const extractTarGzip = async (
   options.signal?.throwIfAborted();
   await mkdir(destinationRoot, { recursive: true });
   await extractTarBuffer(tarBuffer, destinationRoot, {
+    entryPolicy: options.entryPolicy,
     forbiddenPathBehavior: options.forbiddenPathBehavior,
     limits,
     signal: options.signal,
@@ -404,5 +531,10 @@ const extractTarGzip = async (
   });
 };
 
-export type { ArchiveLimits, ExtractArchiveOptions };
+export type {
+  ArchiveEntryPolicy,
+  ArchiveEntryRetention,
+  ArchiveLimits,
+  ExtractArchiveOptions,
+};
 export { DEFAULT_ARCHIVE_LIMITS, extractTarGzip };

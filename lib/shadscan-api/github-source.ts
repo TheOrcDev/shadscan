@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { classifyScanInputPath } from "@shadscan/cli";
 import { z } from "zod";
 import { DEFAULT_ARCHIVE_LIMITS, extractTarGzip } from "./archive";
 import {
@@ -339,6 +340,10 @@ const downloadGitHubArchive = async (
       maxBytes: DEFAULT_ARCHIVE_LIMITS.maxCompressedBytes,
       tooLargeCode: "GITHUB_ARCHIVE_TOO_LARGE",
       tooLargeMessage: "The GitHub archive exceeds the compressed size limit.",
+      tooLargeSourceLimit: {
+        kind: "compressed_bytes",
+        unit: "bytes",
+      },
     },
     sourceSignal
   );
@@ -417,6 +422,7 @@ const materializeGitHubSource = async (
     const extractionRoot = path.join(cleanupDirectory, "source");
 
     await extractTarGzip(archiveBuffer, extractionRoot, {
+      entryPolicy: classifyScanInputPath,
       forbiddenPathBehavior: "skip",
       signal: sourceSignal,
       stripComponents: 1,

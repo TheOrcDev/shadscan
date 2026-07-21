@@ -33,3 +33,7 @@ export type { RuleCatalogEntry } from "./rule-catalog";
 export { RULE_CATALOG } from "./rule-catalog";
 export type { ScanOptions } from "./scan";
 export { BUNDLED_RULESET_VERSION, scanProject } from "./scan";
+export {
+  classifyScanInputPath,
+  type ScanInputRetention,
+} from "./source-requirements";

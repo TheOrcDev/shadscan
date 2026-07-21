@@ -1,11 +1,13 @@
 import type { HostedScanErrorBody } from "./contracts";
 import { HOSTED_SCAN_SCHEMA_VERSION } from "./protocol";
+import type { SourceLimitDetail } from "./source-limits";
 
 interface HostedScanErrorOptions {
   cause?: unknown;
   code: string;
   headers?: HeadersInit;
   retryable?: boolean;
+  sourceLimit?: SourceLimitDetail;
   status: number;
 }
 
@@ -13,6 +15,7 @@ class HostedScanError extends Error {
   readonly code: string;
   readonly headers: Headers;
   readonly retryable: boolean;
+  readonly sourceLimit: SourceLimitDetail | undefined;
   readonly status: number;
 
   constructor(message: string, options: HostedScanErrorOptions) {
@@ -21,6 +24,7 @@ class HostedScanError extends Error {
     this.code = options.code;
     this.headers = new Headers(options.headers);
     this.retryable = options.retryable ?? false;
+    this.sourceLimit = options.sourceLimit;
     this.status = options.status;
   }
 }

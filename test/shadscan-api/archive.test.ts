@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
+import { classifyScanInputPath } from "@shadscan/cli";
 import { type Headers, pack } from "tar-stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { extractTarGzip } from "../../lib/shadscan-api/archive";
@@ -253,7 +254,7 @@ describe("hosted scan archive extraction", () => {
     );
   });
 
-  it("currently rejects an oversized asset even when the scanner does not read it", async () => {
+  it("skips an oversized asset when the scanner does not read it", async () => {
     const destination = await createDestination();
     const { gzip } = await createTarGzip([
       {
@@ -261,21 +262,26 @@ describe("hosted scan archive extraction", () => {
         header: { name: "public/demo.png", type: "file" },
       },
       {
-        contents: "export default function Page() {}\n",
+        contents: "export{}",
         header: { name: "app/page.tsx", type: "file" },
       },
     ]);
 
-    await expectArchiveError(
-      extractTarGzip(gzip, destination, {
-        forbiddenPathBehavior: "skip",
-        limits: { maxFileBytes: 8 },
-      }),
-      "ARCHIVE_FILE_TOO_LARGE"
+    await extractTarGzip(gzip, destination, {
+      entryPolicy: classifyScanInputPath,
+      forbiddenPathBehavior: "skip",
+      limits: { maxFileBytes: 8 },
+    });
+
+    await expect(
+      stat(path.join(destination, "public/demo.png"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(path.join(destination, "app/page.tsx"), "utf8")).toBe(
+      "export{}"
     );
   });
 
-  it("currently counts irrelevant entries against the complete archive budget", async () => {
+  it("does not count irrelevant entries against the retained-entry budget", async () => {
     const destination = await createDestination();
     const { gzip } = await createTarGzip([
       ...Array.from({ length: 5 }, (_, index) => ({
@@ -291,12 +297,14 @@ describe("hosted scan archive extraction", () => {
       },
     ]);
 
-    await expectArchiveError(
-      extractTarGzip(gzip, destination, {
-        forbiddenPathBehavior: "skip",
-        limits: { maxEntries: 5 },
-      }),
-      "ARCHIVE_TOO_MANY_ENTRIES"
+    await extractTarGzip(gzip, destination, {
+      entryPolicy: classifyScanInputPath,
+      forbiddenPathBehavior: "skip",
+      limits: { maxEntries: 1 },
+    });
+
+    expect(await readFile(path.join(destination, "app/page.tsx"), "utf8")).toBe(
+      "export default function Page() {}\n"
     );
   });
 
@@ -322,21 +330,35 @@ describe("hosted scan archive extraction", () => {
       await readFile(path.join(exactDestination, "package.json"), "utf8")
     ).toBe("boundary");
 
-    await expectArchiveError(
+    await expect(
       extractTarGzip(gzip, compressedOverflowDestination, {
         forbiddenPathBehavior: "reject",
         limits: { maxCompressedBytes: gzip.byteLength - 1 },
-      }),
-      "ARCHIVE_COMPRESSED_TOO_LARGE",
-      413
-    );
-    await expectArchiveError(
+      })
+    ).rejects.toMatchObject({
+      code: "ARCHIVE_COMPRESSED_TOO_LARGE",
+      sourceLimit: {
+        kind: "compressed_bytes",
+        limit: gzip.byteLength - 1,
+        observed: gzip.byteLength,
+        unit: "bytes",
+      },
+      status: 413,
+    });
+    await expect(
       extractTarGzip(gzip, expandedOverflowDestination, {
         forbiddenPathBehavior: "reject",
         limits: { maxExpandedBytes: tar.byteLength - 1 },
-      }),
-      "ARCHIVE_EXPANDED_TOO_LARGE"
-    );
+      })
+    ).rejects.toMatchObject({
+      code: "ARCHIVE_EXPANDED_TOO_LARGE",
+      sourceLimit: {
+        kind: "expanded_bytes",
+        limit: tar.byteLength - 1,
+        observed: tar.byteLength,
+        unit: "bytes",
+      },
+    });
   });
 
   it("classifies a truncated tar payload as a malformed archive", async () => {

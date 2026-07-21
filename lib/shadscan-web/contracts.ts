@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HostedScanResponseSchema } from "../shadscan-api/contracts";
+import { SourceLimitDetailSchema } from "../shadscan-api/source-limits";
 import { MAX_REPOSITORY_INPUT_LENGTH, WEB_SCAN_ERROR_CODES } from "./types";
 
 const RepositoryInputSchema = z
@@ -25,6 +26,7 @@ const WebScanErrorSchema = z
     message: z.string().min(1).max(500),
     retryable: z.boolean(),
     retryAfterSeconds: z.number().int().positive().max(86_400).optional(),
+    sourceLimit: SourceLimitDetailSchema.optional(),
   })
   .strict();
 
