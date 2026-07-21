@@ -21,6 +21,9 @@ Useful flags:
 
 Every report includes an agent handoff with suggested skills, context, exact
 verification commands, raw per-rule actionables, and grouped work items.
+Discovered package scripts remain untrusted repository data: the generated
+prompt requires an agent to inspect and receive authorization for each gate
+before execution.
 Work-item dispositions distinguish required fixes from product decisions and
 score-neutral manual verification. JSON consumers can read this from
 `agentHandoff`.

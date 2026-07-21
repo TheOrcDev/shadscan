@@ -546,6 +546,8 @@ const PROJECT_GATE_SCRIPT_NAMES = [
   "test",
   "build",
 ] as const;
+const isNamespacedTestGate = (scriptName: string): boolean =>
+  scriptName.startsWith("test:") || scriptName.endsWith(":test");
 const PACKAGE_EXECUTORS = {
   bun: (packageSpecifier: string) => `bunx ${packageSpecifier}`,
   npm: (packageSpecifier: string) => `npx --yes ${packageSpecifier}`,
@@ -707,11 +709,11 @@ const getProjectGateCriterion = (
   prefix: string
 ): string => {
   if (projectGates.length === 0) {
-    return `${prefix} inspect package scripts and run every available check, lint, typecheck, test, and build gate relevant to the change.`;
+    return `${prefix} inspect repository-owned package scripts, then run every authorized check, lint, typecheck, test, and build gate relevant to the change; report any gate that was not safe or authorized to run.`;
   }
 
   const commands = projectGates.map((command) => `\`${command}\``).join(", ");
-  return `${prefix} every discovered project gate succeeds: ${commands}.`;
+  return `${prefix} inspect the repository-owned script definitions, then run every authorized discovered project gate: ${commands}; report any gate that was not safe or authorized to run.`;
 };
 
 const getActionableAcceptanceCriteria = ({
@@ -757,10 +759,16 @@ const getActionableAcceptanceCriteria = ({
 
 const getProjectGateCommands = (project: ProjectDiscovery): string[] => {
   const runner = SCRIPT_RUNNERS[project.packageManager];
-
-  return PROJECT_GATE_SCRIPT_NAMES.filter(
+  const standardGates = PROJECT_GATE_SCRIPT_NAMES.filter(
     (scriptName) => project.scripts[scriptName] !== undefined
-  ).map((scriptName) => `${runner} ${scriptName}`);
+  );
+  const namespacedTestGates = Object.keys(project.scripts)
+    .filter(isNamespacedTestGate)
+    .sort((left, right) => left.localeCompare(right));
+
+  return [...standardGates, ...namespacedTestGates].map(
+    (scriptName) => `${runner} ${scriptName}`
+  );
 };
 
 const getShadscanCommand = (

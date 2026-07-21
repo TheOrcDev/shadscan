@@ -323,6 +323,43 @@ describe("runAudit", () => {
     );
   });
 
+  it("discovers namespaced test gates without including lifecycle hooks", async () => {
+    const rootDir = await createReactFixture();
+    await writeFixtureFile(
+      rootDir,
+      "package.json",
+      `${JSON.stringify(
+        {
+          dependencies: { react: "19.2.4" },
+          name: "audit-fixture",
+          scripts: {
+            build: "vite build",
+            "cli:test": "pnpm --filter ./packages/cli test",
+            pretest: "pnpm build",
+            "pretest:api": "pnpm build",
+            test: "vitest run",
+            "test:api": "vitest run test/api",
+            "test:web": "vitest run test/web",
+          },
+        },
+        null,
+        2
+      )}\n`
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: [createRule({ id: "passing-rule" })],
+    });
+
+    expect(report.agentHandoff.verification.projectGates).toEqual([
+      "pnpm test",
+      "pnpm build",
+      "pnpm cli:test",
+      "pnpm test:api",
+      "pnpm test:web",
+    ]);
+  });
+
   it("names the executable when generating a Bun verification command", async () => {
     const rootDir = await createReactFixture("bun");
 
