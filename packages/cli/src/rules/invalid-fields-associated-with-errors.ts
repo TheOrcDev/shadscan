@@ -1,6 +1,7 @@
 import { isJsxElement } from "typescript";
 import {
   getJsxAttributeValue,
+  getJsxOwnerKey,
   getJsxTagName,
   getLineNumber,
   parseProjectSourceFiles,
@@ -37,9 +38,9 @@ const invalidFieldsAssociatedWithErrorsRule: AuditRule = {
     let uncertainResult: AuditRuleResult | null = null;
 
     for (const file of files) {
-      const elementIds = new Set<string>();
+      const elementIdsByOwner = new Map<string, Set<string>>();
 
-      visitJsxNodes([file], ({ node }) => {
+      visitJsxNodes([file], ({ ancestors, node }) => {
         if (isJsxElement(node)) {
           return;
         }
@@ -51,11 +52,14 @@ const invalidFieldsAssociatedWithErrorsRule: AuditRule = {
           typeof id.value === "string" &&
           id.value.trim().length > 0
         ) {
+          const ownerKey = getJsxOwnerKey(file, ancestors);
+          const elementIds = elementIdsByOwner.get(ownerKey) ?? new Set();
           elementIds.add(id.value.trim());
+          elementIdsByOwner.set(ownerKey, elementIds);
         }
       });
 
-      visitJsxNodes([file], ({ node }) => {
+      visitJsxNodes([file], ({ ancestors, node }) => {
         if (failure || isJsxElement(node)) {
           return;
         }
@@ -84,10 +88,15 @@ const invalidFieldsAssociatedWithErrorsRule: AuditRule = {
             ? attribute.value.trim().split(WHITESPACE_PATTERN).filter(Boolean)
             : []
         );
+        const elementIds = elementIdsByOwner.get(
+          getJsxOwnerKey(file, ancestors)
+        );
 
         if (
           staticReferences.length > 0 &&
-          staticReferences.every((reference) => elementIds.has(reference))
+          staticReferences.every(
+            (reference) => elementIds?.has(reference) === true
+          )
         ) {
           return;
         }
@@ -107,7 +116,7 @@ const invalidFieldsAssociatedWithErrorsRule: AuditRule = {
         }
 
         const missingReferences = staticReferences.filter(
-          (reference) => !elementIds.has(reference)
+          (reference) => elementIds?.has(reference) !== true
         );
         failure = fail(
           missingReferences.length > 0

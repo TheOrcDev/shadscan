@@ -21,6 +21,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Scope label, control, and error-description ID correlation to the nearest
+  component owner so unrelated functions in one source file cannot satisfy one
+  another's accessibility checks.
 - Compare packed CLI report schemas with the installed package's exported
   schema version instead of a stale duplicated smoke-test literal.
 - Move hosted TypeScript parsing and rule evaluation into disposable,

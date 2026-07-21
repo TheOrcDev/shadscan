@@ -15,9 +15,11 @@ import {
   getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
+  getOwnerScopedJsxAttributeIdentity,
   getTextAttributeState,
   hasJsxAttribute,
   hasVisualChild,
+  type ParsedSourceFile,
   parseProjectSourceFiles,
   visitJsxNodes,
   walkNodes,
@@ -244,14 +246,21 @@ const getFormControlCandidate = (
 
 const getFormControlLabelState = ({
   ancestors,
+  file,
   labelTargets,
   openingElement,
 }: {
   ancestors: Node[];
+  file: ParsedSourceFile;
   labelTargets: Set<string>;
   openingElement: JsxOpeningLikeElement;
 }): EvidenceState => {
-  const id = getJsxAttributeIdentity(openingElement, "id");
+  const id = getOwnerScopedJsxAttributeIdentity(
+    file,
+    ancestors,
+    openingElement,
+    "id"
+  );
   const isLabeledById = id !== null && labelTargets.has(id);
   const isWrappedByLabel = [...FORM_LABEL_TAGS].some((tagName) =>
     ancestorHasTagName(ancestors, tagName)
@@ -610,12 +619,17 @@ const formsHaveLabelsRule: AuditRule = {
     for (const file of files) {
       const labelTargets = new Set<string>();
 
-      visitJsxNodes([file], ({ node }) => {
+      visitJsxNodes([file], ({ ancestors, node }) => {
         const openingElement = getOpeningElement(node);
         const tagName = getJsxTagName(openingElement);
 
         if (tagName && FORM_LABEL_TAGS.has(tagName)) {
-          const htmlFor = getJsxAttributeIdentity(openingElement, "htmlFor");
+          const htmlFor = getOwnerScopedJsxAttributeIdentity(
+            file,
+            ancestors,
+            openingElement,
+            "htmlFor"
+          );
 
           if (htmlFor) {
             labelTargets.add(htmlFor);
@@ -638,6 +652,7 @@ const formsHaveLabelsRule: AuditRule = {
 
         const labelState = getFormControlLabelState({
           ancestors,
+          file,
           labelTargets,
           openingElement,
         });

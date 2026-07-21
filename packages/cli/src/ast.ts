@@ -108,6 +108,28 @@ const isFunctionOwner = (node: Node): boolean =>
   isFunctionExpression(node) ||
   isMethodDeclaration(node);
 
+const getNearestFunctionOwner = (ancestors: Node[]): Node | null => {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
+
+    if (ancestor && isFunctionOwner(ancestor)) {
+      return ancestor;
+    }
+  }
+
+  return null;
+};
+
+const getJsxOwnerKey = (file: ParsedSourceFile, ancestors: Node[]): string => {
+  const owner = getNearestFunctionOwner(ancestors);
+
+  return JSON.stringify([
+    file.filePath,
+    owner?.getStart(file.sourceFile) ?? null,
+    owner?.getEnd() ?? null,
+  ]);
+};
+
 const getPatternIndexes = (content: string, pattern: RegExp): number[] => {
   const flags = pattern.flags.includes("g")
     ? pattern.flags
@@ -310,6 +332,19 @@ const getJsxAttributeIdentity = (
   }
 
   return null;
+};
+
+const getOwnerScopedJsxAttributeIdentity = (
+  file: ParsedSourceFile,
+  ancestors: Node[],
+  node: JsxOpeningLikeElement,
+  name: string
+): string | null => {
+  const identity = getJsxAttributeIdentity(node, name);
+
+  return identity
+    ? JSON.stringify([getJsxOwnerKey(file, ancestors), identity])
+    : null;
 };
 
 const getJsxAttribute = (
@@ -520,13 +555,17 @@ export {
   getJsxAttribute,
   getJsxAttributeIdentity,
   getJsxAttributeValue,
+  getJsxOwnerKey,
   getJsxTagName,
   getLineNumber,
+  getNearestFunctionOwner,
+  getOwnerScopedJsxAttributeIdentity,
   getSourceScopeMatchLine,
   getTextAttributeState,
   hasAccessibleText,
   hasJsxAttribute,
   hasVisualChild,
+  isFunctionOwner,
   parseProjectSourceFiles,
   visitJsxNodes,
   walkNodes,

@@ -9,10 +9,11 @@ import {
   ancestorHasTagName,
   type EvidenceState,
   getAccessibleTextState,
-  getJsxAttributeIdentity,
   getJsxTagName,
   getLineNumber,
+  getOwnerScopedJsxAttributeIdentity,
   getTextAttributeState,
+  type ParsedSourceFile,
   parseProjectSourceFiles,
   visitJsxNodes,
 } from "../ast";
@@ -33,16 +34,23 @@ const GENERATED_UI_PATH_PATTERN = /[/\\]components[/\\]ui[/\\]/;
 
 const getControlLabelState = ({
   ancestors,
+  file,
   labelTargets,
   node,
   openingElement,
 }: {
   ancestors: Node[];
+  file: ParsedSourceFile;
   labelTargets: Set<string>;
   node: JsxElement | JsxOpeningLikeElement;
   openingElement: JsxOpeningLikeElement;
 }): EvidenceState => {
-  const id = getJsxAttributeIdentity(openingElement, "id");
+  const id = getOwnerScopedJsxAttributeIdentity(
+    file,
+    ancestors,
+    openingElement,
+    "id"
+  );
   const isLabeledById = id !== null && labelTargets.has(id);
   const isWrappedByLabel =
     ancestorHasTagName(ancestors, "label") ||
@@ -79,7 +87,7 @@ const customControlsHaveLabelsRule: AuditRule = {
     for (const file of files) {
       const labelTargets = new Set<string>();
 
-      visitJsxNodes([file], ({ node }) => {
+      visitJsxNodes([file], ({ ancestors, node }) => {
         const openingElement = isJsxElement(node) ? node.openingElement : node;
         const tagName = getJsxTagName(openingElement);
 
@@ -87,7 +95,12 @@ const customControlsHaveLabelsRule: AuditRule = {
           return;
         }
 
-        const htmlFor = getJsxAttributeIdentity(openingElement, "htmlFor");
+        const htmlFor = getOwnerScopedJsxAttributeIdentity(
+          file,
+          ancestors,
+          openingElement,
+          "htmlFor"
+        );
 
         if (htmlFor) {
           labelTargets.add(htmlFor);
@@ -108,6 +121,7 @@ const customControlsHaveLabelsRule: AuditRule = {
 
         const labelState = getControlLabelState({
           ancestors,
+          file,
           labelTargets,
           node,
           openingElement,
