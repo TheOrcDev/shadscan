@@ -19,6 +19,11 @@ Optional server-only variables:
 | Variable | Purpose |
 | --- | --- |
 | `GITHUB_TOKEN` | Raises GitHub metadata limits. Public repositories remain the only web-supported source, and authorization is not forwarded to `codeload.github.com`. |
+| `SHADSCAN_WEB_MAX_COMPRESSED_MIB` | Compressed GitHub stream limit in MiB. Default `32`; hard ceiling `64`. |
+| `SHADSCAN_WEB_MAX_EXPANDED_MIB` | Expanded GitHub stream limit in MiB. Default `128`; hard ceiling `256`. |
+| `SHADSCAN_WEB_MAX_ARCHIVE_ENTRIES` | Raw tar entry limit. Default `10000`; hard ceiling `50000`. |
+| `SHADSCAN_WEB_MAX_RETAINED_FILE_MIB` | Per-file limit for source the scanner reads. Default `8`; hard ceiling `16`. |
+| `SHADSCAN_WEB_SOURCE_MODE` | Source acquisition mode: `archive`, `sparse`, or `auto`. Default `archive`. |
 | `SHADSCAN_PUBLIC_GITHUB_REPOSITORY` | Enables the public source link and star count after an unauthenticated GitHub lookup confirms the configured `owner/repository` is public. Leave unset while the source repository is private. |
 | `SHADSCAN_WEB_RATE_LIMIT_MODE=database` | Exercises the production web limiter outside `NODE_ENV=production`. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the authenticated `/v1/scans` limiter outside production. |
@@ -34,6 +39,9 @@ development salt unless database mode is explicitly enabled. Its sliding-window
 calculations and atomic multi-rule consumption match the database limiter, while
 state remains process-local and ephemeral. The public limits are 10 scans per
 client per 10 minutes, 20 per client per day, and 10 per repository per day.
+Invalid source limits, non-integer values, and values above the compiled hard
+ceilings also fail closed. Limits are read per request, so build and test imports
+do not require production environment variables.
 
 The Drizzle migrations create a bounded sliding-window counter table, its
 atomic consumption function, and a no-login permission role. Keep the owner
@@ -71,8 +79,13 @@ normal traffic.
 - The full server action has a 25-second deadline so it can return a stable
   `SCAN_TIMEOUT` error before the platform terminates it.
 - GitHub source work has a 12-second timeout inside that end-to-end budget.
-- GitHub archives are limited to 16 MiB compressed and 32 MiB extracted.
-- Extraction permits at most 2,500 entries and 2 MiB per file.
+- GitHub archives stream through bounded compressed and expanded byte counters;
+  the public defaults are 32 MiB compressed and 128 MiB expanded.
+- Extraction permits at most 10,000 raw archive entries and 8 MiB for one
+  retained source file. Irrelevant assets are streamed and counted but are not
+  retained; path-sensitive assets such as favicons become zero-byte markers.
+- Limit errors identify the failed counter, configured threshold, measured
+  value at cancellation, and a normalized path when one retained file failed.
 - Temporary source is removed after success and failure.
 - The browser result is session-only; no source or report is persisted.
 

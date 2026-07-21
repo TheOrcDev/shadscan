@@ -1,8 +1,11 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { classifyScanInputPath } from "@shadscan/cli";
 import { z } from "zod";
-import { DEFAULT_ARCHIVE_LIMITS, extractTarGzip } from "./archive";
+import {
+  type ArchiveLimits,
+  DEFAULT_ARCHIVE_LIMITS,
+  extractTarGzipStream,
+} from "./archive";
 import {
   GitHubScanRequestSchema,
   type MaterializedScanSource,
@@ -302,12 +305,12 @@ const getAllowedRedirectUrl = (response: Response): string => {
   return redirectUrl.toString();
 };
 
-const downloadGitHubArchive = async (
+const fetchGitHubArchiveResponse = async (
   repository: string,
   commitSha: string,
   fetchImplementation: FetchImplementation,
   sourceSignal: AbortSignal
-): Promise<Buffer> => {
+): Promise<Response> => {
   const initialResponse = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/tarball/${commitSha}`,
     { headers: getGitHubHeaders(false), redirect: "manual" },
@@ -330,6 +333,22 @@ const downloadGitHubArchive = async (
     );
   }
 
+  return archiveResponse;
+};
+
+const downloadGitHubArchive = async (
+  repository: string,
+  commitSha: string,
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
+): Promise<Buffer> => {
+  const archiveResponse = await fetchGitHubArchiveResponse(
+    repository,
+    commitSha,
+    fetchImplementation,
+    sourceSignal
+  );
+
   return readGitHubResponseBytes(
     archiveResponse,
     {
@@ -347,6 +366,18 @@ const downloadGitHubArchive = async (
     },
     sourceSignal
   );
+};
+
+const getResponseContentLength = (response: Response): number | undefined => {
+  const contentLength = response.headers.get("content-length");
+  if (!contentLength) {
+    return;
+  }
+
+  const parsedLength = Number.parseInt(contentLength, 10);
+  return Number.isSafeInteger(parsedLength) && parsedLength >= 0
+    ? parsedLength
+    : undefined;
 };
 
 const parseGitHubScanRequest = async (
@@ -386,7 +417,8 @@ const parseGitHubScanRequest = async (
 const materializeGitHubSource = async (
   requestData: GitHubScanRequest,
   fetchImplementation: FetchImplementation = fetch,
-  deadlineSignal?: AbortSignal
+  deadlineSignal?: AbortSignal,
+  limits?: Partial<ArchiveLimits>
 ): Promise<MaterializedScanSource> => {
   const { repository, revision, subdirectory } = requestData.source;
   const sourceTimeoutSignal = AbortSignal.timeout(GITHUB_SOURCE_TIMEOUT_MS);
@@ -408,25 +440,35 @@ const materializeGitHubSource = async (
       fetchImplementation,
       sourceSignal
     );
-    const archiveBuffer = await downloadGitHubArchive(
+    const archiveResponse = await fetchGitHubArchiveResponse(
       repository,
       commitSha,
       fetchImplementation,
       sourceSignal
     );
+    if (!archiveResponse.body) {
+      throw new HostedScanError("GitHub returned an empty source archive.", {
+        code: "GITHUB_INVALID_RESPONSE",
+        retryable: true,
+        status: 502,
+      });
+    }
     sourceSignal.throwIfAborted();
-    const sourceDigest = `sha256:${createHash("sha256")
-      .update(archiveBuffer)
-      .digest("hex")}`;
     cleanupDirectory = await createMaterializationDirectory();
     const extractionRoot = path.join(cleanupDirectory, "source");
 
-    await extractTarGzip(archiveBuffer, extractionRoot, {
-      entryPolicy: classifyScanInputPath,
-      forbiddenPathBehavior: "skip",
-      signal: sourceSignal,
-      stripComponents: 1,
-    });
+    const streamedArchive = await extractTarGzipStream(
+      archiveResponse.body,
+      extractionRoot,
+      {
+        compressedSize: getResponseContentLength(archiveResponse),
+        entryPolicy: classifyScanInputPath,
+        forbiddenPathBehavior: "skip",
+        limits,
+        signal: sourceSignal,
+        stripComponents: 1,
+      }
+    );
     sourceSignal.throwIfAborted();
     const projectRoot = await resolveProjectRoot(extractionRoot, subdirectory);
     sourceSignal.throwIfAborted();
@@ -436,7 +478,7 @@ const materializeGitHubSource = async (
       cleanupDirectory,
       projectRoot,
       resolvedRevision: commitSha,
-      sourceDigest,
+      sourceDigest: streamedArchive.sourceDigest,
       sourceKind: "git",
       sourceRoot: extractionRoot,
     };
@@ -451,6 +493,7 @@ const materializeGitHubSource = async (
 export type { FetchImplementation, GitHubScanRequest };
 export {
   downloadGitHubArchive,
+  fetchGitHubArchiveResponse,
   GITHUB_SOURCE_TIMEOUT_MS,
   materializeGitHubSource,
   parseGitHubScanRequest,

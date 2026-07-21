@@ -146,8 +146,13 @@ hash and should not be compared with a Git tree hash.
 - Distributed rate-limit calls fail closed behind 1-second lock, 3-second
   statement, and 5-second transport timeouts.
 - GitHub source work has a 12-second timeout inside that end-to-end budget.
-- GitHub archive downloads are capped at 16 MiB compressed.
-- Extracted archives are capped at 32 MiB, 2,500 entries, and 2 MiB per file.
+- GitHub archives stream through bounded compressed and expanded counters while
+  being hashed and extracted. Authenticated API defaults remain 16 MiB
+  compressed, 32 MiB expanded, 2,500 retained entries, 10,000 raw entries, and
+  2 MiB for one retained file.
+- GitHub acquisition discards irrelevant binary assets and materializes
+  zero-byte markers for path-only signals such as favicons. Reviewed snapshot
+  uploads retain the stricter reject-oriented extraction behavior.
 - Snapshot bytes are hashed and GitHub scans record the resolved commit SHA.
 - Source materialization uses a temporary directory that is removed after every
   completed or failed scan.

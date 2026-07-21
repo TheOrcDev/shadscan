@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -5,7 +6,10 @@ import { gzipSync } from "node:zlib";
 import { classifyScanInputPath } from "@shadscan/cli";
 import { type Headers, pack } from "tar-stream";
 import { afterEach, describe, expect, it } from "vitest";
-import { extractTarGzip } from "../../lib/shadscan-api/archive";
+import {
+  extractTarGzip,
+  extractTarGzipStream,
+} from "../../lib/shadscan-api/archive";
 
 interface TestArchiveEntry {
   contents?: Buffer | string;
@@ -68,6 +72,21 @@ const createDestination = async (): Promise<string> => {
   cleanupPaths.push(destination);
   return destination;
 };
+
+const createChunkedStream = (
+  buffer: Buffer,
+  chunkSize: number
+): ReadableStream<Uint8Array> =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let offset = 0; offset < buffer.byteLength; offset += chunkSize) {
+        controller.enqueue(
+          Uint8Array.from(buffer.subarray(offset, offset + chunkSize))
+        );
+      }
+      controller.close();
+    },
+  });
 
 const expectArchiveError = async (
   promise: Promise<void>,
@@ -359,6 +378,132 @@ describe("hosted scan archive extraction", () => {
         unit: "bytes",
       },
     });
+  });
+
+  it("streams, hashes, and filters a GitHub archive across chunk boundaries", async () => {
+    const destination = await createDestination();
+    const { gzip, tar } = await createTarGzip([
+      {
+        contents: "image-bytes-that-are-not-retained",
+        header: { name: "repository/public/demo.png", type: "file" },
+      },
+      {
+        contents: "export{}",
+        header: { name: "repository/app/page.tsx", type: "file" },
+      },
+    ]);
+
+    const result = await extractTarGzipStream(
+      createChunkedStream(gzip, 7),
+      destination,
+      {
+        entryPolicy: classifyScanInputPath,
+        forbiddenPathBehavior: "skip",
+        limits: { maxFileBytes: 8 },
+        stripComponents: 1,
+      }
+    );
+
+    expect(result).toEqual({
+      compressedBytes: gzip.byteLength,
+      expandedBytes: tar.byteLength,
+      sourceDigest: `sha256:${createHash("sha256").update(gzip).digest("hex")}`,
+    });
+    expect(await readFile(path.join(destination, "app/page.tsx"), "utf8")).toBe(
+      "export{}"
+    );
+    await expect(
+      stat(path.join(destination, "public/demo.png"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("reports the measured chunk when a streamed compressed limit is crossed", async () => {
+    const destination = await createDestination();
+    const { gzip } = await createTarGzip([
+      {
+        contents: "export{}",
+        header: { name: "repository/app/page.tsx", type: "file" },
+      },
+    ]);
+    const limit = gzip.byteLength - 1;
+
+    await expect(
+      extractTarGzipStream(createChunkedStream(gzip, limit), destination, {
+        forbiddenPathBehavior: "skip",
+        limits: { maxCompressedBytes: limit },
+        stripComponents: 1,
+      })
+    ).rejects.toMatchObject({
+      code: "ARCHIVE_COMPRESSED_TOO_LARGE",
+      sourceLimit: {
+        kind: "compressed_bytes",
+        limit,
+        observed: gzip.byteLength,
+        unit: "bytes",
+      },
+    });
+  });
+
+  it("stops a streamed compression bomb at the expanded-byte limit", async () => {
+    const destination = await createDestination();
+    const { gzip, tar } = await createTarGzip([
+      {
+        contents: "x".repeat(4096),
+        header: { name: "repository/app/page.tsx", type: "file" },
+      },
+    ]);
+    const limit = tar.byteLength - 1;
+
+    await expect(
+      extractTarGzipStream(createChunkedStream(gzip, 13), destination, {
+        forbiddenPathBehavior: "skip",
+        limits: { maxExpandedBytes: limit },
+        stripComponents: 1,
+      })
+    ).rejects.toMatchObject({
+      code: "ARCHIVE_EXPANDED_TOO_LARGE",
+      sourceLimit: {
+        kind: "expanded_bytes",
+        limit,
+        unit: "bytes",
+      },
+    });
+  });
+
+  it("classifies malformed streamed gzip input", async () => {
+    const destination = await createDestination();
+
+    await expect(
+      extractTarGzipStream(
+        createChunkedStream(Buffer.from("not-gzip"), 2),
+        destination,
+        { forbiddenPathBehavior: "skip" }
+      )
+    ).rejects.toMatchObject({ code: "MALFORMED_ARCHIVE" });
+  });
+
+  it("cancels the web response stream when extraction is aborted", async () => {
+    const destination = await createDestination();
+    const controller = new AbortController();
+    const abortReason = new Error("stream stopped");
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    const extraction = extractTarGzipStream(stream, destination, {
+      forbiddenPathBehavior: "skip",
+      signal: controller.signal,
+    });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    controller.abort(abortReason);
+
+    await expect(extraction).rejects.toBe(abortReason);
+    expect(cancelled).toBe(true);
   });
 
   it("classifies a truncated tar payload as a malformed archive", async () => {

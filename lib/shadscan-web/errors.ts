@@ -204,7 +204,8 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
 
   if (
     error.code === "RATE_LIMIT_NOT_CONFIGURED" ||
-    error.code === "RATE_LIMIT_UNAVAILABLE"
+    error.code === "RATE_LIMIT_UNAVAILABLE" ||
+    error.code === "SOURCE_CONFIGURATION_INVALID"
   ) {
     return new WebScanServiceError(
       "The web scanner is temporarily unavailable. Try again shortly.",

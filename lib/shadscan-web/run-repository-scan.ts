@@ -17,6 +17,7 @@ import { WebScanCompleteStateSchema } from "./contracts";
 import { asWebScanServiceError } from "./errors";
 import { normalizeGitHubRepository } from "./normalize-repository";
 import { enforceWebScanRateLimit, type WebRateLimitInput } from "./rate-limit";
+import { getWebSourceConfig, type WebSourceConfig } from "./source-config";
 import type { WebScanCompleteState } from "./types";
 
 interface ExecuteWebRepositoryScanInput {
@@ -34,6 +35,7 @@ interface ExecuteWebRepositoryScanDependencies {
     source: Parameters<typeof runHostedScan>[0],
     signal?: AbortSignal
   ) => HostedScanResponse | Promise<HostedScanResponse>;
+  sourceConfig?: WebSourceConfig;
 }
 
 const executeWebRepositoryScan = async (
@@ -64,10 +66,12 @@ const executeWebRepositoryScan = async (
         });
         const materializeSource =
           dependencies.materializeSource ?? materializeGitHubSource;
+        const sourceConfig = dependencies.sourceConfig ?? getWebSourceConfig();
         const source = await materializeSource(
           request,
           dependencies.fetchImplementation,
-          signal
+          signal,
+          sourceConfig.limits
         );
         signal.throwIfAborted();
         const runScan = dependencies.runScan ?? runHostedScan;
