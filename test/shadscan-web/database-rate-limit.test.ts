@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   consumeDatabaseRateLimits,
+  DATABASE_RATE_LIMIT_TRANSPORT_TIMEOUT_MS,
   DatabaseRateLimitError,
   type DatabaseRateLimitRule,
   hashRateLimitIdentity,
@@ -24,6 +25,10 @@ const RULES: readonly DatabaseRateLimitRule[] = [
     windowMs: 86_400_000,
   },
 ];
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("database rate-limit contract", () => {
   it("returns validated decisions in requested rule order", async () => {
@@ -62,7 +67,7 @@ describe("database rate-limit contract", () => {
         resetAt: 86_401_000,
       },
     ]);
-    expect(execute).toHaveBeenCalledWith(RULES);
+    expect(execute).toHaveBeenCalledWith(RULES, expect.anything());
   });
 
   it("rejects incomplete or inconsistent database responses", async () => {
@@ -101,6 +106,29 @@ describe("database rate-limit contract", () => {
       )
     ).rejects.toBeInstanceOf(DatabaseRateLimitError);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("aborts a stalled database request within its transport deadline", async () => {
+    vi.useFakeTimers();
+    let executionSignal: AbortSignal | undefined;
+    const outcome = consumeDatabaseRateLimits(
+      RULES,
+      (_rules, signal) => {
+        executionSignal = signal;
+        return new Promise<never>(() => undefined);
+      },
+      100
+    ).catch((error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(outcome).resolves.toMatchObject({ code: "UNAVAILABLE" });
+    expect(executionSignal?.aborted).toBe(true);
+  });
+
+  it("keeps the database deadline inside the hosted scan budget", () => {
+    expect(DATABASE_RATE_LIMIT_TRANSPORT_TIMEOUT_MS).toBe(5000);
+    expect(DATABASE_RATE_LIMIT_TRANSPORT_TIMEOUT_MS).toBeLessThan(25_000);
   });
 
   it("hashes identities deterministically and namespaces collisions", () => {

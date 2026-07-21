@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import { rateLimitWindows } from "./schema";
 
@@ -11,7 +12,9 @@ class DatabaseConfigurationError extends Error {
   }
 }
 
-type Database = NeonHttpDatabase<typeof schema>;
+type Database = NeonHttpDatabase<typeof schema> & {
+  $client: NeonQueryFunction<false, false>;
+};
 
 let cachedDatabase: Database | null = null;
 let cachedDatabaseSignature: string | null = null;

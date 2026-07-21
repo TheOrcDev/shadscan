@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
-import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { DatabaseConfigurationError, getDatabase } from "../db/client";
 
 const MAXIMUM_RULES_PER_CHECK = 8;
+const DATABASE_RATE_LIMIT_LOCK_TIMEOUT_MS = 1000;
+const DATABASE_RATE_LIMIT_STATEMENT_TIMEOUT_MS = 3000;
+const DATABASE_RATE_LIMIT_TRANSPORT_TIMEOUT_MS = 5000;
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 interface DatabaseRateLimitRule {
@@ -40,16 +42,9 @@ class DatabaseRateLimitError extends Error {
   }
 }
 
-interface DatabaseRateLimitRow extends Record<string, unknown> {
-  allowed: boolean;
-  max_requests: number;
-  remaining: number;
-  reset_at_ms: number | string;
-  rule_name: string;
-}
-
 type ExecuteDatabaseRateLimits = (
-  rules: readonly DatabaseRateLimitRule[]
+  rules: readonly DatabaseRateLimitRule[],
+  signal: AbortSignal
 ) => Promise<readonly unknown[]>;
 
 const DatabaseRateLimitRowSchema = z.object({
@@ -89,7 +84,10 @@ const assertValidRules = (rules: readonly DatabaseRateLimitRule[]): void => {
   }
 };
 
-const executeDatabaseRateLimits: ExecuteDatabaseRateLimits = async (rules) => {
+const executeDatabaseRateLimits: ExecuteDatabaseRateLimits = async (
+  rules,
+  signal
+) => {
   let database: ReturnType<typeof getDatabase>;
   try {
     database = getDatabase();
@@ -112,10 +110,17 @@ const executeDatabaseRateLimits: ExecuteDatabaseRateLimits = async (rules) => {
   }));
 
   try {
-    const result = await database.execute<DatabaseRateLimitRow>(
-      sql`select * from consume_shadscan_rate_limits(${JSON.stringify(payload)}::jsonb)`
+    const transactionResults = await database.$client.transaction(
+      (transaction) => [
+        transaction`select set_config('lock_timeout', ${`${DATABASE_RATE_LIMIT_LOCK_TIMEOUT_MS}ms`}, true)`,
+        transaction`select set_config('statement_timeout', ${`${DATABASE_RATE_LIMIT_STATEMENT_TIMEOUT_MS}ms`}, true)`,
+        transaction`select * from consume_shadscan_rate_limits(${JSON.stringify(
+          payload
+        )}::jsonb)`,
+      ],
+      { fetchOptions: { signal } }
     );
-    return result.rows;
+    return transactionResults[2] ?? [];
   } catch (error) {
     throw new DatabaseRateLimitError(
       "The distributed rate limiter is unavailable.",
@@ -126,15 +131,35 @@ const executeDatabaseRateLimits: ExecuteDatabaseRateLimits = async (rules) => {
 
 const consumeDatabaseRateLimits = async (
   rules: readonly DatabaseRateLimitRule[],
-  execute: ExecuteDatabaseRateLimits = executeDatabaseRateLimits
+  execute: ExecuteDatabaseRateLimits = executeDatabaseRateLimits,
+  timeoutMs = DATABASE_RATE_LIMIT_TRANSPORT_TIMEOUT_MS
 ): Promise<DatabaseRateLimitDecision[]> => {
   assertValidRules(rules);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new DatabaseRateLimitError(
+      "The database rate-limit timeout is invalid.",
+      { code: "UNAVAILABLE" }
+    );
+  }
+
+  const controller = new AbortController();
+  const timeoutError = new DatabaseRateLimitError(
+    "The distributed rate limiter timed out.",
+    { code: "UNAVAILABLE" }
+  );
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort(timeoutError);
+      reject(timeoutError);
+    }, timeoutMs);
+  });
 
   let parsedRows: z.infer<typeof DatabaseRateLimitRowSchema>[];
   try {
     parsedRows = z
       .array(DatabaseRateLimitRowSchema)
-      .parse(await execute(rules));
+      .parse(await Promise.race([execute(rules, controller.signal), timeout]));
   } catch (error) {
     if (error instanceof DatabaseRateLimitError) {
       throw error;
@@ -143,6 +168,8 @@ const consumeDatabaseRateLimits = async (
       "The distributed rate limiter returned an invalid response.",
       { cause: error, code: "UNAVAILABLE" }
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const rowsByName = new Map(parsedRows.map((row) => [row.rule_name, row]));
@@ -184,6 +211,7 @@ export type {
 };
 export {
   consumeDatabaseRateLimits,
+  DATABASE_RATE_LIMIT_TRANSPORT_TIMEOUT_MS,
   DatabaseRateLimitError,
   hashRateLimitIdentity,
 };

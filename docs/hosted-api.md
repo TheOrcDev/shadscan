@@ -122,6 +122,8 @@ hash and should not be compared with a Git tree hash.
 
 - Hosted work has a 25-second deadline within the 30-second route limit and
   returns a retryable `SCAN_TIMEOUT` error with status 504.
+- Distributed rate-limit calls fail closed behind 1-second lock, 3-second
+  statement, and 5-second transport timeouts.
 - GitHub source work has a 12-second timeout inside that end-to-end budget.
 - GitHub archive downloads are capped at 16 MiB compressed.
 - Extracted archives are capped at 32 MiB, 2,500 entries, and 2 MiB per file.

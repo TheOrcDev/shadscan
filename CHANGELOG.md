@@ -15,6 +15,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Bound distributed rate-limit calls with PostgreSQL lock and statement
+  timeouts plus an abortable Neon transport deadline.
 - Scan eligible React files at the project root, expose source coverage in the
   report contract, and prevent `--fail-under` from certifying partial scans.
 - Use locale-independent code-unit ordering throughout reports and prompts so

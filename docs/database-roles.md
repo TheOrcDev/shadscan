@@ -14,6 +14,11 @@ cannot read or modify `rate_limit_windows`, create schema objects, own database
 objects, or inherit Neon's `neon_superuser` role. The function runs as its
 migration-owner definer with a fixed search path.
 
+Runtime limiter calls are bounded at three layers: a 1-second PostgreSQL lock
+timeout, a 3-second statement timeout, and a 5-second Neon HTTP transport
+deadline. A timeout fails closed as an unavailable limiter and remains inside
+the hosted scan deadline.
+
 ## Provision or rotate the runtime login
 
 Apply migrations with the owner credential first:
