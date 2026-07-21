@@ -336,6 +336,55 @@ describe("runAudit", () => {
     );
   });
 
+  it("keeps mixed product decisions and fixes in separate work items", async () => {
+    const rootDir = await createReactFixture();
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({
+          category: "states",
+          id: "toast-provider-present",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "states",
+          id: "toast-provider-mounted",
+          run: () => ({ status: "fail" }),
+        }),
+        createRule({
+          category: "accessibility",
+          id: "status-messages-announced",
+          run: () => ({ status: "fail" }),
+        }),
+      ],
+    });
+
+    expect(
+      report.agentHandoff.workItems.map((workItem) => ({
+        disposition: workItem.disposition,
+        findingIds: workItem.findingIds,
+        id: workItem.id,
+      }))
+    ).toEqual([
+      {
+        disposition: "fix",
+        findingIds: ["status-messages-announced"],
+        id: "status-messages-announced",
+      },
+      {
+        disposition: "decide",
+        findingIds: ["toast-provider-present", "toast-provider-mounted"],
+        id: "transient-feedback-decide",
+      },
+    ]);
+    expect(report.agentHandoff.workItems[0]?.acceptanceCriteria[0]).toContain(
+      "`status-messages-announced` reports pass"
+    );
+    expect(
+      report.agentHandoff.workItems[1]?.acceptanceCriteria[0]
+    ).not.toContain("status-messages-announced");
+  });
+
   it("discovers namespaced test gates without including lifecycle hooks", async () => {
     const rootDir = await createReactFixture();
     await writeFixtureFile(

@@ -13,6 +13,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Keep product decisions and confirmed fixes in separate agent work items so a
+  grouped handoff never turns an optional decision into a mandatory pass gate.
 - Discover package managers from bounded monorepo roots, recognize `bun.lock`,
   and target the selected application in generated scan and project-gate
   commands.

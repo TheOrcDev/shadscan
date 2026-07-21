@@ -945,29 +945,43 @@ const createWorkItems = (
   const workItems: AgentWorkItem[] = [];
 
   for (const group of WORK_ITEM_GROUPS) {
-    const groupedActionables = group.findingIds.flatMap((findingId) => {
+    const matchingActionables = group.findingIds.flatMap((findingId) => {
       const actionable = actionables.find(
         (candidate) => candidate.findingId === findingId
       );
       return actionable ? [actionable] : [];
     });
 
-    if (groupedActionables.length < 2) {
+    if (matchingActionables.length < 2) {
       continue;
     }
 
-    for (const actionable of groupedActionables) {
-      groupedFindingIds.add(actionable.findingId);
-    }
-    workItems.push(
-      createWorkItem({
-        actionables: groupedActionables,
-        id: group.id,
-        projectGates,
-        summary: group.summary,
-        title: group.title,
-      })
+    const dispositions = new Set(
+      matchingActionables.map(({ disposition }) => disposition)
     );
+
+    for (const disposition of dispositions) {
+      const groupedActionables = matchingActionables.filter(
+        (actionable) => actionable.disposition === disposition
+      );
+
+      if (groupedActionables.length < 2) {
+        continue;
+      }
+
+      for (const actionable of groupedActionables) {
+        groupedFindingIds.add(actionable.findingId);
+      }
+      workItems.push(
+        createWorkItem({
+          actionables: groupedActionables,
+          id: dispositions.size === 1 ? group.id : `${group.id}-${disposition}`,
+          projectGates,
+          summary: group.summary,
+          title: group.title,
+        })
+      );
+    }
   }
 
   for (const actionable of actionables) {
