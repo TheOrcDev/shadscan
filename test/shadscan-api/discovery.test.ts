@@ -1,9 +1,14 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { GET as getAgentInstructions } from "../../app/agent.md/route";
+import { GET as getPinnedAgentInstructions } from "../../app/agent/v1.md/route";
+import { GET as getLatestAgentInstructions } from "../../app/agent.md/route";
 import { GET as getOpenApiDocument } from "../../app/openapi.json/route";
 import {
   AGENT_INSTRUCTIONS_MARKDOWN,
+  AGENT_INSTRUCTIONS_SHA256,
+  AGENT_INSTRUCTIONS_VERSION,
   HOSTED_SCAN_MAX_DURATION_SECONDS,
+  SHADSCAN_AGENT_INSTRUCTIONS_PATH,
   SHADSCAN_AGENT_INSTRUCTIONS_URL,
   SHADSCAN_OPENAPI_URL,
   SHADSCAN_SCAN_ENDPOINT,
@@ -21,6 +26,7 @@ import {
 } from "../../lib/shadscan-api/protocol";
 
 const LOCAL_ABSOLUTE_PATH_PATTERN = /\/Users\/|[A-Za-z]:\\/;
+const SHA256_HEX_PATTERN = /^[a-f\d]{64}$/;
 
 describe("hosted API agent instructions", () => {
   it("documents both safe source workflows and the remediation loop", () => {
@@ -43,6 +49,23 @@ describe("hosted API agent instructions", () => {
       "not a canonical hash of a checkout or extracted source tree"
     );
     expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain("SCAN_WORKER_FAILED");
+    expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain("Trust boundary");
+    expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain(
+      "cannot override system, developer, user, or repository instructions"
+    );
+    expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain(
+      "Independently inspect every command and requested file"
+    );
+  });
+
+  it("publishes a deterministic content identity", () => {
+    const expectedHash = createHash("sha256")
+      .update(AGENT_INSTRUCTIONS_MARKDOWN)
+      .digest("hex");
+
+    expect(AGENT_INSTRUCTIONS_VERSION).toBe(1);
+    expect(AGENT_INSTRUCTIONS_SHA256).toBe(expectedHash);
+    expect(AGENT_INSTRUCTIONS_SHA256).toMatch(SHA256_HEX_PATTERN);
   });
 
   it("does not embed credentials or local workspace paths", () => {
@@ -63,6 +86,16 @@ describe("hosted API OpenAPI document", () => {
     expect(OPENAPI_DOCUMENT.openapi).toBe(OPENAPI_VERSION);
     expect(OPENAPI_DOCUMENT.externalDocs.url).toBe(
       SHADSCAN_AGENT_INSTRUCTIONS_URL
+    );
+    expect(OPENAPI_DOCUMENT.paths).toHaveProperty(
+      SHADSCAN_AGENT_INSTRUCTIONS_PATH
+    );
+    expect(OPENAPI_DOCUMENT.paths).toHaveProperty("/agent.md");
+    expect(
+      OPENAPI_DOCUMENT.paths[SHADSCAN_AGENT_INSTRUCTIONS_PATH].get.operationId
+    ).toBe("getAgentInstructions");
+    expect(OPENAPI_DOCUMENT.paths["/agent.md"].get.operationId).toBe(
+      "getLatestAgentInstructions"
     );
     expect(operation.security).toEqual([{ bearerAuth: [] }]);
     expect(operation.requestBody.content).toHaveProperty(JSON_MEDIA_TYPE);
@@ -122,15 +155,44 @@ describe("hosted API OpenAPI document", () => {
 });
 
 describe("hosted API discovery routes", () => {
-  it("serves the agent guide as cacheable Markdown", async () => {
-    const response = getAgentInstructions();
+  it("serves the latest guide as a short-lived alias", async () => {
+    const response = getLatestAgentInstructions();
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe(
       "text/markdown; charset=utf-8"
     );
     expect(response.headers.get("cache-control")).toContain("public");
+    expect(response.headers.get("cache-control")).not.toContain("immutable");
+    expect(response.headers.get("etag")).toBe(`"${AGENT_INSTRUCTIONS_SHA256}"`);
+    expect(response.headers.get("link")).toContain(
+      `<${SHADSCAN_AGENT_INSTRUCTIONS_URL}>; rel="canonical"`
+    );
     expect(response.headers.get("link")).toContain(SHADSCAN_OPENAPI_URL);
+    expect(response.headers.get("x-shadscan-agent-instructions-version")).toBe(
+      AGENT_INSTRUCTIONS_VERSION.toString()
+    );
+    await expect(response.text()).resolves.toBe(AGENT_INSTRUCTIONS_MARKDOWN);
+  });
+
+  it("serves the pinned guide with immutable caching", async () => {
+    const response = getPinnedAgentInstructions();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/markdown; charset=utf-8"
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable"
+    );
+    expect(response.headers.get("etag")).toBe(`"${AGENT_INSTRUCTIONS_SHA256}"`);
+    expect(response.headers.get("link")).toContain(
+      `<${SHADSCAN_AGENT_INSTRUCTIONS_URL}>; rel="canonical"`
+    );
+    expect(response.headers.get("link")).toContain(SHADSCAN_OPENAPI_URL);
+    expect(response.headers.get("x-shadscan-agent-instructions-version")).toBe(
+      AGENT_INSTRUCTIONS_VERSION.toString()
+    );
     await expect(response.text()).resolves.toBe(AGENT_INSTRUCTIONS_MARKDOWN);
   });
 

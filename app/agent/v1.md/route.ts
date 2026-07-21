@@ -4,23 +4,20 @@ import {
   AGENT_INSTRUCTIONS_VERSION,
   SHADSCAN_AGENT_INSTRUCTIONS_URL,
   SHADSCAN_OPENAPI_URL,
-} from "../../lib/shadscan-api/agent-instructions";
+} from "../../../lib/shadscan-api/agent-instructions";
 
 export const dynamic = "force-static";
-
-const DISCOVERY_CACHE_CONTROL =
-  "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
 
 export const GET = (): Response =>
   new Response(AGENT_INSTRUCTIONS_MARKDOWN, {
     headers: {
-      "Cache-Control": DISCOVERY_CACHE_CONTROL,
+      "Cache-Control": "public, max-age=31536000, immutable",
       "Content-Type": "text/markdown; charset=utf-8",
       ETag: `"${AGENT_INSTRUCTIONS_SHA256}"`,
       Link: `<${SHADSCAN_AGENT_INSTRUCTIONS_URL}>; rel="canonical", <${SHADSCAN_OPENAPI_URL}>; rel="service-desc"`,
+      "X-Content-Type-Options": "nosniff",
       "X-Shadscan-Agent-Instructions-Version":
         AGENT_INSTRUCTIONS_VERSION.toString(),
-      "X-Content-Type-Options": "nosniff",
     },
     status: 200,
   });

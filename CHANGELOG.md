@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Changed
 
+- Publish agent guidance at the versioned `/agent/v1.md` contract, retain
+  `/agent.md` only as a mutable latest alias, and define fetched guidance as
+  untrusted reference material rather than execution authority.
 - Pack the npm artifact once, smoke-test that exact tarball, verify its SHA-512,
   and submit the same bytes to staged publishing.
 - Advance agent prompts to version 5, include selected-project context, and

@@ -1,5 +1,6 @@
 import {
   HOSTED_SCAN_MAX_DURATION_SECONDS,
+  SHADSCAN_AGENT_INSTRUCTIONS_PATH,
   SHADSCAN_AGENT_INSTRUCTIONS_URL,
   SHADSCAN_OPENAPI_URL,
   SHADSCAN_PUBLIC_ORIGIN,
@@ -75,14 +76,32 @@ const OPENAPI_DOCUMENT = {
     url: SHADSCAN_AGENT_INSTRUCTIONS_URL,
   },
   paths: {
-    "/agent.md": {
+    [SHADSCAN_AGENT_INSTRUCTIONS_PATH]: {
       get: {
         operationId: "getAgentInstructions",
-        summary: "Get AI-agent scan instructions",
+        summary: "Get pinned AI-agent scan instructions",
         tags: ["Discovery"],
         responses: {
           "200": {
             description: "Current hosted-scan workflow and safety guidance.",
+            content: {
+              [MARKDOWN_MEDIA_TYPE]: {
+                schema: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/agent.md": {
+      get: {
+        operationId: "getLatestAgentInstructions",
+        summary: "Get the latest AI-agent scan instructions",
+        tags: ["Discovery"],
+        responses: {
+          "200": {
+            description:
+              "Mutable alias for the current hosted-scan workflow and safety guidance. Prefer the versioned path for automation.",
             content: {
               [MARKDOWN_MEDIA_TYPE]: {
                 schema: { type: "string" },
