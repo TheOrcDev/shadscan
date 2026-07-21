@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.3 - 2026-07-21
+
 ### Added
 
 - Add a width-aware terminal score bar with deterministic, color-free-by-default
@@ -76,6 +78,9 @@ stable releases published under `latest`.
 - Require dark-mode and bare-key shortcuts to prove complete, exiting guards
   for inputs, textareas, selects, and contenteditable targets; unrelated target
   names and partial guards no longer earn safe-hotkey credit.
+- Preserve render-graph uncertainty across Vite aliases, Next.js route surfaces,
+  component composition, and bounded export resolution.
+- Handle nullable Next.js `usePathname` values during production builds.
 
 ## 0.1.0-rc.2 - 2026-07-21
 
