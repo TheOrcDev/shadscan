@@ -49,6 +49,11 @@ interface MemoryWindowState {
   startedAt: number;
 }
 
+interface EvaluatedMemoryRule {
+  decision: WebRateLimitDecision;
+  state: MemoryWindowState;
+}
+
 const memoryWindows = new Map<string, MemoryWindowState>();
 
 const getClientRateLimitKey = (
@@ -123,29 +128,36 @@ const checkMemoryWebRateLimit = (
     salt,
     environment
   );
-  const decisions: WebRateLimitDecision[] = [];
+  const evaluatedRules: EvaluatedMemoryRule[] = [];
 
   for (const name of Object.keys(WEB_RATE_LIMITS) as WebRateLimitName[]) {
     const rule = WEB_RATE_LIMITS[name];
     const identity = getLimitIdentity(name, clientKey, input.repositoryKey);
     const state = getMemoryWindow(`${name}:${identity}`, rule.windowMs, now);
-    state.count += 1;
-    decisions.push({
-      limit: rule.limit,
-      name,
-      remaining: rule.limit - state.count,
-      resetAt: state.startedAt + rule.windowMs,
+    evaluatedRules.push({
+      decision: {
+        limit: rule.limit,
+        name,
+        remaining: Math.max(0, rule.limit - state.count - 1),
+        resetAt: state.startedAt + rule.windowMs,
+      },
+      state,
     });
   }
 
-  const failedDecision = decisions
-    .filter((decision) => decision.remaining < 0)
+  const failedDecision = evaluatedRules
+    .filter(({ state, decision }) => state.count >= decision.limit)
+    .map(({ decision }) => decision)
     .sort((left, right) => right.resetAt - left.resetAt)[0];
   if (failedDecision) {
     return throwWebRateLimitError(failedDecision, now);
   }
 
-  return decisions;
+  for (const evaluatedRule of evaluatedRules) {
+    evaluatedRule.state.count += 1;
+  }
+
+  return evaluatedRules.map(({ decision }) => decision);
 };
 
 const checkDatabaseWebRateLimit = async (

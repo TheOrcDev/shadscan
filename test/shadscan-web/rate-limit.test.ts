@@ -112,6 +112,7 @@ describe("web scan rate limits", () => {
   });
 
   it("allows ten client scans per short window and rejects the eleventh", () => {
+    const rejectedRepository = "acme/widget-over-limit";
     for (let count = 0; count < WEB_RATE_LIMITS.clientShort.limit; count += 1) {
       expect(
         checkMemoryWebRateLimit(
@@ -130,7 +131,7 @@ describe("web scan rate limits", () => {
       checkMemoryWebRateLimit(
         {
           clientAddress: "203.0.113.4",
-          repositoryKey: "acme/widget-over-limit",
+          repositoryKey: rejectedRepository,
         },
         1000,
         TEST_SALT,
@@ -142,6 +143,24 @@ describe("web scan rate limits", () => {
         retryAfterSeconds: 600,
       })
     );
+
+    for (
+      let count = 0;
+      count < WEB_RATE_LIMITS.repositoryDaily.limit;
+      count += 1
+    ) {
+      expect(
+        checkMemoryWebRateLimit(
+          {
+            clientAddress: `198.51.100.${count}`,
+            repositoryKey: rejectedRepository,
+          },
+          1000,
+          TEST_SALT,
+          "test"
+        )
+      ).toHaveLength(3);
+    }
   });
 
   it("limits repeated repository scans across distinct clients", () => {
@@ -164,7 +183,7 @@ describe("web scan rate limits", () => {
 
     expect(() =>
       checkMemoryWebRateLimit(
-        { clientAddress: "198.51.100.1", repositoryKey },
+        { clientAddress: "198.51.100.200", repositoryKey },
         1000,
         TEST_SALT,
         "test"
@@ -175,5 +194,19 @@ describe("web scan rate limits", () => {
         retryAfterSeconds: 86_400,
       })
     );
+
+    for (let count = 0; count < WEB_RATE_LIMITS.clientShort.limit; count += 1) {
+      expect(
+        checkMemoryWebRateLimit(
+          {
+            clientAddress: "198.51.100.200",
+            repositoryKey: `acme/other-${count}`,
+          },
+          1000,
+          TEST_SALT,
+          "test"
+        )
+      ).toHaveLength(3);
+    }
   });
 });

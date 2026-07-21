@@ -15,6 +15,13 @@
       "when": 1784589010170,
       "tag": "0001_consume_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784597778022,
+      "tag": "0002_atomic_rate_limit_batches",
+      "breakpoints": true
     }
   ]
 }

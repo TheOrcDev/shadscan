@@ -46,6 +46,56 @@ try {
   `;
   assert.equal(storedWindows[0]?.request_count, primaryRule.maxRequests);
 
+  const blockedRule = {
+    bucket: `${bucketPrefix}-atomic-blocked`,
+    identityHash: hashIdentity("atomic-blocked"),
+    maxRequests: 1,
+    ruleName: "blocked",
+    windowMs: 600_000,
+  };
+  const companionRule = {
+    ...blockedRule,
+    bucket: `${bucketPrefix}-atomic-companion`,
+    identityHash: hashIdentity("atomic-companion"),
+    maxRequests: 5,
+    ruleName: "companion",
+  };
+  await consume([blockedRule]);
+  const rejectedBatch = await consume([blockedRule, companionRule]);
+  assert.equal(
+    rejectedBatch.find((decision) => decision.rule_name === "blocked")?.allowed,
+    false
+  );
+  assert.equal(
+    rejectedBatch.find((decision) => decision.rule_name === "companion")
+      ?.allowed,
+    true
+  );
+
+  const companionWindows = await sql`
+    select count(*)::integer as count
+    from rate_limit_windows
+    where bucket = ${companionRule.bucket}
+      and identity_hash = ${companionRule.identityHash}
+  `;
+  assert.equal(companionWindows[0]?.count, 0);
+
+  const blockedWindow = await sql`
+    select floor(extract(epoch from window_started_at) * 1000)::bigint as started_at_ms
+    from rate_limit_windows
+    where bucket = ${blockedRule.bucket}
+      and identity_hash = ${blockedRule.identityHash}
+    order by window_started_at desc
+    limit 1
+  `;
+  const blockedDecision = rejectedBatch.find(
+    (decision) => decision.rule_name === "blocked"
+  );
+  assert.equal(
+    Number(blockedDecision?.reset_at_ms),
+    Number(blockedWindow[0]?.started_at_ms) + blockedRule.windowMs + 1
+  );
+
   const independentResults = await consume([
     {
       ...primaryRule,

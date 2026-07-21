@@ -89,28 +89,26 @@ const checkMemoryRateLimit = (
   now = Date.now()
 ): RateLimitDecision => {
   const state = getMemoryState(keyId, now);
-  state.minute.count += 1;
-  state.daily.count += 1;
-
   const minuteDecision = {
     limit: MINUTE_LIMIT,
-    remaining: MINUTE_LIMIT - state.minute.count,
+    remaining: Math.max(0, MINUTE_LIMIT - state.minute.count - 1),
     resetAt: state.minute.startedAt + MINUTE_MS,
   };
   const dailyDecision = {
     limit: DAILY_LIMIT,
-    remaining: DAILY_LIMIT - state.daily.count,
+    remaining: Math.max(0, DAILY_LIMIT - state.daily.count - 1),
     resetAt: state.daily.startedAt + DAY_MS,
   };
-
-  if (minuteDecision.remaining < 0) {
-    throwRateLimitError(minuteDecision, now);
+  const failedDecision = [
+    ...(state.minute.count >= MINUTE_LIMIT ? [minuteDecision] : []),
+    ...(state.daily.count >= DAILY_LIMIT ? [dailyDecision] : []),
+  ].sort((left, right) => right.resetAt - left.resetAt)[0];
+  if (failedDecision) {
+    throwRateLimitError(failedDecision, now);
   }
 
-  if (dailyDecision.remaining < 0) {
-    throwRateLimitError(dailyDecision, now);
-  }
-
+  state.minute.count += 1;
+  state.daily.count += 1;
   return minuteDecision;
 };
 
@@ -138,26 +136,11 @@ const checkDatabaseRateLimit = async (
       },
     ]);
 
-    if (!minute.allowed) {
-      throwRateLimitError(
-        {
-          limit: minute.limit,
-          remaining: minute.remaining,
-          resetAt: minute.resetAt,
-        },
-        now
-      );
-    }
-
-    if (!daily.allowed) {
-      throwRateLimitError(
-        {
-          limit: daily.limit,
-          remaining: daily.remaining,
-          resetAt: daily.resetAt,
-        },
-        now
-      );
+    const failedDecision = [minute, daily]
+      .filter((decision) => !decision.allowed)
+      .sort((left, right) => right.resetAt - left.resetAt)[0];
+    if (failedDecision) {
+      throwRateLimitError(failedDecision, now);
     }
 
     return {

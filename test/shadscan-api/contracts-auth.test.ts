@@ -16,6 +16,7 @@ import {
   PortableSubdirectorySchema,
   SnapshotScanQuerySchema,
 } from "../../lib/shadscan-api/contracts";
+import { HostedScanError } from "../../lib/shadscan-api/errors";
 import { OPENAPI_DOCUMENT } from "../../lib/shadscan-api/openapi";
 import {
   HOSTED_AUDIT_CATEGORIES,
@@ -23,8 +24,10 @@ import {
 } from "../../lib/shadscan-api/protocol";
 import {
   checkDatabaseRateLimit,
+  checkMemoryRateLimit,
   enforceRateLimit,
   getRateLimitHeaders,
+  resetMemoryRateLimits,
 } from "../../lib/shadscan-api/rate-limit";
 
 const VALID_API_KEY = "shadscan_beta_abcdefghijklmnopqrstuvwxyz0123456789";
@@ -279,6 +282,58 @@ describe("hosted API production limiting", () => {
     expect(rules.map((rule) => rule.name)).toEqual(["minute", "daily"]);
     expect(rules[0].identityHash).toMatch(SHA256_HEX_PATTERN);
     expect(rules[0].identityHash).toBe(rules[1].identityHash);
+  });
+
+  it("does not consume daily quota when the minute limit rejects", () => {
+    const startedAt = 1000;
+    resetMemoryRateLimits();
+
+    for (let count = 0; count < 10; count += 1) {
+      expect(checkMemoryRateLimit("beta", startedAt)).toBeDefined();
+    }
+    for (let count = 0; count < 90; count += 1) {
+      expect(() => checkMemoryRateLimit("beta", startedAt)).toThrowError(
+        expect.objectContaining({ code: "RATE_LIMITED" })
+      );
+    }
+
+    expect(() =>
+      checkMemoryRateLimit("beta", startedAt + 60_001)
+    ).not.toThrow();
+    resetMemoryRateLimits();
+  });
+
+  it("retries when the last denied database rule becomes eligible", async () => {
+    const consume = vi.fn(() =>
+      Promise.resolve([
+        {
+          allowed: false,
+          limit: 10,
+          name: "minute",
+          remaining: 0,
+          resetAt: 61_000,
+        },
+        {
+          allowed: false,
+          limit: 100,
+          name: "daily",
+          remaining: 0,
+          resetAt: 86_401_000,
+        },
+      ])
+    );
+
+    try {
+      await checkDatabaseRateLimit("beta", 1000, consume);
+      expect.fail("Expected the database limiter to reject the request.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(HostedScanError);
+      if (!(error instanceof HostedScanError)) {
+        throw error;
+      }
+      expect(error.code).toBe("RATE_LIMITED");
+      expect(error.headers.get("retry-after")).toBe("86400");
+    }
   });
 
   it("cannot enable the process-local limiter in production", async () => {
