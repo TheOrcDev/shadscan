@@ -151,9 +151,13 @@ const readGitHubJson = async (
     {
       emptyCode: "GITHUB_INVALID_RESPONSE",
       emptyMessage: "GitHub returned an empty metadata response.",
+      emptyRetryable: true,
+      emptyStatus: 502,
       maxBytes: MAX_GITHUB_METADATA_BYTES,
       tooLargeCode: "GITHUB_INVALID_RESPONSE",
       tooLargeMessage: "GitHub returned an oversized metadata response.",
+      tooLargeRetryable: true,
+      tooLargeStatus: 502,
     },
     sourceSignal
   );
@@ -308,8 +312,10 @@ const downloadGitHubArchive = async (
   return readGitHubResponseBytes(
     archiveResponse,
     {
-      emptyCode: "GITHUB_EMPTY_ARCHIVE",
+      emptyCode: "GITHUB_INVALID_RESPONSE",
       emptyMessage: "GitHub returned an empty source archive.",
+      emptyRetryable: true,
+      emptyStatus: 502,
       maxBytes: DEFAULT_ARCHIVE_LIMITS.maxCompressedBytes,
       tooLargeCode: "GITHUB_ARCHIVE_TOO_LARGE",
       tooLargeMessage: "The GitHub archive exceeds the compressed size limit.",

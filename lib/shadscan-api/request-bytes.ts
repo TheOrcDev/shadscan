@@ -3,11 +3,29 @@ import { HostedScanError } from "./errors";
 interface ReadBytesOptions {
   emptyCode?: string;
   emptyMessage?: string;
+  emptyRetryable?: boolean;
+  emptyStatus?: number;
   maxBytes: number;
   signal?: AbortSignal;
   tooLargeCode: string;
   tooLargeMessage: string;
+  tooLargeRetryable?: boolean;
+  tooLargeStatus?: number;
 }
+
+const createEmptyBodyError = (options: ReadBytesOptions): HostedScanError =>
+  new HostedScanError(options.emptyMessage ?? "A request body is required.", {
+    code: options.emptyCode ?? "EMPTY_BODY",
+    retryable: options.emptyRetryable,
+    status: options.emptyStatus ?? 400,
+  });
+
+const createTooLargeError = (options: ReadBytesOptions): HostedScanError =>
+  new HostedScanError(options.tooLargeMessage, {
+    code: options.tooLargeCode,
+    retryable: options.tooLargeRetryable,
+    status: options.tooLargeStatus ?? 413,
+  });
 
 const readStreamBytes = async (
   body: ReadableStream<Uint8Array> | null,
@@ -17,21 +35,12 @@ const readStreamBytes = async (
   if (contentLength) {
     const parsedLength = Number.parseInt(contentLength, 10);
     if (Number.isFinite(parsedLength) && parsedLength > options.maxBytes) {
-      throw new HostedScanError(options.tooLargeMessage, {
-        code: options.tooLargeCode,
-        status: 413,
-      });
+      throw createTooLargeError(options);
     }
   }
 
   if (!body) {
-    throw new HostedScanError(
-      options.emptyMessage ?? "A request body is required.",
-      {
-        code: options.emptyCode ?? "EMPTY_BODY",
-        status: 400,
-      }
-    );
+    throw createEmptyBodyError(options);
   }
 
   const reader = body.getReader();
@@ -55,10 +64,7 @@ const readStreamBytes = async (
       totalBytes += result.value.byteLength;
       if (totalBytes > options.maxBytes) {
         await reader.cancel();
-        throw new HostedScanError(options.tooLargeMessage, {
-          code: options.tooLargeCode,
-          status: 413,
-        });
+        throw createTooLargeError(options);
       }
 
       chunks.push(result.value);
@@ -72,13 +78,7 @@ const readStreamBytes = async (
   }
 
   if (totalBytes === 0) {
-    throw new HostedScanError(
-      options.emptyMessage ?? "A request body is required.",
-      {
-        code: options.emptyCode ?? "EMPTY_BODY",
-        status: 400,
-      }
-    );
+    throw createEmptyBodyError(options);
   }
 
   return Buffer.concat(chunks, totalBytes);

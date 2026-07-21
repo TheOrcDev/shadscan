@@ -499,6 +499,60 @@ describe("POST /v1/scans", () => {
     });
   });
 
+  it("classifies empty GitHub metadata as a retryable upstream failure", async () => {
+    const fetchMock = vi.fn(() => new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(createGitHubRequest());
+    const result = (await response.json()) as HostedScanErrorBody;
+
+    expect(response.status).toBe(502);
+    expect(result).toEqual({
+      error: {
+        code: "GITHUB_INVALID_RESPONSE",
+        message: "GitHub returned an empty metadata response.",
+        retryable: true,
+      },
+      schemaVersion: 1,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies an empty GitHub archive as a retryable upstream failure", async () => {
+    const fetchMock = vi.fn((input: Parameters<typeof fetch>[0]): Response => {
+      const url = getFetchUrl(input);
+      if (url === "https://api.github.com/repos/acme/widget") {
+        return Response.json({ private: false });
+      }
+      if (url === "https://api.github.com/repos/acme/widget/commits/main") {
+        return Response.json({ sha: IMMUTABLE_COMMIT_SHA });
+      }
+      if (
+        url ===
+        `https://api.github.com/repos/acme/widget/tarball/${IMMUTABLE_COMMIT_SHA}`
+      ) {
+        return new Response(null, { status: 200 });
+      }
+
+      throw new Error(`Unexpected GitHub request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(createGitHubRequest());
+    const result = (await response.json()) as HostedScanErrorBody;
+
+    expect(response.status).toBe(502);
+    expect(result).toEqual({
+      error: {
+        code: "GITHUB_INVALID_RESPONSE",
+        message: "GitHub returned an empty source archive.",
+        retryable: true,
+      },
+      schemaVersion: 1,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("returns a stable error envelope before reading an oversized snapshot", async () => {
     const request = createSnapshotRequest(Buffer.from("x"), {
       "content-length": (MAX_SNAPSHOT_BYTES + 1).toString(),
