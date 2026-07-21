@@ -253,6 +253,53 @@ describe("hosted scan archive extraction", () => {
     );
   });
 
+  it("currently rejects an oversized asset even when the scanner does not read it", async () => {
+    const destination = await createDestination();
+    const { gzip } = await createTarGzip([
+      {
+        contents: "image-bytes",
+        header: { name: "public/demo.png", type: "file" },
+      },
+      {
+        contents: "export default function Page() {}\n",
+        header: { name: "app/page.tsx", type: "file" },
+      },
+    ]);
+
+    await expectArchiveError(
+      extractTarGzip(gzip, destination, {
+        forbiddenPathBehavior: "skip",
+        limits: { maxFileBytes: 8 },
+      }),
+      "ARCHIVE_FILE_TOO_LARGE"
+    );
+  });
+
+  it("currently counts irrelevant entries against the complete archive budget", async () => {
+    const destination = await createDestination();
+    const { gzip } = await createTarGzip([
+      ...Array.from({ length: 5 }, (_, index) => ({
+        contents: `doc ${index}`,
+        header: {
+          name: `docs/generated-${index}.md`,
+          type: "file" as const,
+        },
+      })),
+      {
+        contents: "export default function Page() {}\n",
+        header: { name: "app/page.tsx", type: "file" },
+      },
+    ]);
+
+    await expectArchiveError(
+      extractTarGzip(gzip, destination, {
+        forbiddenPathBehavior: "skip",
+        limits: { maxEntries: 5 },
+      }),
+      "ARCHIVE_TOO_MANY_ENTRIES"
+    );
+  });
+
   it("enforces compressed and expanded memory limits at the byte boundary", async () => {
     const { gzip, tar } = await createTarGzip([
       {
