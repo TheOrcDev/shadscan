@@ -8,6 +8,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Reject API key IDs that resolve only through JavaScript object prototypes,
+  preserving the stable unauthorized response for malformed credentials.
 - Restrict agent handoff verification gates to bounded, shell-safe package
   script names so untrusted manifests cannot inject executable instructions or
   unbounded command output.

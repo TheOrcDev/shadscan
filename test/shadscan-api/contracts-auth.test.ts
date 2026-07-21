@@ -231,6 +231,26 @@ describe("hosted API Bearer authentication", () => {
   });
 
   it.each([
+    "constructor",
+    "toString",
+    "valueOf",
+  ])("rejects inherited object key IDs without throwing: %s", (keyId) => {
+    expect(() =>
+      authenticateApiRequest(
+        createAuthenticatedRequest(
+          `Bearer shadscan_${keyId}_abcdefghijklmnopqrstuvwxyz0123456789`
+        ),
+        VALID_API_KEY_HASHES
+      )
+    ).toThrowError(
+      expect.objectContaining({
+        code: "UNAUTHORIZED",
+        status: 401,
+      })
+    );
+  });
+
+  it.each([
     undefined,
     "not-json",
     "{}",

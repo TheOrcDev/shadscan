@@ -81,7 +81,10 @@ const authenticateApiRequest = (
   const token = getBearerToken(request);
   const match = API_KEY_PATTERN.exec(token);
   const keyId = match?.[1];
-  const configuredHash = keyId ? configuredHashes[keyId] : undefined;
+  const configuredHash =
+    keyId && Object.hasOwn(configuredHashes, keyId)
+      ? configuredHashes[keyId]
+      : undefined;
   const expectedHash = Buffer.from(configuredHash ?? "0".repeat(64), "hex");
   const presentedHash = Buffer.from(hashApiKey(token), "hex");
   const hashMatches =
