@@ -1,7 +1,7 @@
 import type { AgentWorkItem, AuditEvidence, AuditReport } from "./audit";
 import { AuditReportSchema } from "./audit";
 
-const AGENT_PROMPT_VERSION = 3 as const;
+const AGENT_PROMPT_VERSION = 4 as const;
 
 const PRIORITY_ORDER = {
   P0: 0,
@@ -71,6 +71,7 @@ const renderAgentPrompt = (input: AuditReport): string => {
     grade: report.grade,
     packageManager: report.packageManager,
     packageName: report.packageName,
+    projectContext: report.agentHandoff.context,
     promptVersion: AGENT_PROMPT_VERSION,
     reportSchemaVersion: report.schemaVersion,
     rulesetVersion: report.rulesetVersion,

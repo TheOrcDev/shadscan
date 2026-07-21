@@ -577,6 +577,35 @@ const SCRIPT_RUNNERS = {
   unknown: "npm run",
   yarn: "yarn",
 } as const satisfies Record<ProjectDiscovery["packageManager"], string>;
+const SAFE_SHELL_ARGUMENT_PATTERN = /^[A-Za-z0-9_./:@+-]+$/;
+const quoteShellArgument = (value: string): string =>
+  SAFE_SHELL_ARGUMENT_PATTERN.test(value)
+    ? value
+    : `'${value.replaceAll("'", `'"'"'`)}'`;
+const getSelectedProjectArgument = (
+  project: ProjectDiscovery
+): string | null =>
+  project.selectedProjectPath === "."
+    ? null
+    : quoteShellArgument(`./${project.selectedProjectPath}`);
+const getProjectScriptRunner = (project: ProjectDiscovery): string => {
+  const projectArgument = getSelectedProjectArgument(project);
+
+  if (!projectArgument) {
+    return SCRIPT_RUNNERS[project.packageManager];
+  }
+
+  switch (project.packageManager) {
+    case "bun":
+      return `bun --cwd ${projectArgument} run`;
+    case "pnpm":
+      return `pnpm --dir ${projectArgument}`;
+    case "yarn":
+      return `yarn --cwd ${projectArgument}`;
+    default:
+      return `npm --prefix ${projectArgument} run`;
+  }
+};
 const PRODUCT_DECISION_DETAILS: Record<
   string,
   { summary: string; title: string }
@@ -769,7 +798,7 @@ const getActionableAcceptanceCriteria = ({
 };
 
 const getProjectGateCommands = (project: ProjectDiscovery): string[] => {
-  const runner = SCRIPT_RUNNERS[project.packageManager];
+  const runner = getProjectScriptRunner(project);
   const standardGates = PROJECT_GATE_SCRIPT_NAMES.filter(
     (scriptName) => project.scripts[scriptName] !== undefined
   );
@@ -789,8 +818,10 @@ const getShadscanCommand = (
 ): string => {
   const executor = PACKAGE_EXECUTORS[project.packageManager];
   const categoryOption = category ? ` --category ${category}` : "";
+  const projectArgument = getSelectedProjectArgument(project);
+  const projectOption = projectArgument ? ` ${projectArgument}` : "";
   const packageSpecifier = `@shadscan/cli@${ENGINE_VERSION}`;
-  return `${executor(packageSpecifier)} --json${categoryOption}`;
+  return `${executor(packageSpecifier)}${projectOption} --json${categoryOption}`;
 };
 
 const uniqueEvidence = (actionables: AgentActionable[]): AuditEvidence[] => {
@@ -1077,6 +1108,7 @@ const createAgentHandoff = ({
     context: [
       `Adapter: ${project.framework.adapter}`,
       `Package manager: ${project.packageManager}`,
+      `Selected project directory: ${project.selectedProjectPath} (relative to the package-manager root)`,
       `shadcn confidence: ${project.shadcn.confidence}; config: ${configPath}`,
       `Warnings: ${warnings}`,
     ],
@@ -1161,7 +1193,9 @@ const runAudit = async (
 ): Promise<AuditReport> => {
   const startedAt = performance.now();
   options.signal?.throwIfAborted();
-  const project = await discoverProject(cwd);
+  const project = await discoverProject(cwd, {
+    filesystemRoot: options.filesystemRoot,
+  });
   options.signal?.throwIfAborted();
   const context: AuditContext = {
     filesystemRoot: path.resolve(options.filesystemRoot ?? project.rootDir),

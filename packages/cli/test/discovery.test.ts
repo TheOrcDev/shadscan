@@ -161,6 +161,40 @@ describe("discoverProject", () => {
     expect(project.versions.vite).toBe("7.2.0");
   });
 
+  it("discovers the package manager and selected app from a bounded monorepo", async () => {
+    const sourceRoot = await createFixture();
+    const projectRoot = path.join(sourceRoot, "apps", "web");
+    await writePackageJson(sourceRoot, {
+      packageManager: "pnpm@11.15.1",
+      private: true,
+    });
+    await writePackageJson(projectRoot, {
+      dependencies: { react: "19.2.4" },
+      name: "web-app",
+    });
+
+    const project = await discoverProject(projectRoot, {
+      filesystemRoot: sourceRoot,
+    });
+
+    expect(project.packageManager).toBe("pnpm");
+    expect(project.packageManagerRoot).toBe(sourceRoot);
+    expect(project.selectedProjectPath).toBe("apps/web");
+  });
+
+  it("recognizes the current Bun lockfile", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4" },
+    });
+    await writeFixtureFile(rootDir, "bun.lock", "");
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.packageManager).toBe("bun");
+    expect(project.selectedProjectPath).toBe(".");
+  });
+
   it("falls back to generic React when no framework-specific adapter matches", async () => {
     const rootDir = await createFixture();
     await writePackageJson(rootDir, {

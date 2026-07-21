@@ -21,7 +21,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
   result: {
     handoff: {
       promptMarkdown: "You are improving acme/widget from a shadscan audit.",
-      promptVersion: 3,
+      promptVersion: 4,
     },
     report: {
       agentHandoff: {

@@ -373,6 +373,41 @@ describe("runAudit", () => {
     ]);
   });
 
+  it("targets the selected monorepo app in handoff commands", async () => {
+    const sourceRoot = await createFixture();
+    const projectRoot = path.join(sourceRoot, "apps", "web; touch compromised");
+    await writeFixtureFile(
+      sourceRoot,
+      "package.json",
+      `${JSON.stringify({ packageManager: "pnpm@11.15.1", private: true })}\n`
+    );
+    await writeFixtureFile(
+      projectRoot,
+      "package.json",
+      `${JSON.stringify({
+        dependencies: { react: "19.2.4" },
+        name: "web-app",
+        scripts: { build: "next build", test: "vitest run" },
+      })}\n`
+    );
+
+    const report = await runAudit(projectRoot, {
+      filesystemRoot: sourceRoot,
+      rules: [createRule({ id: "passing-rule" })],
+    });
+
+    expect(report.agentHandoff.verification.projectGates).toEqual([
+      "pnpm --dir './apps/web; touch compromised' test",
+      "pnpm --dir './apps/web; touch compromised' build",
+    ]);
+    expect(report.agentHandoff.verification.shadscanCommand).toBe(
+      `pnpm dlx @shadscan/cli@${ENGINE_VERSION} './apps/web; touch compromised' --json`
+    );
+    expect(report.agentHandoff.context).toContain(
+      "Selected project directory: apps/web; touch compromised (relative to the package-manager root)"
+    );
+  });
+
   it("bounds namespaced test gates and rejects unsafe script names", async () => {
     const rootDir = await createReactFixture();
     const safeTestScripts = Object.fromEntries(
@@ -585,6 +620,7 @@ describe("createAuditReport", () => {
         evidence: [],
       },
       packageManager: "unknown",
+      packageManagerRoot: "/tmp",
       packageName: null,
       paths: {
         appDir: null,
@@ -596,6 +632,7 @@ describe("createAuditReport", () => {
         viteEntry: null,
       },
       rootDir: "/tmp",
+      selectedProjectPath: ".",
       scripts: {},
       shadcn: {
         aliases: {},

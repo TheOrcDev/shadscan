@@ -6,8 +6,16 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Changed
+
+- Advance agent prompts to version 4 and include the selected-project context
+  in the bounded handoff payload.
+
 ### Fixed
 
+- Discover package managers from bounded monorepo roots, recognize `bun.lock`,
+  and target the selected application in generated scan and project-gate
+  commands.
 - Confine every TypeScript config and module resolver used by hosted audits to
   the materialized source, including inherited configs, directory globs, and
   symlinked paths.

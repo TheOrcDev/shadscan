@@ -12,7 +12,12 @@ type FrameworkAdapter =
   | "generic-react";
 
 type Confidence = "high" | "medium" | "low";
+type PackageManager = "bun" | "npm" | "pnpm" | "unknown" | "yarn";
 type ProjectDiscoveryErrorCode = "PROJECT_NOT_FOUND" | "UNSUPPORTED_PROJECT";
+
+interface DiscoverProjectOptions {
+  filesystemRoot?: string;
+}
 
 interface FrameworkDiscovery {
   adapter: FrameworkAdapter;
@@ -45,11 +50,13 @@ interface ProjectVersions {
 interface ProjectDiscovery {
   dependencies: Record<string, string>;
   framework: FrameworkDiscovery;
-  packageManager: "bun" | "npm" | "pnpm" | "unknown" | "yarn";
+  packageManager: PackageManager;
+  packageManagerRoot: string;
   packageName: string | null;
   paths: ProjectPaths;
   rootDir: string;
   scripts: Record<string, string>;
+  selectedProjectPath: string;
   shadcn: ShadcnDiscovery;
   versions: ProjectVersions;
   warnings: string[];
@@ -77,6 +84,16 @@ const fileExists = async (filePath: string): Promise<boolean> => {
   }
 };
 
+const isWithinRoot = (rootDir: string, candidatePath: string): boolean => {
+  const relativePath = path.relative(rootDir, candidatePath);
+
+  return (
+    relativePath !== ".." &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath)
+  );
+};
+
 const readJson = async (filePath: string): Promise<JsonObject> => {
   const content = await readFile(filePath, "utf8");
   return JSON.parse(content) as JsonObject;
@@ -94,16 +111,36 @@ const readJsonc = async (
   return { errors, value };
 };
 
-const findProjectRoot = async (cwd: string): Promise<string> => {
+const findProjectRoot = async (
+  cwd: string,
+  filesystemRoot?: string
+): Promise<string> => {
   let currentDir = path.resolve(cwd);
+  const resolvedFilesystemRoot = filesystemRoot
+    ? path.resolve(filesystemRoot)
+    : null;
+
+  if (
+    resolvedFilesystemRoot &&
+    !isWithinRoot(resolvedFilesystemRoot, currentDir)
+  ) {
+    throw new ProjectDiscoveryError(
+      "The requested project is outside the scan boundary."
+    );
+  }
 
   while (true) {
     if (await fileExists(path.join(currentDir, "package.json"))) {
       return currentDir;
     }
 
-    const parentDir = path.dirname(currentDir);
+    if (currentDir === resolvedFilesystemRoot) {
+      throw new ProjectDiscoveryError(
+        "No package.json was found inside the scan boundary."
+      );
+    }
 
+    const parentDir = path.dirname(currentDir);
     if (parentDir === currentDir) {
       throw new ProjectDiscoveryError(
         "No package.json was found in this directory or its parents."
@@ -142,26 +179,77 @@ const getDependencies = (packageJson: JsonObject): Record<string, string> => {
   return dependencies;
 };
 
+const PACKAGE_MANAGER_FIELD_PATTERN = /^(bun|npm|pnpm|yarn)@/;
+const PACKAGE_MANAGER_LOCKFILES = [
+  ["pnpm", "pnpm-lock.yaml"],
+  ["yarn", "yarn.lock"],
+  ["npm", "package-lock.json"],
+  ["bun", "bun.lock"],
+  ["bun", "bun.lockb"],
+] as const satisfies readonly (readonly [PackageManager, string])[];
+
+const getDeclaredPackageManager = async (
+  packageJsonPath: string
+): Promise<PackageManager | null> => {
+  if (!(await fileExists(packageJsonPath))) {
+    return null;
+  }
+
+  try {
+    const packageJson = await readJson(packageJsonPath);
+    const declaredPackageManager = packageJson.packageManager;
+
+    if (typeof declaredPackageManager !== "string") {
+      return null;
+    }
+
+    return (PACKAGE_MANAGER_FIELD_PATTERN.exec(declaredPackageManager)?.[1] ??
+      null) as PackageManager | null;
+  } catch {
+    return null;
+  }
+};
+
 const detectPackageManager = async (
-  rootDir: string
-): Promise<ProjectDiscovery["packageManager"]> => {
-  if (await fileExists(path.join(rootDir, "pnpm-lock.yaml"))) {
-    return "pnpm";
+  rootDir: string,
+  filesystemRoot?: string
+): Promise<{ packageManager: PackageManager; rootDir: string }> => {
+  const resolvedProjectRoot = path.resolve(rootDir);
+  const resolvedFilesystemRoot = filesystemRoot
+    ? path.resolve(filesystemRoot)
+    : null;
+  let currentDir = resolvedProjectRoot;
+
+  while (true) {
+    const declaredPackageManager = await getDeclaredPackageManager(
+      path.join(currentDir, "package.json")
+    );
+    if (declaredPackageManager) {
+      return { packageManager: declaredPackageManager, rootDir: currentDir };
+    }
+
+    for (const [packageManager, lockfile] of PACKAGE_MANAGER_LOCKFILES) {
+      if (await fileExists(path.join(currentDir, lockfile))) {
+        return { packageManager, rootDir: currentDir };
+      }
+    }
+
+    const reachedBoundary =
+      currentDir === resolvedFilesystemRoot ||
+      (await fileExists(path.join(currentDir, ".git")));
+    if (reachedBoundary) {
+      return { packageManager: "unknown", rootDir: currentDir };
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
   }
 
-  if (await fileExists(path.join(rootDir, "yarn.lock"))) {
-    return "yarn";
-  }
-
-  if (await fileExists(path.join(rootDir, "package-lock.json"))) {
-    return "npm";
-  }
-
-  if (await fileExists(path.join(rootDir, "bun.lockb"))) {
-    return "bun";
-  }
-
-  return "unknown";
+  return { packageManager: "unknown", rootDir: resolvedProjectRoot };
 };
 
 const getStringRecord = (value: unknown): Record<string, string> => {
@@ -308,8 +396,11 @@ const detectFramework = ({
   };
 };
 
-const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
-  const rootDir = await findProjectRoot(cwd);
+const discoverProject = async (
+  cwd: string,
+  options: DiscoverProjectOptions = {}
+): Promise<ProjectDiscovery> => {
+  const rootDir = await findProjectRoot(cwd, options.filesystemRoot);
   const packageJsonPath = path.join(rootDir, "package.json");
   const packageJson = await readJson(packageJsonPath);
   const dependencies = getDependencies(packageJson);
@@ -356,11 +447,21 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
   const srcDir = path.join(rootDir, "src");
   const packageName =
     typeof packageJson.name === "string" ? packageJson.name : null;
+  const packageManagerDiscovery = await detectPackageManager(
+    rootDir,
+    options.filesystemRoot
+  );
+  const selectedProjectPath =
+    path
+      .relative(packageManagerDiscovery.rootDir, rootDir)
+      .split(path.sep)
+      .join("/") || ".";
 
   return {
     dependencies,
     framework,
-    packageManager: await detectPackageManager(rootDir),
+    packageManager: packageManagerDiscovery.packageManager,
+    packageManagerRoot: packageManagerDiscovery.rootDir,
     packageName,
     paths: {
       appDir,
@@ -372,6 +473,7 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
       viteEntry,
     },
     rootDir,
+    selectedProjectPath,
     scripts: getStringRecord(packageJson.scripts),
     shadcn: {
       aliases: getStringRecord(shadcnConfig?.aliases),
@@ -391,6 +493,7 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
 
 export type {
   Confidence,
+  DiscoverProjectOptions,
   FrameworkAdapter,
   ProjectDiscovery,
   ProjectDiscoveryErrorCode,
