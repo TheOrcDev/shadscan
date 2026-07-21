@@ -13,6 +13,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 
+const PLAIN_SCORE_PATTERN =
+  /Your shadscan score: \[[#-]{16}\] \d+\/100 \(Grade [A-F]\)/;
+
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packageDirectory = path.resolve(scriptDirectory, "..");
 const packageManifest = JSON.parse(
@@ -140,6 +143,21 @@ try {
   });
   assert.equal(versionResult.stdout.trim(), packageManifest.version);
 
+  const helpResult = await run(executable, ["--help"], {
+    cwd: consumerDirectory,
+  });
+  assert.match(helpResult.stdout, /--apply/);
+  assert.match(helpResult.stdout, /--agent <agent>/);
+  assert.match(helpResult.stdout, /--no-interactive/);
+  assert.match(helpResult.stdout, /setup/);
+
+  const humanResult = await run(executable, ["--no-roast"], {
+    cwd: consumerDirectory,
+  });
+  assert.match(humanResult.stdout, PLAIN_SCORE_PATTERN);
+  assert.ok(!humanResult.stdout.includes("\u001B"));
+  assert.ok(!humanResult.stderr.includes("What next?"));
+
   const jsonResult = await run(executable, ["--json"], {
     cwd: consumerDirectory,
   });
@@ -209,6 +227,20 @@ try {
     { cwd: consumerDirectory, expectedExitCode: 1 }
   );
   assert.ok(JSON.parse(thresholdResult.stdout).score < 100);
+
+  const invalidAgentResult = await run(executable, ["--agent", "codex"], {
+    cwd: consumerDirectory,
+    expectedExitCode: 1,
+  });
+  assert.match(invalidAgentResult.stderr, /--agent requires --apply/);
+
+  const setupPreviewResult = await run(
+    executable,
+    ["setup", "--pre-commit", "--dry-run"],
+    { cwd: consumerDirectory }
+  );
+  assert.match(setupPreviewResult.stdout, /Shadscan pre-commit plan/);
+  assert.match(setupPreviewResult.stdout, /Mode: manual/);
 
   const importCheckPath = path.join(consumerDirectory, "verify-import.mjs");
   await writeFile(

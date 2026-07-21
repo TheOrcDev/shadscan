@@ -1,8 +1,10 @@
 import { CommanderError } from "commander";
+import { AgentCliError, type AgentCliErrorCode } from "./agent-cli";
 import {
   ProjectDiscoveryError,
   type ProjectDiscoveryErrorCode,
 } from "./discovery";
+import { PreCommitError, type PreCommitErrorCode } from "./pre-commit";
 
 const COMMANDER_ERROR_PREFIX_PATTERN = /^error:\s*/i;
 
@@ -11,11 +13,20 @@ interface CliFailure {
     | "AUDIT_FAILED"
     | "INVALID_ARGUMENTS"
     | "INVALID_PROJECT_METADATA"
+    | AgentCliErrorCode
+    | PreCommitErrorCode
     | ProjectDiscoveryErrorCode;
   message: string;
 }
 
 const normalizeCliFailure = (error: unknown): CliFailure => {
+  if (error instanceof AgentCliError || error instanceof PreCommitError) {
+    return {
+      code: error.code,
+      message: error.message,
+    };
+  }
+
   if (error instanceof ProjectDiscoveryError) {
     return {
       code: error.code,

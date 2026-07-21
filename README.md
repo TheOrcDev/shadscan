@@ -38,6 +38,18 @@ Paste-ready agent prompt:
 node packages/cli/dist/cli.js /path/to/shadcn-app --prompt
 ```
 
+Launch an installed coding agent with that prompt:
+
+```bash
+node packages/cli/dist/cli.js /path/to/shadcn-app --apply --agent codex
+```
+
+Preview a score-preserving pre-commit hook:
+
+```bash
+node packages/cli/dist/cli.js setup /path/to/shadcn-app --pre-commit --dry-run
+```
+
 For explicit output selection, use `--format human`, `--format json`, or
 `--format prompt`. Prompt output contains the prioritized handoff and
 repository-relative evidence without roast copy or machine-local paths.
@@ -47,6 +59,14 @@ skills, exact verification commands, raw per-rule actionables, and grouped work
 items classified as `fix`, `decide`, or `verify`.
 The executable's path, output, exit, stability, and privacy guarantees are
 defined in the [CLI contract](docs/cli-contract.md).
+
+Human output includes an overall progress bar. Interactive local runs offer
+Claude Code, Codex CLI, and Grok Build candidates for immediate remediation,
+validate the selected provider before launch, and offer a pre-commit score gate
+when one is not active. Pressing Enter selects `Done`; `--no-interactive`
+suppresses the menu. The default scan remains read-only. `--apply` launches an
+external provider process only after an explicit flag or menu selection, while
+pre-commit setup previews and confirms every filesystem change.
 
 ## Hosted API
 

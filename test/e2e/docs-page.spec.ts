@@ -34,6 +34,12 @@ test("documents the CLI before the optional agent workflow", async ({
       .locator("#options dt")
       .getByText("--fail-under <score>", { exact: true })
   ).toBeVisible();
+  await expect(
+    page.locator("#options dt").getByText("--apply", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.locator("#options dt").getByText("--agent <agent>", { exact: true })
+  ).toBeVisible();
   await expect(page.getByText("production-polish")).toBeVisible();
 
   const agentPrompt = page.locator("#agent-prompt");
@@ -44,6 +50,11 @@ test("documents the CLI before the optional agent workflow", async ({
   await agentPrompt.getByRole("tab", { name: "yarn", exact: true }).click();
   await expect(agentPrompt.locator('[data-slot="code-block"]')).toContainText(
     "yarn dlx --quiet --package @shadscan/cli@next shadscan --prompt"
+  );
+
+  await expect(page.locator("#apply")).toContainText("--apply --agent codex");
+  await expect(page.locator("#pre-commit")).toContainText(
+    "setup --pre-commit --dry-run"
   );
 
   await expect(page.getByText("shadscan-pre-commit").first()).toBeVisible();
@@ -59,7 +70,7 @@ test("documents the CLI before the optional agent workflow", async ({
     page.getByRole("button", { name: "Copy AGENTS.md" })
   ).toBeVisible();
   await expect(
-    page.getByText("It adds no Git hook or project dependency.", {
+    page.getByText("It adds no Git hook or project dependency", {
       exact: false,
     })
   ).toBeVisible();

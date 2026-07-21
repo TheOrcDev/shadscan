@@ -6,6 +6,17 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- Add a width-aware terminal score bar with deterministic, color-free-by-default
+  output for CI and redirected streams.
+- Add interactive post-scan actions and `--apply --agent <provider>` for
+  validating and launching Claude Code, Codex CLI, or Grok Build installations
+  with a private neutral remediation prompt.
+- Add confirmed, version-pinned pre-commit score gates through the post-scan
+  menu and `shadscan setup --pre-commit`, with safe POSIX-native-hook updates
+  plus manual plans for hook managers, other interpreters, and complex hooks.
+
 ### Changed
 
 - Correlate navigation landmarks through a bounded component render graph that

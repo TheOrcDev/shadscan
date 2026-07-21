@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   Command,
@@ -7,27 +7,63 @@ import {
   Option,
 } from "commander";
 import packageJson from "../package.json";
+import {
+  type AgentId,
+  findAgentCliCandidates,
+  launchAgentCli,
+  parseAgentId,
+} from "./agent-cli";
 import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
-import { ProjectDiscoveryError } from "./discovery";
+import {
+  discoverProject,
+  type ProjectDiscovery,
+  ProjectDiscoveryError,
+} from "./discovery";
 import {
   type OutputFormat,
   parseOutputFormat,
   resolveOutputFormat,
   wantsJsonOutput,
 } from "./output-format";
+import {
+  promptPostScanAction,
+  resolveInteractiveMode,
+} from "./post-scan-actions";
+import {
+  applyPreCommitInstallPlan,
+  createPreCommitInstallPlan,
+  detectPreCommitProtection,
+  formatPreCommitInstallPlan,
+  PreCommitError,
+  type PreCommitInstallPlan,
+} from "./pre-commit";
 import { renderAgentPrompt } from "./render-agent-prompt";
-import { renderHumanReport, stripRoasts } from "./render-human";
+import {
+  renderHumanReport,
+  sanitizeTerminalText,
+  stripRoasts,
+} from "./render-human";
 import { scanProject } from "./scan";
+import { resolveTerminalCapabilities } from "./terminal-capabilities";
 
 const VERSION = packageJson.version;
 
 interface CliOptions {
+  agent?: AgentId;
+  apply?: boolean;
   category?: AuditCategory;
   failUnder?: number;
   format?: OutputFormat;
+  interactive: boolean;
   json?: boolean;
   prompt?: boolean;
   roast?: boolean;
+}
+
+interface SetupOptions {
+  dryRun?: boolean;
+  preCommit: boolean;
+  yes?: boolean;
 }
 
 const parseScore = (value: string): number => {
@@ -54,12 +90,31 @@ const parseCategory = (value: string): AuditCategory => {
   return category;
 };
 
+const parseAgent = (value: string): AgentId => {
+  try {
+    return parseAgentId(value);
+  } catch {
+    throw new InvalidArgumentError("Expected one of: claude, codex, grok.");
+  }
+};
+
 const scoreFailsThreshold = (
   score: number | null,
   threshold: number,
   sourceCoverage: "complete" | "partial" = "complete"
 ): boolean =>
   sourceCoverage === "partial" || score === null || score < threshold;
+
+const canEstablishPreCommitFloor = ({
+  category,
+  score,
+  sourceCoverage,
+}: {
+  category?: AuditCategory;
+  score: number | null;
+  sourceCoverage: "complete" | "partial";
+}): boolean =>
+  category === undefined && score !== null && sourceCoverage === "complete";
 
 const resolveProjectPath = async (
   projectPath: string,
@@ -81,6 +136,400 @@ const resolveProjectPath = async (
   );
 };
 
+const getInteractiveTerminal = (): {
+  errorIsTTY: boolean;
+  inputIsTTY: boolean;
+  outputIsTTY: boolean;
+} => ({
+  errorIsTTY: process.stderr.isTTY === true,
+  inputIsTTY: process.stdin.isTTY === true,
+  outputIsTTY: process.stdout.isTTY === true,
+});
+
+const canPromptInteractively = (enabled = true): boolean =>
+  resolveInteractiveMode({
+    enabled,
+    environment: {
+      CI: process.env.CI,
+      SHADSCAN_INTERACTIVE: process.env.SHADSCAN_INTERACTIVE,
+    },
+    terminal: getInteractiveTerminal(),
+  });
+
+const resolveAgentTrustRoot = async (startPath: string): Promise<string> => {
+  let currentPath = path.resolve(startPath);
+
+  while (true) {
+    try {
+      await access(path.join(currentPath, ".git"));
+      return currentPath;
+    } catch {
+      const parentPath = path.dirname(currentPath);
+
+      if (parentPath === currentPath) {
+        return path.resolve(startPath);
+      }
+      currentPath = parentPath;
+    }
+  }
+};
+
+const askForConfirmation = async (message: string): Promise<boolean> => {
+  const { createInterface } = await import("node:readline/promises");
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    terminal: true,
+  });
+
+  try {
+    const answer = (await readline.question(`${message} [y/N] `))
+      .trim()
+      .toLowerCase();
+    return answer === "y" || answer === "yes";
+  } finally {
+    readline.close();
+  }
+};
+
+const getPreCommitFloor = (
+  report: Awaited<ReturnType<typeof scanProject>>
+): number => {
+  if (report.score === null || report.coverage.source !== "complete") {
+    throw new PreCommitError(
+      "INVALID_SCORE",
+      "A complete, assessed scan is required before creating a pre-commit floor."
+    );
+  }
+
+  return report.score;
+};
+
+const buildPreCommitPlan = async ({
+  project,
+  report,
+}: {
+  project: ProjectDiscovery;
+  report: Awaited<ReturnType<typeof scanProject>>;
+}): Promise<PreCommitInstallPlan> =>
+  createPreCommitInstallPlan({
+    packageManager: project.packageManager,
+    projectRoot: project.rootDir,
+    score: getPreCommitFloor(report),
+    version: VERSION,
+  });
+
+const printAppliedPreCommitResult = ({
+  alreadyApplied,
+  changedPaths,
+}: Awaited<ReturnType<typeof applyPreCommitInstallPlan>>): void => {
+  if (alreadyApplied) {
+    process.stderr.write(
+      "The Shadscan pre-commit gate is already installed.\n"
+    );
+    return;
+  }
+
+  process.stderr.write(
+    `Installed the Shadscan pre-commit gate in ${changedPaths.map(sanitizeTerminalText).join(", ")}.\n`
+  );
+};
+
+const offerPreCommitInstall = async (
+  plan: PreCommitInstallPlan
+): Promise<void> => {
+  process.stderr.write(`\n${formatPreCommitInstallPlan(plan)}`);
+
+  if (plan.mode === "not-needed") {
+    return;
+  }
+
+  if (plan.mode === "manual") {
+    process.stderr.write(
+      "No files were changed; follow the manual steps above.\n"
+    );
+    return;
+  }
+
+  if (!(await askForConfirmation("Apply this pre-commit plan?"))) {
+    process.stderr.write("No files were changed.\n");
+    return;
+  }
+
+  printAppliedPreCommitResult(
+    await applyPreCommitInstallPlan(plan, { confirmed: true })
+  );
+};
+
+const runAgent = async ({
+  agentId,
+  project,
+  report,
+}: {
+  agentId: AgentId;
+  project: ProjectDiscovery;
+  report: Awaited<ReturnType<typeof scanProject>>;
+}): Promise<void> => {
+  process.stderr.write(
+    `\nLaunching ${agentId} with the Shadscan remediation prompt...\n`
+  );
+  const agentTrustRoot = await resolveAgentTrustRoot(
+    project.packageManagerRoot
+  );
+  const result = await launchAgentCli({
+    agentId,
+    cwd: project.packageManagerRoot,
+    projectRoot: agentTrustRoot,
+    report,
+  });
+
+  if (!result.success) {
+    process.stderr.write(
+      `The ${agentId} process did not complete successfully${
+        result.exitCode === null ? "" : ` (exit ${result.exitCode})`
+      }.\n`
+    );
+    process.exitCode = 1;
+  }
+};
+
+const runExplicitApply = async ({
+  agentId,
+  project,
+  report,
+}: {
+  agentId?: AgentId;
+  project: ProjectDiscovery;
+  report: Awaited<ReturnType<typeof scanProject>>;
+}): Promise<void> => {
+  if (!canPromptInteractively()) {
+    throw new InvalidArgumentError(
+      "--apply requires an interactive local terminal and is disabled in CI."
+    );
+  }
+
+  if (report.agentHandoff.workItems.length === 0) {
+    process.stderr.write(
+      "\nNo actionable findings were found, so no agent was launched.\n"
+    );
+    return;
+  }
+
+  let selectedAgent = agentId;
+  if (!selectedAgent) {
+    const agentTrustRoot = await resolveAgentTrustRoot(
+      project.packageManagerRoot
+    );
+    const agents = await findAgentCliCandidates({
+      cwd: project.packageManagerRoot,
+      projectRoot: agentTrustRoot,
+    });
+
+    if (agents.length === 0) {
+      throw new InvalidArgumentError(
+        "--apply could not find an eligible Claude Code, Codex CLI, or Grok Build executable on PATH."
+      );
+    }
+
+    const action = await promptPostScanAction({
+      agents,
+      includePreCommit: false,
+    });
+    if (action.kind !== "agent") {
+      return;
+    }
+    selectedAgent = action.agentId;
+  }
+
+  await runAgent({ agentId: selectedAgent, project, report });
+};
+
+const runDefaultPostScanAction = async ({
+  category,
+  enabled,
+  project,
+  report,
+}: {
+  category?: AuditCategory;
+  enabled: boolean;
+  project: ProjectDiscovery;
+  report: Awaited<ReturnType<typeof scanProject>>;
+}): Promise<void> => {
+  if (!canPromptInteractively(enabled)) {
+    return;
+  }
+
+  const agentTrustRoot = await resolveAgentTrustRoot(
+    project.packageManagerRoot
+  );
+  const availableAgents =
+    report.agentHandoff.workItems.length > 0
+      ? await findAgentCliCandidates({
+          cwd: project.packageManagerRoot,
+          projectRoot: agentTrustRoot,
+        })
+      : [];
+  const detection = canEstablishPreCommitFloor({
+    category,
+    score: report.score,
+    sourceCoverage: report.coverage.source,
+  })
+    ? await detectPreCommitProtection({ projectRoot: project.rootDir })
+    : null;
+  const includePreCommit =
+    detection !== null &&
+    report.score !== null &&
+    (detection.status !== "protected-active" ||
+      detection.floor === null ||
+      detection.floor < report.score);
+
+  if (availableAgents.length === 0 && !includePreCommit) {
+    return;
+  }
+
+  const action = await promptPostScanAction({
+    agents: availableAgents,
+    includePreCommit,
+  });
+
+  if (action.kind === "agent") {
+    await runAgent({ agentId: action.agentId, project, report });
+    return;
+  }
+
+  if (action.kind === "pre-commit") {
+    if (!detection) {
+      return;
+    }
+
+    await offerPreCommitInstall(await buildPreCommitPlan({ project, report }));
+  }
+};
+
+const validateScanActionOptions = (
+  options: CliOptions,
+  outputFormat: OutputFormat
+): void => {
+  if (options.agent && !options.apply) {
+    throw new InvalidArgumentError("--agent requires --apply.");
+  }
+
+  if (options.apply && outputFormat !== "human") {
+    throw new InvalidArgumentError("--apply requires human output.");
+  }
+
+  if (options.apply && !options.agent && !options.interactive) {
+    throw new InvalidArgumentError(
+      "--apply without --agent requires interactive selection."
+    );
+  }
+};
+
+const runScanAction = async (
+  projectPath: string,
+  options: CliOptions,
+  command: Command
+): Promise<void> => {
+  const outputFormat = resolveOutputFormat(options);
+  validateScanActionOptions(options, outputFormat);
+  const roastWasSpecified = command.getOptionValueSource("roast") === "cli";
+  const includeRoast =
+    outputFormat !== "prompt" &&
+    (roastWasSpecified
+      ? options.roast !== false
+      : outputFormat === "human" && !process.env.CI);
+  const resolvedProjectPath = await resolveProjectPath(projectPath);
+  const project = await discoverProject(resolvedProjectPath);
+  const report = await scanProject(project.rootDir, {
+    category: options.category,
+  });
+  const outputReport = includeRoast ? report : stripRoasts(report);
+
+  if (outputFormat === "json") {
+    process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
+  } else if (outputFormat === "prompt") {
+    process.stdout.write(renderAgentPrompt(outputReport));
+  } else {
+    const terminal = resolveTerminalCapabilities({
+      columns: process.stdout.columns,
+      env: {
+        CI: process.env.CI,
+        FORCE_COLOR: process.env.FORCE_COLOR,
+        NO_COLOR: process.env.NO_COLOR,
+        TERM: process.env.TERM,
+      },
+      isTTY: process.stdout.isTTY === true,
+    });
+    process.stdout.write(
+      renderHumanReport(outputReport, { includeRoast, terminal })
+    );
+  }
+
+  if (
+    options.failUnder !== undefined &&
+    scoreFailsThreshold(report.score, options.failUnder, report.coverage.source)
+  ) {
+    process.exitCode = 1;
+  }
+
+  if (options.apply) {
+    await runExplicitApply({ agentId: options.agent, project, report });
+    return;
+  }
+
+  if (outputFormat === "human") {
+    await runDefaultPostScanAction({
+      category: options.category,
+      enabled: options.interactive,
+      project,
+      report,
+    });
+  }
+};
+
+const runSetupAction = async (
+  projectPath: string,
+  options: SetupOptions
+): Promise<void> => {
+  const resolvedProjectPath = await resolveProjectPath(projectPath);
+  const project = await discoverProject(resolvedProjectPath);
+  const report = await scanProject(project.rootDir);
+  const plan = await buildPreCommitPlan({ project, report });
+
+  process.stdout.write(
+    `Current Shadscan score: ${getPreCommitFloor(report)}/100\n${formatPreCommitInstallPlan(plan)}`
+  );
+
+  if (options.dryRun || plan.mode === "not-needed") {
+    return;
+  }
+
+  if (plan.mode === "manual") {
+    process.exitCode = 1;
+    return;
+  }
+
+  let confirmed = options.yes === true;
+  if (!confirmed) {
+    if (!canPromptInteractively()) {
+      throw new PreCommitError(
+        "CONFIRMATION_REQUIRED",
+        "Use --yes to apply this pre-commit plan non-interactively, or --dry-run to preview it."
+      );
+    }
+    confirmed = await askForConfirmation("Apply this pre-commit plan?");
+  }
+
+  if (!confirmed) {
+    process.stderr.write("No files were changed.\n");
+    return;
+  }
+
+  printAppliedPreCommitResult(
+    await applyPreCommitInstallPlan(plan, { confirmed: true })
+  );
+};
+
 const createProgram = (): Command => {
   const program = new Command();
 
@@ -96,6 +545,18 @@ const createProgram = (): Command => {
       )
         .argParser(parseOutputFormat)
         .conflicts(["json", "prompt"])
+    )
+    .addOption(
+      new Option(
+        "--apply",
+        "Open an installed coding-agent CLI with the remediation prompt."
+      ).conflicts(["json", "prompt"])
+    )
+    .addOption(
+      new Option(
+        "--agent <agent>",
+        "Choose claude, codex, or grok for --apply."
+      ).argParser(parseAgent)
     )
     .addOption(
       new Option("--json", "Print a machine-readable JSON report.").conflicts([
@@ -121,46 +582,25 @@ const createProgram = (): Command => {
     )
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
-    .action(
-      async (projectPath: string, options: CliOptions, command: Command) => {
-        const outputFormat = resolveOutputFormat(options);
-        const roastWasSpecified =
-          command.getOptionValueSource("roast") === "cli";
-        const includeRoast =
-          outputFormat !== "prompt" &&
-          (roastWasSpecified
-            ? options.roast !== false
-            : outputFormat === "human" && !process.env.CI);
-        const report = await scanProject(
-          await resolveProjectPath(projectPath),
-          {
-            category: options.category,
-          }
-        );
-        const outputReport = includeRoast ? report : stripRoasts(report);
+    .option("--no-interactive", "Disable Shadscan follow-up prompts.")
+    .action(runScanAction);
 
-        if (outputFormat === "json") {
-          process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
-        } else if (outputFormat === "prompt") {
-          process.stdout.write(renderAgentPrompt(outputReport));
-        } else {
-          process.stdout.write(
-            renderHumanReport(outputReport, { includeRoast })
-          );
-        }
-
-        if (
-          options.failUnder !== undefined &&
-          scoreFailsThreshold(
-            report.score,
-            options.failUnder,
-            report.coverage.source
-          )
-        ) {
-          process.exitCode = 1;
-        }
-      }
-    );
+  program
+    .command("setup")
+    .description("Configure an explicit Shadscan project integration.")
+    .argument("[path]", "Project directory to configure.", ".")
+    .requiredOption(
+      "--pre-commit",
+      "Create or extend a score-preserving pre-commit hook."
+    )
+    .option("--dry-run", "Print the exact plan without changing files.")
+    .addOption(
+      new Option(
+        "--yes",
+        "Apply the displayed pre-commit plan without prompting."
+      ).conflicts("dryRun")
+    )
+    .action(runSetupAction);
 
   return program;
 };
@@ -184,4 +624,10 @@ const runCli = async (argv: string[] = process.argv): Promise<void> => {
   }
 };
 
-export { createProgram, resolveProjectPath, runCli, scoreFailsThreshold };
+export {
+  canEstablishPreCommitFloor,
+  createProgram,
+  resolveProjectPath,
+  runCli,
+  scoreFailsThreshold,
+};

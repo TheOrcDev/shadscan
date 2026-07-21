@@ -35,6 +35,16 @@ const CLI_OPTIONS = [
   },
   {
     description:
+      "Validate and open an installed coding-agent CLI with the generated remediation prompt. Local interactive terminals only.",
+    option: "--apply",
+  },
+  {
+    description:
+      "Choose claude, codex, or grok for --apply. Without it, choose a matching PATH candidate to validate and launch.",
+    option: "--agent <agent>",
+  },
+  {
+    description:
       "Exit with status 1 when the score is below an integer from 0 to 100, or is unassessed.",
     option: "--fail-under <score>",
   },
@@ -51,6 +61,11 @@ const CLI_OPTIONS = [
     option: "--roast",
   },
   {
+    description:
+      "Disable the local post-scan menu and all Shadscan follow-up prompts.",
+    option: "--no-interactive",
+  },
+  {
     description: "Print command usage and all available options.",
     option: "--help",
   },
@@ -64,7 +79,9 @@ const sections = [
   { href: "#usage", label: "Usage" },
   { href: "#options", label: "Options" },
   { href: "#agent-prompt", label: "Agent prompt" },
+  { href: "#apply", label: "Apply with an agent" },
   { href: "#automation", label: "JSON and CI" },
+  { href: "#pre-commit", label: "Pre-commit gate" },
   { href: "#agent-skill", label: "Agent skill" },
   { href: "#project-rule", label: "Project rule" },
 ] as const satisfies ReadonlyArray<{ href: `#${string}`; label: string }>;
@@ -113,8 +130,8 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
 
 export const metadata = createPageMetadata({
   description:
-    "Run Shadscan, choose human, JSON, or agent-prompt output, enforce score thresholds, and add the optional agent commit workflow.",
-  imageAlt: "Shadscan CLI usage, options, and agent prompt output",
+    "Run Shadscan, inspect a progress-bar score, launch a coding agent, enforce score thresholds, and add a safe pre-commit gate.",
+  imageAlt: "Shadscan CLI scoring, agent launch, and pre-commit setup",
   imagePath: "/docs/opengraph-image",
   path: "/docs",
   title: "Shadscan CLI documentation",
@@ -139,7 +156,8 @@ export default function DocsPage() {
           <p>
             Run this from the root of a React shadcn app. The one-shot command
             needs no project install. Shadscan reads source and configuration,
-            prints the audit, and leaves the project unchanged.
+            prints the audit, and leaves the project unchanged unless you
+            explicitly choose a follow-up action.
           </p>
         </header>
 
@@ -159,8 +177,12 @@ export default function DocsPage() {
             <CodeBlockCommand {...getCliCommands("../my-shadcn-app")} />
           </div>
           <p>
-            The default human report includes the overall score, category
-            scores, evidence, fixes, and agent-ready actionables. Roast copy is
+            The default human report leads with an overall progress bar, then
+            includes category scores, evidence, fixes, and agent-ready
+            actionables. Local TTYs receive a width-aware Unicode and color bar;
+            CI and redirected output receive a deterministic ASCII fallback with
+            color disabled by default. <code>NO_COLOR</code> always wins, while{" "}
+            <code>FORCE_COLOR</code> can color that fallback. Roast copy is
             enabled for local human output and disabled automatically in CI.
           </p>
         </section>
@@ -189,7 +211,8 @@ export default function DocsPage() {
             <code>states</code>, <code>accessibility</code>, <code>forms</code>,
             and <code>production-polish</code>. The <code>--prompt</code> and{" "}
             <code>--json</code> aliases cannot be combined with each other or
-            with <code>--format</code>.
+            with <code>--format</code>. <code>--apply</code> requires human
+            output, and <code>--agent</code> requires <code>--apply</code>.
           </p>
         </section>
 
@@ -201,7 +224,7 @@ export default function DocsPage() {
           <p>
             <code>--prompt</code> is an alias for <code>--format prompt</code>.
             It prints only neutral Markdown that you can paste into an AI coding
-            agent. Shadscan does not call an AI model itself.
+            agent. This output mode does not call an AI model itself.
           </p>
           <p>The generated prompt contains:</p>
           <ul>
@@ -218,6 +241,33 @@ export default function DocsPage() {
           </p>
         </section>
 
+        <section id="apply">
+          <h2>Apply with an installed agent</h2>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("--apply --agent codex")} />
+          </div>
+          <p>
+            <code>--apply</code> prints the report, creates the same neutral
+            remediation prompt, and opens Claude Code, Codex CLI, or Grok Build
+            in the package-manager root. Omit <code>--agent</code> to choose
+            from the matching candidates Shadscan finds on <code>PATH</code>.
+            The selected provider is validated before launch.
+          </p>
+          <p>
+            Agent launch is disabled in CI and when the input, output, or error
+            stream is not an interactive terminal. Shadscan rejects
+            project-local executables, checks the provider identity, launches
+            with an argument array and no user-controlled shell command or
+            approval-bypass flags, and removes its private prompt file when the
+            agent exits.
+          </p>
+          <p>
+            The external agent may read and edit files, run commands, and send
+            prompt data to its provider. A failed agent exits non-zero and can
+            never clear a failed <code>--fail-under</code> gate.
+          </p>
+        </section>
+
         <section id="automation">
           <h2>Use JSON and score gates</h2>
           <h3>Read the complete report</h3>
@@ -227,7 +277,7 @@ export default function DocsPage() {
           <p>
             JSON output includes the score, category summaries, every rule
             result, and <code>agentHandoff</code>. The current audit schema
-            version is <code>3</code>.
+            version is <code>4</code>.
           </p>
           <h3>Fail CI below a score</h3>
           <div className="not-typeset mt-4">
@@ -245,12 +295,45 @@ export default function DocsPage() {
           </div>
         </section>
 
+        <section id="pre-commit">
+          <h2>Add a pre-commit score gate</h2>
+          <p>
+            A local interactive scan checks whether an active blocking Shadscan
+            hook already exists. If it does not, the post-scan menu offers a
+            score gate alongside any installed agents. Press Enter to choose{" "}
+            <code>Done</code>, or use <code>--no-interactive</code> to suppress
+            the menu entirely. Category-scoped scans do not offer a hook because
+            their score cannot establish a full-project floor.
+          </p>
+          <h3>Preview the exact hook plan</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand
+              {...getCliCommands("setup --pre-commit --dry-run")}
+            />
+          </div>
+          <h3>Apply a reviewed plan without another prompt</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("setup --pre-commit --yes")} />
+          </div>
+          <p>
+            The plan pins the exact Shadscan version and uses the current
+            complete assessed score as its <code>--fail-under</code> floor.
+            Shadscan can safely create or extend simple native Git hooks using
+            POSIX <code>sh</code> or <code>dash</code>. It preserves existing
+            commands, never executes the hook, and gives manual instructions for
+            Husky, Lefthook, simple-git-hooks, pre-commit, conflicting managers,
+            other shell interpreters, and opaque native hooks.
+          </p>
+        </section>
+
         <section id="agent-skill">
           <h2>Run it before agent commits</h2>
           <p>
             The optional <code>shadscan-pre-commit</code> skill establishes a
             baseline and requires AI agents to rerun the audit immediately
-            before every commit. It adds no Git hook or project dependency.
+            before every commit. It adds no Git hook or project dependency; use{" "}
+            <code>shadscan setup --pre-commit</code> when you want an actual
+            repository hook.
           </p>
           <div className="not-typeset mt-4">
             <CodeBlockCommand

@@ -3,6 +3,7 @@
 import { runCli } from "./cli";
 import { normalizeCliFailure } from "./cli-error";
 import { wantsJsonOutput } from "./output-format";
+import { sanitizeTerminalText } from "./render-human";
 
 const ERROR_SCHEMA_VERSION = 1;
 
@@ -19,7 +20,7 @@ try {
         null,
         2
       )
-    : `shadscan could not audit this project: ${failure.message}`;
+    : `shadscan could not complete this command: ${sanitizeTerminalText(failure.message)}`;
 
   process.stderr.write(`${output}\n`);
   process.exitCode = 1;

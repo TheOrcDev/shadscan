@@ -1,10 +1,20 @@
+import picocolors from "picocolors";
 import type { AuditFinding, AuditReport } from "./audit";
+import type { TerminalCapabilities } from "./terminal-capabilities";
 
 interface RenderHumanReportOptions {
   includeRoast: boolean;
+  terminal: TerminalCapabilities;
 }
 
-const BAR_WIDTH = 16;
+const CATEGORY_BAR_WIDTH = 16;
+const PLAIN_SCORE_BAR_WIDTH = 16;
+const RICH_SCORE_BAR_MAX_WIDTH = 32;
+const RICH_SCORE_BAR_INDENT = "  ";
+const GOOD_SCORE_THRESHOLD = 90;
+const OK_SCORE_THRESHOLD = 70;
+
+type TerminalColors = ReturnType<typeof picocolors.createColors>;
 
 const isUnsafeTerminalCodePoint = (codePoint: number): boolean =>
   codePoint <= 0x1f ||
@@ -24,13 +34,110 @@ const sanitizeTerminalText = (value: string): string =>
 const formatCategoryScore = (score: number): string =>
   Number.isInteger(score) ? String(score) : score.toFixed(1);
 
+const getProgressBar = (
+  percentage: number,
+  width: number,
+  filledCharacter: string,
+  emptyCharacter: string
+): { empty: string; filled: string } => {
+  const clampedPercentage = Math.max(0, Math.min(100, percentage));
+  const filledWidth = Math.round((clampedPercentage / 100) * width);
+
+  return {
+    empty: emptyCharacter.repeat(width - filledWidth),
+    filled: filledCharacter.repeat(filledWidth),
+  };
+};
+
 const getCategoryBar = (percentage: number | null): string => {
   if (percentage === null) {
-    return "-".repeat(BAR_WIDTH);
+    return "-".repeat(CATEGORY_BAR_WIDTH);
   }
 
-  const filled = Math.round((percentage / 100) * BAR_WIDTH);
-  return `${"#".repeat(filled)}${"-".repeat(BAR_WIDTH - filled)}`;
+  const { empty, filled } = getProgressBar(
+    percentage,
+    CATEGORY_BAR_WIDTH,
+    "#",
+    "-"
+  );
+  return `${filled}${empty}`;
+};
+
+const colorizeByScore = (
+  value: string,
+  score: number,
+  colors: TerminalColors
+): string => {
+  if (score >= GOOD_SCORE_THRESHOLD) {
+    return colors.green(value);
+  }
+
+  if (score >= OK_SCORE_THRESHOLD) {
+    return colors.yellow(value);
+  }
+
+  return colors.red(value);
+};
+
+const getRichScoreBarWidth = (columns: number | null): number => {
+  if (columns === null) {
+    return RICH_SCORE_BAR_MAX_WIDTH;
+  }
+
+  return Math.max(
+    1,
+    Math.min(RICH_SCORE_BAR_MAX_WIDTH, columns - RICH_SCORE_BAR_INDENT.length)
+  );
+};
+
+const renderScoreBar = (
+  score: number,
+  terminal: TerminalCapabilities,
+  colors: TerminalColors
+): string => {
+  const width = terminal.unicode
+    ? getRichScoreBarWidth(terminal.columns)
+    : PLAIN_SCORE_BAR_WIDTH;
+  const { empty, filled } = getProgressBar(
+    score,
+    width,
+    terminal.unicode ? "█" : "#",
+    terminal.unicode ? "░" : "-"
+  );
+  const renderedBar = `${colorizeByScore(filled, score, colors)}${colors.dim(empty)}`;
+
+  return terminal.unicode ? renderedBar : `[${renderedBar}]`;
+};
+
+const renderScoreSummary = (
+  report: AuditReport,
+  terminal: TerminalCapabilities
+): string[] => {
+  const colors = picocolors.createColors(terminal.color);
+
+  if (report.score === null) {
+    return [`${colors.bold("Your shadscan score:")} unassessed (Grade n/a)`];
+  }
+
+  const grade = report.grade ?? "n/a";
+  const renderedScore = colorizeByScore(
+    `${report.score}/100`,
+    report.score,
+    colors
+  );
+  const renderedGrade = colorizeByScore(grade, report.score, colors);
+  const scoreBar = renderScoreBar(report.score, terminal, colors);
+
+  if (terminal.unicode) {
+    return [
+      `${colors.bold("Your shadscan score:")} ${renderedScore} (Grade ${renderedGrade})`,
+      `${RICH_SCORE_BAR_INDENT}${scoreBar}`,
+    ];
+  }
+
+  return [
+    `${colors.bold("Your shadscan score:")} ${scoreBar} ${renderedScore} (Grade ${renderedGrade})`,
+  ];
 };
 
 const getFindingLabel = (finding: AuditFinding): string => {
@@ -177,8 +284,7 @@ const renderHumanReport = (
   options: RenderHumanReportOptions
 ): string => {
   const lines: string[] = [
-    `Your shadscan score: ${report.score === null ? "unassessed" : `${report.score}/100`}`,
-    `Grade: ${report.grade ?? "n/a"}`,
+    ...renderScoreSummary(report, options.terminal),
     "shadscan has entered the chat.",
     "",
     `Adapter: ${report.framework.adapter}`,
@@ -194,4 +300,4 @@ const renderHumanReport = (
   return `${lines.join("\n")}\n`;
 };
 
-export { renderHumanReport, stripRoasts };
+export { renderHumanReport, sanitizeTerminalText, stripRoasts };

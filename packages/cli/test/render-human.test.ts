@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { AUDIT_REPORT_SCHEMA_VERSION, type AuditReport } from "../src/audit";
 import { renderHumanReport, stripRoasts } from "../src/render-human";
+import type { TerminalCapabilities } from "../src/terminal-capabilities";
+
+const PLAIN_TERMINAL = {
+  color: false,
+  columns: null,
+  unicode: false,
+} as const satisfies TerminalCapabilities;
+
+const RICH_TERMINAL = {
+  color: false,
+  columns: 18,
+  unicode: true,
+} as const satisfies TerminalCapabilities;
 
 const createReport = (): AuditReport => ({
   agentHandoff: {
@@ -150,9 +163,14 @@ const createReport = (): AuditReport => ({
 
 describe("renderHumanReport", () => {
   it("renders score, category bars, evidence, and fixes", () => {
-    const output = renderHumanReport(createReport(), { includeRoast: false });
+    const output = renderHumanReport(createReport(), {
+      includeRoast: false,
+      terminal: PLAIN_TERMINAL,
+    });
 
-    expect(output).toContain("Your shadscan score: 50/100");
+    expect(output).toContain(
+      "Your shadscan score: [########--------] 50/100 (Grade F)"
+    );
     expect(output).toContain("Foundation: [########--------] 10/20 (50%)");
     expect(output).toContain("Missing: metadata configured");
     expect(output).toContain("Agent handoff:");
@@ -170,9 +188,11 @@ describe("renderHumanReport", () => {
   it("shows roast copy only when requested", () => {
     const neutralOutput = renderHumanReport(createReport(), {
       includeRoast: false,
+      terminal: PLAIN_TERMINAL,
     });
     const roastOutput = renderHumanReport(createReport(), {
       includeRoast: true,
+      terminal: PLAIN_TERMINAL,
     });
 
     expect(neutralOutput).not.toContain("A page title would not hurt you.");
@@ -182,11 +202,62 @@ describe("renderHumanReport", () => {
   it("renders an explicit unassessed result", () => {
     const output = renderHumanReport(
       { ...createReport(), grade: null, score: null },
-      { includeRoast: false }
+      { includeRoast: false, terminal: PLAIN_TERMINAL }
     );
 
-    expect(output).toContain("Your shadscan score: unassessed");
-    expect(output).toContain("Grade: n/a");
+    expect(output).toContain("Your shadscan score: unassessed (Grade n/a)");
+    expect(output).not.toContain("Your shadscan score: [");
+  });
+
+  it.each([
+    { bar: "----------------", grade: "F", score: 0 },
+    { bar: "########--------", grade: "F", score: 50 },
+    { bar: "################", grade: "A", score: 100 },
+  ] as const)("renders the plain score bar at $score", ({
+    bar,
+    grade,
+    score,
+  }) => {
+    const output = renderHumanReport(
+      { ...createReport(), grade, score },
+      { includeRoast: false, terminal: PLAIN_TERMINAL }
+    );
+
+    expect(output).toContain(
+      `Your shadscan score: [${bar}] ${score}/100 (Grade ${grade})`
+    );
+  });
+
+  it("renders a Unicode score bar clamped to the TTY width", () => {
+    const output = renderHumanReport(createReport(), {
+      includeRoast: false,
+      terminal: RICH_TERMINAL,
+    });
+
+    expect(output).toContain(
+      "Your shadscan score: 50/100 (Grade F)\n  ████████░░░░░░░░\n"
+    );
+  });
+
+  it.each([
+    { colorCode: 32, grade: "A", score: 95 },
+    { colorCode: 33, grade: "C", score: 75 },
+    { colorCode: 31, grade: "F", score: 50 },
+  ] as const)("colors score band $grade without replacing its text label", ({
+    colorCode,
+    grade,
+    score,
+  }) => {
+    const output = renderHumanReport(
+      { ...createReport(), grade, score },
+      {
+        includeRoast: false,
+        terminal: { ...RICH_TERMINAL, color: true },
+      }
+    );
+
+    expect(output).toContain(`\u001b[${colorCode}m${score}/100\u001b[39m`);
+    expect(output).toContain(`Grade \u001b[${colorCode}m${grade}\u001b[39m`);
   });
 
   it("strips terminal and direction controls from untrusted text", () => {
@@ -194,7 +265,10 @@ describe("renderHumanReport", () => {
     report.packageName = "demo\u001b[2J\u202E";
     report.warnings = ["warning\nInjected line\u0085"];
 
-    const output = renderHumanReport(report, { includeRoast: false });
+    const output = renderHumanReport(report, {
+      includeRoast: false,
+      terminal: PLAIN_TERMINAL,
+    });
 
     expect(output).not.toContain("\u001b");
     expect(output).not.toContain("\u202E");
