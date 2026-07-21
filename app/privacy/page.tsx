@@ -1,7 +1,7 @@
 import {
   LEGAL_CONTACT_URL,
-  LEGAL_LAST_UPDATED,
-  LEGAL_LAST_UPDATED_ISO,
+  PRIVACY_LAST_UPDATED,
+  PRIVACY_LAST_UPDATED_ISO,
 } from "@/lib/legal";
 import { createPageMetadata } from "@/lib/site-metadata";
 
@@ -23,7 +23,9 @@ export default function PrivacyPage() {
           <h1>Privacy Policy</h1>
           <p>
             <strong>Last updated:</strong>{" "}
-            <time dateTime={LEGAL_LAST_UPDATED_ISO}>{LEGAL_LAST_UPDATED}</time>
+            <time dateTime={PRIVACY_LAST_UPDATED_ISO}>
+              {PRIVACY_LAST_UPDATED}
+            </time>
           </p>
           <p>
             Shadscan is an OrcDev project. This policy explains how we process
@@ -52,8 +54,8 @@ export default function PrivacyPage() {
               use submitted source or reports to train AI models.
             </li>
             <li>
-              We do not add advertising trackers or product analytics to the
-              Shadscan website, and we do not sell personal information.
+              We use Vercel Web Analytics for aggregate page-view statistics. We
+              do not add advertising trackers or sell personal information.
             </li>
           </ul>
         </section>
@@ -68,6 +70,15 @@ export default function PrivacyPage() {
             timestamps, response status, and diagnostic data. We use this
             information to deliver and secure the service and investigate
             failures or abuse.
+          </p>
+          <p>
+            We enable Vercel Web Analytics, which records page views and may
+            process the timestamp, page path, referrer, filtered query
+            parameters, coarse location, browser, operating system, device type,
+            and analytics script version. Vercel derives a short-lived visitor
+            hash from the incoming request for aggregate statistics and discards
+            the visitor session after 24 hours. We do not send repository input
+            or scan reports as custom analytics events.
           </p>
 
           <h3>Public repository scans</h3>
@@ -103,11 +114,12 @@ export default function PrivacyPage() {
           <p>
             The web scanner reads the network address supplied by our trusted
             hosting layer and immediately transforms it into a keyed HMAC value.
-            The raw address is not used as the application&apos;s Redis
-            rate-limit key. We also use the public repository identifier to
-            prevent repeated scans of the same repository. These records are
-            configured around ten-minute and twenty-four-hour rate-limit
-            windows.
+            The raw address is not stored in the application&apos;s rate-limit
+            table. We separately transform the normalized public repository
+            identifier into a SHA-256 digest to prevent repeated scans of the
+            same repository. Neon Postgres stores those digests with counters
+            and window timestamps configured around ten-minute and
+            twenty-four-hour limits.
           </p>
 
           <h3>Local preferences</h3>
@@ -150,7 +162,8 @@ export default function PrivacyPage() {
           <ul>
             <li>
               <a href="https://vercel.com/legal/privacy-notice">Vercel</a> for
-              website hosting, delivery, and runtime infrastructure;
+              website hosting, delivery, runtime infrastructure, logs, and
+              aggregate Web Analytics;
             </li>
             <li>
               <a href="https://neon.tech/privacy-policy">Neon</a> for
@@ -190,6 +203,11 @@ export default function PrivacyPage() {
               reliable operation.
             </li>
             <li>
+              Vercel discards the Web Analytics visitor session after 24 hours;
+              aggregate page-view statistics are retained according to our
+              hosting plan and configuration.
+            </li>
+            <li>
               Communications are retained while needed to answer your request
               and maintain appropriate business records.
             </li>
@@ -199,10 +217,11 @@ export default function PrivacyPage() {
         <section>
           <h2>Cookies and similar storage</h2>
           <p>
-            Shadscan does not set advertising or analytics cookies. The theme
-            preference described above uses local storage. Providers and
-            websites you visit through external links operate under their own
-            cookie and privacy policies.
+            Shadscan does not set advertising cookies. Vercel Web Analytics does
+            not use third-party cookies; it uses a request-derived visitor hash
+            for aggregate page views. The theme preference described above uses
+            local storage. Providers and websites you visit through external
+            links operate under their own cookie and privacy policies.
           </p>
         </section>
 

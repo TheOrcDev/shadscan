@@ -3,14 +3,20 @@ import { expect, test } from "@playwright/test";
 
 const LEGAL_PAGES = [
   {
+    lastUpdated: "2026-07-21",
     path: "/privacy",
     title: "Privacy Policy",
-    visibleStatement: "The Shadscan CLI runs locally.",
+    visibleStatements: [
+      "The Shadscan CLI runs locally.",
+      "We enable Vercel Web Analytics",
+      "Neon Postgres stores those digests",
+    ],
   },
   {
+    lastUpdated: "2026-07-20",
     path: "/terms",
     title: "Terms of Service",
-    visibleStatement: "Scan results are guidance",
+    visibleStatements: ["Scan results are guidance"],
   },
 ] as const;
 
@@ -28,10 +34,12 @@ for (const legalPage of LEGAL_PAGES) {
     await expect(
       page.getByRole("heading", { level: 1, name: legalPage.title })
     ).toBeVisible();
-    await expect(page.getByText(legalPage.visibleStatement)).toBeVisible();
+    for (const visibleStatement of legalPage.visibleStatements) {
+      await expect(page.getByText(visibleStatement)).toBeVisible();
+    }
     await expect(page.locator("time")).toHaveAttribute(
       "datetime",
-      "2026-07-20"
+      legalPage.lastUpdated
     );
 
     const legalNavigation = page.getByRole("navigation", { name: "Legal" });
