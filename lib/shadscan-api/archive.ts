@@ -34,8 +34,10 @@ interface ExtractArchiveOptions {
 }
 
 interface ExtractionState {
+  directoryPaths: Set<string>;
   entryCount: number;
   extractedBytes: number;
+  filePaths: Set<string>;
   seenPaths: Set<string>;
 }
 
@@ -122,6 +124,43 @@ const trackEntryPath = (
   return relativePath;
 };
 
+const throwArchivePathConflict = (): never => {
+  throw new HostedScanError("The archive contains conflicting paths.", {
+    code: "ARCHIVE_PATH_CONFLICT",
+    status: 422,
+  });
+};
+
+const trackArchivePathShape = (
+  relativePath: string,
+  entryKind: "directory" | "file",
+  state: ExtractionState
+): void => {
+  const segments = relativePath.split("/");
+  let ancestorPath = "";
+
+  for (const segment of segments.slice(0, -1)) {
+    ancestorPath = ancestorPath ? `${ancestorPath}/${segment}` : segment;
+    if (state.filePaths.has(ancestorPath)) {
+      throwArchivePathConflict();
+    }
+    state.directoryPaths.add(ancestorPath);
+  }
+
+  if (entryKind === "directory") {
+    if (state.filePaths.has(relativePath)) {
+      throwArchivePathConflict();
+    }
+    state.directoryPaths.add(relativePath);
+    return;
+  }
+
+  if (state.directoryPaths.has(relativePath)) {
+    throwArchivePathConflict();
+  }
+  state.filePaths.add(relativePath);
+};
+
 const planFileEntry = (
   header: Headers,
   destinationPath: string,
@@ -177,6 +216,7 @@ const planArchiveEntry = (
   const destinationPath = resolveContainedPath(destinationRoot, relativePath);
   const entryType = header.type ?? "file";
   if (entryType === "directory") {
+    trackArchivePathShape(relativePath, "directory", state);
     return { destinationPath, kind: "directory" };
   }
 
@@ -190,6 +230,7 @@ const planArchiveEntry = (
     );
   }
 
+  trackArchivePathShape(relativePath, "file", state);
   return planFileEntry(header, destinationPath, state, options.limits);
 };
 
@@ -236,8 +277,10 @@ const extractTarBuffer = async (
   const archive = extract();
   let entryFailure: unknown;
   const state: ExtractionState = {
+    directoryPaths: new Set<string>(),
     entryCount: 0,
     extractedBytes: 0,
+    filePaths: new Set<string>(),
     seenPaths: new Set<string>(),
   };
 

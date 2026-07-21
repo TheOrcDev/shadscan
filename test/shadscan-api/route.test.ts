@@ -451,6 +451,32 @@ describe("POST /v1/scans", () => {
     });
   });
 
+  it("returns a stable error envelope for conflicting snapshot paths", async () => {
+    const archive = await createTarGzip([
+      {
+        contents: "ancestor",
+        header: { name: "app", type: "file" },
+      },
+      {
+        contents: "descendant",
+        header: { name: "app/page.tsx", type: "file" },
+      },
+    ]);
+
+    const response = await POST(createSnapshotRequest(archive));
+    const result = (await response.json()) as HostedScanErrorBody;
+
+    expect(response.status).toBe(422);
+    expect(result).toEqual({
+      error: {
+        code: "ARCHIVE_PATH_CONFLICT",
+        message: "The archive contains conflicting paths.",
+        retryable: false,
+      },
+      schemaVersion: 1,
+    });
+  });
+
   it("returns a stable error envelope for invalid package metadata", async () => {
     const archive = await createTarGzip([
       {

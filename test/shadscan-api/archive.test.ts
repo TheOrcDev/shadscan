@@ -175,6 +175,66 @@ describe("hosted scan archive extraction", () => {
     );
   });
 
+  it.each([
+    {
+      entries: [
+        {
+          contents: "ancestor",
+          header: { name: "app", type: "file" as const },
+        },
+        {
+          contents: "descendant",
+          header: { name: "app/page.tsx", type: "file" as const },
+        },
+      ],
+      order: "ancestor file first",
+    },
+    {
+      entries: [
+        {
+          contents: "descendant",
+          header: { name: "app/page.tsx", type: "file" as const },
+        },
+        {
+          contents: "ancestor",
+          header: { name: "app", type: "file" as const },
+        },
+      ],
+      order: "descendant file first",
+    },
+  ])("rejects conflicting archive paths with the $order", async ({
+    entries,
+  }) => {
+    const destination = await createDestination();
+    const { gzip } = await createTarGzip(entries);
+
+    await expectArchiveError(
+      extractTarGzip(gzip, destination, {
+        forbiddenPathBehavior: "reject",
+      }),
+      "ARCHIVE_PATH_CONFLICT"
+    );
+  });
+
+  it("accepts explicit directory metadata after its descendants", async () => {
+    const destination = await createDestination();
+    const { gzip } = await createTarGzip([
+      {
+        contents: "export default function Page() {}\n",
+        header: { name: "app/page.tsx", type: "file" },
+      },
+      { header: { name: "app/", type: "directory" } },
+    ]);
+
+    await extractTarGzip(gzip, destination, {
+      forbiddenPathBehavior: "reject",
+    });
+
+    expect(await readFile(path.join(destination, "app/page.tsx"), "utf8")).toBe(
+      "export default function Page() {}\n"
+    );
+  });
+
   it("rejects a file whose declared contents exceed the per-entry limit", async () => {
     const destination = await createDestination();
     const { gzip } = await createTarGzip([

@@ -142,6 +142,33 @@ describe("executeWebRepositoryScan", () => {
     );
   });
 
+  it("maps conflicting archive paths to unsupported source", async () => {
+    const materializeSource = vi.fn(() =>
+      Promise.reject(
+        new HostedScanError("The archive contains conflicting paths.", {
+          code: "ARCHIVE_PATH_CONFLICT",
+          status: 422,
+        })
+      )
+    );
+
+    await expect(
+      executeWebRepositoryScan(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryInput: "acme/conflicting-widget",
+        },
+        {
+          enforceRateLimit: () => Promise.resolve(),
+          materializeSource,
+        }
+      )
+    ).rejects.toMatchObject({
+      code: "SOURCE_UNSUPPORTED",
+      retryable: false,
+    });
+  });
+
   it("aborts and maps scans that exceed the hosted deadline", async () => {
     let operationSignal: AbortSignal | undefined;
     const materializeSource = vi.fn(
