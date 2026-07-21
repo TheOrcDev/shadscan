@@ -13,12 +13,13 @@ published.
   publish packages in its scope.
 - Use an npm user account with publishing two-factor authentication enabled.
 - Restore GitHub Actions runner access before enabling automated publishing.
-- Confirm `npm view @shadscan/cli` still returns `404` before the first publish.
+- Confirm the target version is absent from `npm view @shadscan/cli versions
+  --json` before publishing it.
 
 The package manifest sets `publishConfig.access` to `public` and pins the
-public npm registry. Keep those settings intact. The first manual publish also
-passes `--access public` explicitly because scoped packages otherwise default
-to restricted visibility.
+public npm registry. Keep those settings intact. Manual publishes also pass
+`--access public` explicitly because scoped packages otherwise default to
+restricted visibility.
 
 Never commit an npm access token. The first release candidate is authenticated
 interactively; later releases use npm Trusted Publishing with short-lived OIDC
@@ -47,7 +48,8 @@ pnpm audit:dependencies
 pnpm audit:self
 pnpm build
 pnpm cli:smoke
-pnpm cli:release:check -- --tag next --git-tag v0.1.0-rc.2
+CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+pnpm cli:release:check -- --tag next --git-tag "v${CLI_VERSION}"
 ```
 
 For a stable release, replace `next` with `latest` and supply the matching
@@ -57,39 +59,39 @@ scripts, workspace dependencies, incomplete package files, and malformed
 registry metadata.
 
 The CI workflows build the CLI once, then use the internal `ci:*` script
-variants for every dependent gate. Keep the ordinary commands above for local release work;
-their lifecycle hooks deliberately rebuild the CLI so stale output cannot be
-verified or published by accident.
+variants for every dependent gate. Keep the ordinary commands above for local
+release work; their lifecycle hooks deliberately rebuild the CLI so stale
+output cannot be verified or published by accident.
 
-## First Release Candidate
+## Prerelease
 
-The first publish creates `@shadscan/cli` inside the existing `@shadscan` scope
-and must be performed by an authorized organization member after reviewing the
-packed artifact.
+Publish each release candidate under `next` after an authorized organization
+member reviews the packed artifact.
 
-1. Set the CLI package version to `0.1.0-rc.1` and update the changelog.
+1. Set the CLI package version to the next unused prerelease and update the
+   changelog.
 2. Commit and push the release-candidate preparation.
 3. Run every release gate above.
 4. Authenticate with `npm login` and confirm the account with `npm whoami`.
-5. From `packages/cli`, run `npm publish --tag next --access public` and
-   complete 2FA. The explicit access flag matches the existing
-   `publishConfig.access` safeguard.
-6. Verify `npm view @shadscan/cli@next` and run
-   `npx --yes @shadscan/cli@0.1.0-rc.1 --version` plus representative audits in
+5. From the repository root, run
+   `(cd packages/cli && npm publish --tag next --access public)` and complete
+   2FA. The explicit access flag matches the existing `publishConfig.access`
+   safeguard.
+6. Verify `npm view @shadscan/cli@next` and run the exact published version with
+   `npx --yes @shadscan/cli@<version> --version` plus representative audits in
    clean temporary Next, Vite, and generic React projects.
 
 Do not intentionally move `latest` during release-candidate testing. Inspect
 the complete tag map with `npm view @shadscan/cli dist-tags --json` after every
 publish.
 
-npm requires every package to retain a `latest` tag. For a brand-new package,
-the registry can therefore assign the first public version to both `latest`
-and `next`, even when it was published with `--tag next`; attempting to delete
-that sole `latest` pointer is rejected by the registry. Leave the unavoidable
-pointer in place until the first stable release, keep all release-candidate
-instructions pinned to `@next` or an exact version, and never advertise the
-unqualified package command during this window. The stable publish replaces
-the prerelease pointer with `0.1.0`.
+npm requires every package to retain a `latest` tag. The first public version
+was therefore assigned to both `latest` and `next` even though it was published
+with `--tag next`; attempting to delete that sole `latest` pointer is rejected
+by the registry. Leave the unavoidable pointer in place until the first stable
+release, keep all release-candidate instructions pinned to `@next` or an exact
+version, and never advertise the unqualified package command during this
+window. The stable publish replaces the prerelease pointer with `0.1.0`.
 
 ## Trusted Publishing
 

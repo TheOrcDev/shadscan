@@ -6,7 +6,25 @@ stable releases published under `latest`.
 
 ## Unreleased
 
-## 0.1.0-rc.2 - 2026-07-20
+## 0.1.0-rc.2 - 2026-07-21
+
+### Added
+
+- Added complete Next.js Pages Router discovery and rule coverage, including
+  `_app`, `_document`, route-level loading, error, not-found, metadata, theme,
+  toast, and mounted-component analysis.
+- Added CLI-first product documentation for output formats, category scopes,
+  score thresholds, project paths, agent prompts, and AI-agent commit usage.
+
+### Changed
+
+- Advanced agent prompts to version 3, included namespaced test gates, and
+  required agents to inspect and receive authorization for repository-owned
+  scripts before execution.
+- Aligned release tooling on Node.js 24 and pnpm 11 while preserving and
+  directly testing the published CLI's Node.js 18 runtime contract.
+- Built the CLI once per CI job while keeping local verification commands
+  self-contained against fresh distributable output.
 
 ### Fixed
 
@@ -16,6 +34,25 @@ stable releases published under `latest`.
 - Kept Yarn's JSON command machine-readable with quiet dependency resolution
   and standardized Bun examples on the package's Node shebang.
 - Corrected the downloadable agent skill to use the published scoped package.
+- Required command-menu and shortcut findings to resolve to mounted application
+  surfaces instead of awarding credit for orphaned components.
+- Reported the exact hotkey evidence that satisfied command-menu and theme
+  rules, and recognized equivalent lowercase and optional-chain shortcut
+  syntax without accepting unsafe typing-target handlers.
+- Returned complete Pages Router reports from the web scanner and aligned the
+  hosted prompt contract with prompt version 3.
+- Made hosted scan quota consumption atomic, enforced one end-to-end deadline,
+  classified empty GitHub archives correctly, and rejected conflicting archive
+  path shapes as stable nonretryable source errors.
+- Separated migration and runtime database roles, preserving least-privilege
+  access to the production rate-limit function.
+
+### Security
+
+- Removed original TypeScript source content from published source maps and
+  pinned every privileged GitHub Actions dependency to an immutable commit.
+- Kept private repository metadata out of public website surfaces and corrected
+  the privacy policy to match the hosted scanner's operational telemetry.
 
 ## 0.1.0-rc.1 - 2026-07-20
 
