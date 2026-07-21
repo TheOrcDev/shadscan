@@ -8,16 +8,44 @@ const VIEWPORTS = [
   { height: 1000, width: 1440 },
 ] as const;
 
-test("documents the agent-only commit workflow", async ({ page }) => {
+test("documents the CLI before the optional agent workflow", async ({
+  page,
+}) => {
   await page.goto("/docs");
 
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Make agents run Shadscan before every commit",
+      name: "Shadscan CLI",
     })
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Docs" })).toBeVisible();
+  await expect(
+    page.locator("article > header").locator('[data-slot="code-block"]')
+  ).toContainText("pnpm dlx @shadscan/cli@next");
+  await expect(
+    page.locator("#options dt").getByText("--prompt", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.locator("#options dt").getByText("--json", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("#options dt")
+      .getByText("--fail-under <score>", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("production-polish")).toBeVisible();
+
+  const agentPrompt = page.locator("#agent-prompt");
+  await agentPrompt.getByRole("tab", { name: "bun", exact: true }).click();
+  await expect(agentPrompt.locator('[data-slot="code-block"]')).toContainText(
+    "bunx @shadscan/cli@next --prompt"
+  );
+  await agentPrompt.getByRole("tab", { name: "yarn", exact: true }).click();
+  await expect(agentPrompt.locator('[data-slot="code-block"]')).toContainText(
+    "yarn dlx --quiet --package @shadscan/cli@next shadscan --prompt"
+  );
+
   await expect(page.getByText("shadscan-pre-commit").first()).toBeVisible();
   await expect(
     page
@@ -31,18 +59,10 @@ test("documents the agent-only commit workflow", async ({ page }) => {
     page.getByRole("button", { name: "Copy AGENTS.md" })
   ).toBeVisible();
   await expect(
-    page.getByText("The skill changes agent behavior only.", { exact: false })
+    page.getByText("It adds no Git hook or project dependency.", {
+      exact: false,
+    })
   ).toBeVisible();
-
-  const protocol = page.locator("#protocol");
-  await protocol.getByRole("tab", { name: "bun", exact: true }).click();
-  await expect(protocol.locator('[data-slot="code-block"]')).toContainText(
-    "bunx @shadscan/cli@next --json"
-  );
-  await protocol.getByRole("tab", { name: "yarn", exact: true }).click();
-  await expect(protocol.locator('[data-slot="code-block"]')).toContainText(
-    "yarn dlx --quiet --package @shadscan/cli@next shadscan --json"
-  );
 
   const results = await new AxeBuilder({ page }).analyze();
   const severeViolations = results.violations.filter(

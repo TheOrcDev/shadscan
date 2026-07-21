@@ -6,15 +6,15 @@ const size = {
   width: 1200,
 };
 
-const alt = "Make AI agents run shadscan before every commit";
+const alt = "Shadscan CLI usage, options, and agent prompt output";
 const contentType = "image/png";
 
 export default function OpenGraphImage() {
   return new ImageResponse(
     <SocialCard
-      detail="Baseline first. Audit immediately before each commit."
-      footer="Agent workflow. No Git hooks."
-      headline="Make agents run Shadscan before every commit."
+      detail="Human reports, structured JSON, or a paste-ready agent prompt."
+      footer="CLI documentation"
+      headline="Run Shadscan in any shadcn app."
     />,
     size
   );

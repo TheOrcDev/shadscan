@@ -21,12 +21,12 @@ const PAGE_METADATA = [
     socialTitle: "Scan a shadcn app | shadscan",
   },
   {
-    browserTitle: "Shadscan for AI agents | shadscan",
+    browserTitle: "Shadscan CLI documentation | shadscan",
     description:
-      "Install the Shadscan agent skill and require a deterministic UI audit before every AI-generated commit.",
+      "Run Shadscan, choose human, JSON, or agent-prompt output, enforce score thresholds, and add the optional agent commit workflow.",
     imagePath: "/docs/opengraph-image",
     path: "/docs",
-    socialTitle: "Shadscan for AI agents | shadscan",
+    socialTitle: "Shadscan CLI documentation | shadscan",
   },
   {
     browserTitle: "Sponsor shadscan | shadscan",

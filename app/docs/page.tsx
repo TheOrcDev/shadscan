@@ -3,6 +3,8 @@ import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
 import { createPageMetadata } from "@/lib/site-metadata";
 
+const CLI_PACKAGE = "@shadscan/cli@next";
+
 const AGENT_PROMPT =
   "Use $shadscan-pre-commit for this task. Establish the current score before editing, run Shadscan immediately before every commit, and do not commit if the audit is unassessed or below the task floor.";
 
@@ -10,12 +12,61 @@ const PROJECT_RULE = `## Shadscan
 
 Before creating any commit, use $shadscan-pre-commit. Establish the current score when work begins, run Shadscan immediately before each commit, and do not commit if the score is unassessed or below the task floor.`;
 
+const CLI_OPTIONS = [
+  {
+    description:
+      "Project directory to scan. Relative paths resolve from the current directory. Defaults to .",
+    option: "[path]",
+  },
+  {
+    description:
+      "Choose human, json, or prompt output. Human output is the default.",
+    option: "--format <format>",
+  },
+  {
+    description:
+      "Print only a neutral, paste-ready Markdown prompt for an AI coding agent.",
+    option: "--prompt",
+  },
+  {
+    description:
+      "Print the complete machine-readable audit report. Alias for --format json.",
+    option: "--json",
+  },
+  {
+    description:
+      "Exit with status 1 when the score is below an integer from 0 to 100, or is unassessed.",
+    option: "--fail-under <score>",
+  },
+  {
+    description: "Run only one audit category.",
+    option: "--category <category>",
+  },
+  {
+    description: "Keep human-readable findings neutral.",
+    option: "--no-roast",
+  },
+  {
+    description: "Include roast copy in CI or JSON output.",
+    option: "--roast",
+  },
+  {
+    description: "Print command usage and all available options.",
+    option: "--help",
+  },
+  {
+    description: "Print the installed Shadscan version.",
+    option: "--version",
+  },
+] as const;
+
 const sections = [
-  { href: "#install", label: "Install the skill" },
-  { href: "#activate", label: "Activate it" },
-  { href: "#protocol", label: "Agent protocol" },
+  { href: "#usage", label: "Usage" },
+  { href: "#options", label: "Options" },
+  { href: "#agent-prompt", label: "Agent prompt" },
+  { href: "#automation", label: "JSON and CI" },
+  { href: "#agent-skill", label: "Agent skill" },
   { href: "#project-rule", label: "Project rule" },
-  { href: "#agent-only", label: "Agent-only scope" },
 ] as const satisfies ReadonlyArray<{ href: `#${string}`; label: string }>;
 
 interface DocsCodeBlockProps {
@@ -23,6 +74,17 @@ interface DocsCodeBlockProps {
   label: string;
   language: "bash" | "markdown" | "text";
 }
+
+const getCliCommands = (cliArguments = "") => {
+  const suffix = cliArguments ? ` ${cliArguments}` : "";
+
+  return {
+    bun: `bunx ${CLI_PACKAGE}${suffix}`,
+    npm: `npx --yes ${CLI_PACKAGE}${suffix}`,
+    pnpm: `pnpm dlx ${CLI_PACKAGE}${suffix}`,
+    yarn: `yarn dlx --quiet --package ${CLI_PACKAGE} shadscan${suffix}`,
+  } as const;
+};
 
 function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
   return (
@@ -51,11 +113,11 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
 
 export const metadata = createPageMetadata({
   description:
-    "Install the Shadscan agent skill and require a deterministic UI audit before every AI-generated commit.",
-  imageAlt: "Make AI agents run shadscan before every commit",
+    "Run Shadscan, choose human, JSON, or agent-prompt output, enforce score thresholds, and add the optional agent commit workflow.",
+  imageAlt: "Shadscan CLI usage, options, and agent prompt output",
   imagePath: "/docs/opengraph-image",
   path: "/docs",
-  title: "Shadscan for AI agents",
+  title: "Shadscan CLI documentation",
 });
 
 export default function DocsPage() {
@@ -68,22 +130,127 @@ export default function DocsPage() {
       <article className="typeset min-w-0 max-w-3xl pb-20 [&_section[id]]:scroll-mt-10">
         <header>
           <p className="not-typeset font-mono text-muted-foreground text-sm">
-            Agent workflow
+            CLI documentation
           </p>
-          <h1>Make agents run Shadscan before every commit</h1>
+          <h1>Shadscan CLI</h1>
+          <div className="not-typeset mt-5">
+            <CodeBlockCommand {...getCliCommands()} />
+          </div>
           <p>
-            The Shadscan skill gives AI agents a commit protocol. It records the
-            project&apos;s starting score, audits the working tree immediately
-            before each commit, and stops the agent when the score regresses.
-            Your project tooling stays untouched.
+            Run this from the root of a React shadcn app. The one-shot command
+            needs no project install. Shadscan reads source and configuration,
+            prints the audit, and leaves the project unchanged.
           </p>
         </header>
 
-        <section id="install">
-          <h2>Install the skill</h2>
+        <section id="usage">
+          <h2>Usage</h2>
+          <DocsCodeBlock
+            code="shadscan [path] [options]"
+            label="Syntax"
+            language="bash"
+          />
           <p>
-            Install the canonical skill globally so supported agents can use it
-            in any repository.
+            The optional <code>path</code> defaults to the current directory.
+            Pass a relative or absolute path to scan another project.
+          </p>
+          <h3>Scan another directory</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("../my-shadcn-app")} />
+          </div>
+          <p>
+            The default human report includes the overall score, category
+            scores, evidence, fixes, and agent-ready actionables. Roast copy is
+            enabled for local human output and disabled automatically in CI.
+          </p>
+        </section>
+
+        <section id="options">
+          <h2>Options</h2>
+          <dl className="not-typeset mt-5 border-y">
+            {CLI_OPTIONS.map(({ description, option }) => (
+              <div
+                className="grid gap-2 border-b py-4 last:border-b-0 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-6"
+                key={option}
+              >
+                <dt>
+                  <code className="break-words font-mono text-sm">
+                    {option}
+                  </code>
+                </dt>
+                <dd className="text-muted-foreground text-sm leading-6">
+                  {description}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p>
+            Categories are <code>foundation</code>, <code>interaction</code>,{" "}
+            <code>states</code>, <code>accessibility</code>, <code>forms</code>,
+            and <code>production-polish</code>. The <code>--prompt</code> and{" "}
+            <code>--json</code> aliases cannot be combined with each other or
+            with <code>--format</code>.
+          </p>
+        </section>
+
+        <section id="agent-prompt">
+          <h2>Create an agent prompt</h2>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("--prompt")} />
+          </div>
+          <p>
+            <code>--prompt</code> is an alias for <code>--format prompt</code>.
+            It prints only neutral Markdown that you can paste into an AI coding
+            agent. Shadscan does not call an AI model itself.
+          </p>
+          <p>The generated prompt contains:</p>
+          <ul>
+            <li>The repository identity, score, and exact ruleset version.</li>
+            <li>
+              Grouped fixes, product decisions, and manual verification work.
+            </li>
+            <li>Evidence, suggested fixes, and acceptance criteria.</li>
+            <li>Detected project gates and the exact rescan command.</li>
+          </ul>
+          <p>
+            Add a path or category before the flag to narrow the handoff, for
+            example <code>../my-app --category accessibility --prompt</code>.
+          </p>
+        </section>
+
+        <section id="automation">
+          <h2>Use JSON and score gates</h2>
+          <h3>Read the complete report</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("--json")} />
+          </div>
+          <p>
+            JSON output includes the score, category summaries, every rule
+            result, and <code>agentHandoff</code>. The current audit schema
+            version is <code>3</code>.
+          </p>
+          <h3>Fail CI below a score</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("--json --fail-under 80")} />
+          </div>
+          <p>
+            Findings normally exit with status <code>0</code>. With{" "}
+            <code>--fail-under</code>, Shadscan exits with status <code>1</code>
+            when the score is below the floor or cannot be assessed. Discovery
+            and audit failures also exit with status <code>1</code>.
+          </p>
+          <h3>Run one category</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("--category accessibility")} />
+          </div>
+        </section>
+
+        <section id="agent-skill">
+          <h2>Run it before agent commits</h2>
+          <p>
+            The optional <code>shadscan-pre-commit</code> skill establishes a
+            baseline and requires AI agents to rerun the audit immediately
+            before every commit. It adds no Git hook or project dependency.
           </p>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
@@ -93,14 +260,6 @@ export default function DocsPage() {
               yarn="yarn dlx skills add TheOrcDev/skills --skill shadscan-pre-commit --global"
             />
           </div>
-        </section>
-
-        <section id="activate">
-          <h2>Activate it for the task</h2>
-          <p>
-            Give the agent this instruction before it starts changing files. The
-            task baseline becomes the default minimum score.
-          </p>
           <DocsCodeBlock
             code={AGENT_PROMPT}
             label="Agent prompt"
@@ -108,73 +267,18 @@ export default function DocsPage() {
           />
         </section>
 
-        <section id="protocol">
-          <h2>What the agent does</h2>
-          <ol>
-            <li>
-              <strong>Establishes a baseline.</strong> Before editing, the agent
-              runs <code>shadscan --json</code> and reads the top-level score.
-              It uses a local binary when one already exists, or a one-shot CLI
-              command otherwise.
-            </li>
-            <li>
-              <strong>Sets the task floor.</strong> The starting score is the
-              minimum by default. A higher score requested by the user becomes
-              the new floor. An unassessed result stops the workflow.
-            </li>
-            <li>
-              <strong>Audits before every commit.</strong> After the intended
-              edits and tests, the agent scans the complete working tree again.
-              A failed audit must be fixed and rerun before committing.
-            </li>
-            <li>
-              <strong>Reports the result.</strong> Each commit is accompanied by
-              the baseline, enforced floor, and final score. Findings outside
-              the task scope are reported instead of silently bypassed.
-            </li>
-          </ol>
-          <p>
-            When Shadscan is not already installed, the agent uses the matching
-            one-shot command without adding a dependency:
-          </p>
-          <div className="not-typeset mt-4">
-            <CodeBlockCommand
-              bun="bunx @shadscan/cli@next --json"
-              npm="npx --yes @shadscan/cli@next --json"
-              pnpm="pnpm dlx @shadscan/cli@next --json"
-              yarn="yarn dlx --quiet --package @shadscan/cli@next shadscan --json"
-            />
-          </div>
-        </section>
-
         <section id="project-rule">
           <h2>Make it a project rule</h2>
           <p>
-            Add this policy to <code>AGENTS.md</code> so agents that read the
-            repository instructions activate the skill for future commit tasks.
-            Use the equivalent agent instruction file when your tool uses a
-            different filename.
+            Add this policy to <code>AGENTS.md</code>, or the equivalent
+            instruction file for your agent, to activate the skill for future
+            commit tasks.
           </p>
           <DocsCodeBlock
             code={PROJECT_RULE}
             label="AGENTS.md"
             language="markdown"
           />
-        </section>
-
-        <section id="agent-only">
-          <h2>Agent-only by design</h2>
-          <p>
-            The skill changes agent behavior only. It does not install project
-            dependencies, edit package scripts, modify lockfiles, or configure
-            Git. It also never rewrites or stages source files while auditing.
-          </p>
-          <p>
-            Commits made manually, or by an agent that has not loaded the skill,
-            are not intercepted. That boundary keeps Shadscan entirely inside
-            the AI workflow while leaving the developer&apos;s local commit
-            process alone.
-          </p>
         </section>
       </article>
     </main>
