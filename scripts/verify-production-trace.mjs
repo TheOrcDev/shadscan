@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { once as onceEvent } from "node:events";
 import {
   copyFile,
   cp,
@@ -10,17 +11,21 @@ import {
   realpath,
   rm,
   symlink,
+  writeFile,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
+import { Worker } from "node:worker_threads";
 
 const TRACE_PATHS = [
   ".next/server/app/scan/page.js.nft.json",
   ".next/server/app/v1/scans/route.js.nft.json",
 ];
 const REQUIRED_RUNTIME_FILES = new Set([
+  "lib/shadscan-api/hosted-scan-worker.mjs",
   "packages/cli/LICENSE",
   "packages/cli/dist/index.js",
 ]);
@@ -35,6 +40,14 @@ const sharedNextPackagePath = path.join(projectRoot, ".next/package.json");
 const sharedServerChunksPath = path.join(projectRoot, ".next/server/chunks");
 const tracedRuntimePaths = new Set();
 const traceEntryPaths = [];
+const HOSTED_SCAN_WORKER_PATH = path.join(
+  projectRoot,
+  "lib/shadscan-api/hosted-scan-worker.mjs"
+);
+const SHADSCAN_CLI_RUNTIME_PATH = path.join(
+  projectRoot,
+  "packages/cli/dist/index.js"
+);
 
 const toAbsoluteTracePath = (tracePath, tracedFile) =>
   path.resolve(path.dirname(path.resolve(tracePath)), tracedFile);
@@ -117,39 +130,50 @@ const findMissingNextRuntimeFiles = async (tracedPaths) => {
 const copyTracedRuntime = async (sandboxRoot, sourcePaths) => {
   const entries = await Promise.all(
     [...sourcePaths].map(async (sourcePath) => ({
+      destinationPath: toSandboxPath(sandboxRoot, sourcePath),
       sourcePath,
       stats: await lstat(sourcePath),
     }))
   );
+  const symlinkDestinations = entries
+    .filter(({ stats }) => stats.isSymbolicLink())
+    .map(({ destinationPath }) => destinationPath);
+  const isInsideTracedSymlink = (destinationPath) =>
+    symlinkDestinations.some((symlinkPath) => {
+      const relativePath = path.relative(symlinkPath, destinationPath);
+      return (
+        relativePath.length > 0 &&
+        !relativePath.startsWith("..") &&
+        !path.isAbsolute(relativePath)
+      );
+    });
 
-  for (const { sourcePath, stats } of entries) {
-    if (stats.isDirectory()) {
-      await mkdir(toSandboxPath(sandboxRoot, sourcePath), { recursive: true });
+  for (const { destinationPath, stats } of entries) {
+    if (stats.isDirectory() && !isInsideTracedSymlink(destinationPath)) {
+      await mkdir(destinationPath, { recursive: true });
     }
   }
 
-  for (const { sourcePath, stats } of entries) {
+  for (const { destinationPath, sourcePath, stats } of entries) {
+    if (!(stats.isFile() && !isInsideTracedSymlink(destinationPath))) {
+      continue;
+    }
+
+    await mkdir(path.dirname(destinationPath), { recursive: true });
+    await copyFile(sourcePath, destinationPath);
+  }
+
+  for (const { destinationPath, sourcePath, stats } of entries) {
     if (!stats.isSymbolicLink()) {
       continue;
     }
 
-    const destinationPath = toSandboxPath(sandboxRoot, sourcePath);
     const sourceTarget = await readlink(sourcePath);
     const target = path.isAbsolute(sourceTarget)
       ? path.relative(path.dirname(sourcePath), sourceTarget)
       : sourceTarget;
     await mkdir(path.dirname(destinationPath), { recursive: true });
     await symlink(target, destinationPath);
-  }
-
-  for (const { sourcePath, stats } of entries) {
-    if (!stats.isFile()) {
-      continue;
-    }
-
-    const destinationPath = toSandboxPath(sandboxRoot, sourcePath);
-    await mkdir(path.dirname(destinationPath), { recursive: true });
-    await copyFile(sourcePath, destinationPath);
   }
 };
 
@@ -192,6 +216,67 @@ const smokeTraceEntries = async (entryPaths, sourcePaths) => {
           `${path.relative(projectRoot, sourceEntryPath)} failed in an isolated trace: ${detail}`
         );
       }
+    }
+
+    const workerFixturePath = path.join(sandboxRoot, "worker-fixture");
+    await mkdir(path.join(workerFixturePath, "src"), { recursive: true });
+    await Promise.all([
+      writeFile(
+        path.join(workerFixturePath, "package.json"),
+        `${JSON.stringify({
+          dependencies: { react: "19.2.4" },
+          name: "trace-worker-fixture",
+        })}\n`
+      ),
+      writeFile(
+        path.join(workerFixturePath, "src/App.tsx"),
+        "export const App = () => <main>Trace worker fixture</main>;\n"
+      ),
+    ]);
+
+    const worker = new Worker(
+      toSandboxPath(sandboxRoot, HOSTED_SCAN_WORKER_PATH),
+      {
+        env: { NODE_ENV: "production" },
+        execArgv: [],
+        resourceLimits: {
+          maxOldGenerationSizeMb: 192,
+          maxYoungGenerationSizeMb: 32,
+          stackSizeMb: 4,
+        },
+        workerData: {
+          cliModuleUrl: pathToFileURL(
+            toSandboxPath(sandboxRoot, SHADSCAN_CLI_RUNTIME_PATH)
+          ).href,
+          input: {
+            filesystemRoot: workerFixturePath,
+            projectRoot: workerFixturePath,
+            source: {
+              digest: `sha256:${"a".repeat(64)}`,
+              kind: "snapshot",
+              revision: null,
+            },
+          },
+          operation: "scan",
+        },
+      }
+    );
+    try {
+      const [message] = await onceEvent(worker, "message", {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        message.type !== "completed" ||
+        message.report === null ||
+        typeof message.report !== "object" ||
+        message.report.packageName !== "trace-worker-fixture"
+      ) {
+        throw new Error("Hosted scan worker failed its isolated trace scan.");
+      }
+    } finally {
+      await worker.terminate();
     }
   } finally {
     await rm(sandboxRoot, { force: true, recursive: true });

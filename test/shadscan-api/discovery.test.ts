@@ -42,6 +42,7 @@ describe("hosted API agent instructions", () => {
     expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain(
       "not a canonical hash of a checkout or extracted source tree"
     );
+    expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain("SCAN_WORKER_FAILED");
   });
 
   it("does not embed credentials or local workspace paths", () => {
@@ -114,6 +115,7 @@ describe("hosted API OpenAPI document", () => {
     expect(responses).toHaveProperty("422");
     expect(responses).toHaveProperty("429");
     expect(responses["429"].headers).toHaveProperty("Retry-After");
+    expect(responses["500"].description).toContain("worker");
     expect(responses).toHaveProperty("503");
     expect(responses["503"].headers).toHaveProperty("Retry-After");
   });

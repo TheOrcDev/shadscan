@@ -87,6 +87,17 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
     );
   }
 
+  if (error.code === "SCAN_WORKER_FAILED") {
+    return new WebScanServiceError(
+      "The isolated scanner stopped before the audit finished. Try again or run shadscan locally.",
+      {
+        cause: error,
+        code: "SCAN_WORKER_FAILED",
+        retryable: true,
+      }
+    );
+  }
+
   if (error.code === "GITHUB_SOURCE_NOT_FOUND") {
     return new WebScanServiceError(
       "The repository could not be found. Check that it exists and is public.",

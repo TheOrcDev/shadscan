@@ -1,16 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
-  AGENT_PROMPT_VERSION,
-  ProjectDiscoveryError,
-  renderAgentPrompt,
-  scanProject,
-} from "@shadscan/cli";
-import {
   type HostedScanResponse,
   HostedScanResponseSchema,
   type MaterializedScanSource,
 } from "./contracts";
-import { HostedScanError } from "./errors";
+import { runHostedScanWorker } from "./hosted-scan-worker-client";
 import { cleanupMaterializationDirectory } from "./materialized-project";
 import { HOSTED_SCAN_SCHEMA_VERSION } from "./protocol";
 
@@ -22,49 +16,25 @@ const runHostedScan = async (
 ): Promise<HostedScanResponse> => {
   try {
     signal?.throwIfAborted();
-    const report = await scanProject(source.projectRoot, {
-      category: source.category,
-      filesystemRoot: source.sourceRoot,
-      signal,
-      source: {
-        digest: source.sourceDigest,
-        kind: source.sourceKind,
-        revision: source.resolvedRevision,
-      },
-    });
-    signal?.throwIfAborted();
-    const promptMarkdown = renderAgentPrompt(report);
+    const workerResult = await runHostedScanWorker(source, signal);
     signal?.throwIfAborted();
 
     return HostedScanResponseSchema.parse({
       handoff: {
-        promptMarkdown,
-        promptVersion: AGENT_PROMPT_VERSION,
+        promptMarkdown: workerResult.promptMarkdown,
+        promptVersion: workerResult.promptVersion,
       },
-      report,
+      report: workerResult.report,
       scan: {
-        engineVersion: report.engineVersion,
+        engineVersion: workerResult.report.engineVersion,
         id: createScanId(),
         resolvedRevision: source.resolvedRevision,
-        rulesetVersion: report.rulesetVersion,
+        rulesetVersion: workerResult.report.rulesetVersion,
         sourceDigest: source.sourceDigest,
         status: "completed",
       },
       schemaVersion: HOSTED_SCAN_SCHEMA_VERSION,
     });
-  } catch (error) {
-    if (error instanceof ProjectDiscoveryError) {
-      throw new HostedScanError(
-        "The selected source is not a supported React project.",
-        {
-          cause: error,
-          code: "PROJECT_DISCOVERY_FAILED",
-          status: 422,
-        }
-      );
-    }
-
-    throw error;
   } finally {
     await cleanupMaterializationDirectory(source.cleanupDirectory);
   }

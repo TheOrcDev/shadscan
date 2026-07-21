@@ -22,3 +22,10 @@ shadscan's local CLI is designed to read source from the selected project and
 write reports to stdout or errors to stderr. Any unexpected network request,
 project-file mutation, install-time execution, or machine-local path disclosure
 is considered a security bug.
+
+Hosted source is treated as untrusted data and is never executed. Archive
+validation and size limits run before analysis; parsing and rule evaluation run
+in a disposable worker with a bounded V8 heap, a bounded stack, and no deployed
+secrets in its environment. The worker is terminated on request abort. This is
+failure and resource isolation, not a security sandbox: the worker remains part
+of the server process and uses the same operating-system identity.

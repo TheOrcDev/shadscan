@@ -42,6 +42,20 @@ const SCANNER_TRACE_EXCLUDES = [
   "./vercel.json",
   "./vitest.config.ts",
 ] as const;
+const SCANNER_TRACE_INCLUDES = [
+  "./lib/shadscan-api/hosted-scan-worker.mjs",
+  "./node_modules/.pnpm/fdir@*/node_modules/fdir/**/*",
+  "./node_modules/.pnpm/fdir@*/node_modules/picomatch",
+  "./node_modules/.pnpm/picomatch@*/node_modules/picomatch/**/*",
+  "./node_modules/.pnpm/tinyglobby@*/node_modules/fdir",
+  "./node_modules/.pnpm/tinyglobby@*/node_modules/picomatch",
+  "./node_modules/.pnpm/tinyglobby@*/node_modules/tinyglobby/**/*",
+  "./packages/cli/node_modules/jsonc-parser/**/*",
+  "./packages/cli/node_modules/tinyglobby",
+  "./packages/cli/node_modules/tinyglobby/**/*",
+  "./packages/cli/node_modules/typescript/**/*",
+  "./packages/cli/node_modules/zod/**/*",
+] as const;
 
 const nextConfig: NextConfig = {
   experimental:
@@ -49,6 +63,10 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "/scan": [...SCANNER_TRACE_EXCLUDES],
     "/v1/scans": [...SCANNER_TRACE_EXCLUDES],
+  },
+  outputFileTracingIncludes: {
+    "/scan": [...SCANNER_TRACE_INCLUDES],
+    "/v1/scans": [...SCANNER_TRACE_INCLUDES],
   },
   serverExternalPackages: ["@shadscan/cli"],
   turbopack: {

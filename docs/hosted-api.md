@@ -127,6 +127,13 @@ hash and should not be compared with a Git tree hash.
 - Each process admits at most two active scans. Additional requests are not
   queued and return retryable `SCAN_BUSY` status 503 with `Retry-After: 5`;
   rejected requests do not consume scan quota.
+- TypeScript parsing and rule evaluation run in a disposable worker with a
+  192 MiB old-generation heap limit, 32 MiB young-generation limit, and 4 MiB
+  stack. The parent terminates the worker on request abort and returns retryable
+  `SCAN_WORKER_FAILED` status 500 if the worker crashes or returns invalid data.
+- The worker receives no deployment secrets in its environment. It isolates
+  failures and resource use, but it is not a security sandbox; shadscan still
+  never executes repository code.
 - Hosted work has a 25-second deadline within the 30-second route limit and
   returns a retryable `SCAN_TIMEOUT` error with status 504.
 - Distributed rate-limit calls fail closed behind 1-second lock, 3-second

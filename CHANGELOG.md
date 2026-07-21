@@ -15,6 +15,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Move hosted TypeScript parsing and rule evaluation into disposable,
+  resource-limited workers that are terminated on request abort, contain parser
+  stack failures, and receive no deployment secrets in their environment.
 - Bound each hosted process to two active scans and reject excess work without
   queueing or consuming quota, using a retryable `SCAN_BUSY` contract.
 - Bound distributed rate-limit calls with PostgreSQL lock and statement

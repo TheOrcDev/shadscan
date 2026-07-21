@@ -238,7 +238,9 @@ const OPENAPI_DOCUMENT = {
               "Retry-After": RETRY_AFTER_RESPONSE_HEADER,
             },
           },
-          "500": createErrorResponse("The scan failed unexpectedly."),
+          "500": createErrorResponse(
+            "The scan failed unexpectedly or its isolated scanner worker stopped before returning a valid result."
+          ),
           "502": createErrorResponse(
             "GitHub was unavailable, rate-limited the service, or returned an invalid response."
           ),

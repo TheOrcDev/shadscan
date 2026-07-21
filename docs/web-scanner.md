@@ -61,6 +61,12 @@ normal traffic.
 - Each process admits at most two active scans. Additional submissions are not
   queued and return retryable `SCAN_BUSY` with a five-second retry interval;
   rejected submissions do not consume scan quota.
+- Source parsing and rule evaluation run in a disposable, resource-limited
+  worker with no deployment secrets in its environment. Request aborts
+  terminate the worker before temporary source cleanup; worker crashes become
+  retryable `SCAN_WORKER_FAILED` errors with a local CLI fallback.
+- The worker is a failure and resource boundary, not a security sandbox. The
+  scanner does not execute repository code.
 - `/scan` runs in the Node.js runtime with a 30-second execution limit.
 - The full server action has a 25-second deadline so it can return a stable
   `SCAN_TIMEOUT` error before the platform terminates it.

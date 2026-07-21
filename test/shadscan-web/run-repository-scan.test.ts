@@ -195,6 +195,46 @@ describe("executeWebRepositoryScan", () => {
     });
   });
 
+  it("maps isolated scanner failures to a retryable local fallback", async () => {
+    const materializeSource = vi.fn(() =>
+      Promise.resolve({
+        cleanupDirectory: "/tmp/shadscan-test",
+        projectRoot: "/tmp/shadscan-test",
+        resolvedRevision: null,
+        sourceDigest: `sha256:${"a".repeat(64)}`,
+        sourceKind: "snapshot" as const,
+        sourceRoot: "/tmp/shadscan-test",
+      })
+    );
+    const runScan = vi.fn(() =>
+      Promise.reject(
+        new HostedScanError("Internal worker detail", {
+          code: "SCAN_WORKER_FAILED",
+          retryable: true,
+          status: 500,
+        })
+      )
+    );
+
+    await expect(
+      executeWebRepositoryScan(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryInput: "acme/worker-failure",
+        },
+        {
+          enforceRateLimit: () => Promise.resolve(),
+          materializeSource,
+          runScan,
+        }
+      )
+    ).rejects.toMatchObject({
+      code: "SCAN_WORKER_FAILED",
+      message: expect.not.stringContaining("Internal worker detail"),
+      retryable: true,
+    });
+  });
+
   it("aborts and maps scans that exceed the hosted deadline", async () => {
     let operationSignal: AbortSignal | undefined;
     const materializeSource = vi.fn(
