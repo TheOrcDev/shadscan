@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  access,
   mkdir,
   mkdtemp,
   readdir,
@@ -21,6 +22,18 @@ const temporaryRoot = await mkdtemp(
   path.join(tmpdir(), "shadscan packed smoke ")
 );
 const npmCacheDirectory = path.join(temporaryRoot, "npm cache");
+
+const getOptionValue = (optionName) => {
+  const optionIndex = process.argv.indexOf(optionName);
+
+  if (optionIndex === -1) {
+    return null;
+  }
+
+  const value = process.argv[optionIndex + 1];
+  assert.ok(value, `Expected a value after ${optionName}.`);
+  return value;
+};
 
 const run = async (command, args, { cwd, expectedExitCode = 0 } = {}) => {
   const result = await execa(command, args, {
@@ -56,17 +69,30 @@ try {
     mkdir(path.join(consumerDirectory, "src"), { recursive: true }),
   ]);
 
-  await run(
-    "npm",
-    ["pack", "--ignore-scripts", "--pack-destination", packDirectory],
-    { cwd: packageDirectory }
-  );
+  const providedTarball = getOptionValue("--tarball");
+  let tarballPath;
 
-  const tarballs = (await readdir(packDirectory)).filter((fileName) =>
-    fileName.endsWith(".tgz")
-  );
-  assert.equal(tarballs.length, 1, "Expected exactly one packed tarball.");
-  const tarballPath = path.join(packDirectory, tarballs[0]);
+  if (providedTarball) {
+    tarballPath = path.resolve(process.cwd(), providedTarball);
+    assert.equal(
+      path.extname(tarballPath),
+      ".tgz",
+      "Expected --tarball to reference an npm .tgz artifact."
+    );
+    await access(tarballPath);
+  } else {
+    await run(
+      "npm",
+      ["pack", "--ignore-scripts", "--pack-destination", packDirectory],
+      { cwd: packageDirectory }
+    );
+
+    const tarballs = (await readdir(packDirectory)).filter((fileName) =>
+      fileName.endsWith(".tgz")
+    );
+    assert.equal(tarballs.length, 1, "Expected exactly one packed tarball.");
+    tarballPath = path.join(packDirectory, tarballs[0]);
+  }
   const npxExecutable = process.platform === "win32" ? "npx.cmd" : "npx";
 
   const npxVersionResult = await run(
@@ -173,7 +199,7 @@ try {
   });
   assert.match(promptResult.stdout, /<shadscan-data/);
   assert.match(promptResult.stdout, /"acceptanceCriteria"/);
-  assert.match(promptResult.stdout, /"promptVersion": 3/);
+  assert.match(promptResult.stdout, /"promptVersion": 4/);
   assert.match(promptResult.stdout, /"workItems"/);
 
   const thresholdResult = await run(

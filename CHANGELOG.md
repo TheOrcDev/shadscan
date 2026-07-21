@@ -8,6 +8,8 @@ stable releases published under `latest`.
 
 ### Changed
 
+- Pack the npm artifact once, smoke-test that exact tarball, verify its SHA-512,
+  and submit the same bytes to staged publishing.
 - Advance agent prompts to version 4 and include the selected-project context
   in the bounded handoff payload.
 

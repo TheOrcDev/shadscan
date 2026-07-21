@@ -71,8 +71,23 @@ jobs:
         run: pnpm ci:build-site
       - name: Verify production traces
         run: pnpm verify:trace
-      - name: Smoke test packed npx command
-        run: pnpm cli:smoke:built
-      - name: Stage package for npm approval
+      - name: Pack verified CLI artifact
+        id: pack
         working-directory: packages/cli
-        run: npm stage publish --tag "$NPM_DIST_TAG"
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/shadscan-package"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/shadscan-package"
+          mapfile -t tarballs < <(find "$RUNNER_TEMP/shadscan-package" -maxdepth 1 -type f -name '*.tgz' -print)
+          test "${#tarballs[@]}" -eq 1
+          tarball="${tarballs[0]}"
+          digest="$(sha512sum "$tarball" | cut -d ' ' -f 1)"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          echo "sha512=$digest" >> "$GITHUB_OUTPUT"
+      - name: Smoke test exact npm artifact
+        run: node packages/cli/scripts/smoke-package.mjs --tarball "${{ steps.pack.outputs.tarball }}"
+      - name: Stage package for npm approval
+        shell: bash
+        run: |
+          echo "${{ steps.pack.outputs.sha512 }}  ${{ steps.pack.outputs.tarball }}" | sha512sum --check --strict
+          npm stage publish "${{ steps.pack.outputs.tarball }}" --tag "$NPM_DIST_TAG" --access public --provenance
