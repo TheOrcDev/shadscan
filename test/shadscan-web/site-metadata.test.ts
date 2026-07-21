@@ -8,14 +8,13 @@ describe("site URL resolution", () => {
       getSiteUrl({
         NEXT_PUBLIC_SITE_URL: "docs.example.com",
         NODE_ENV: "production",
-        VERCEL_PROJECT_PRODUCTION_URL: "ignored.vercel.app",
       }).href
     ).toBe("https://docs.example.com/");
   });
 
   it("uses the stable production deployment when no URL is configured", () => {
     expect(getSiteUrl({ NODE_ENV: "production" }).href).toBe(
-      "https://shadscan.vercel.app/"
+      "https://www.shadscan.com/"
     );
   });
 

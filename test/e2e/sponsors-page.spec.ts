@@ -43,7 +43,7 @@ test("shows every sponsorship tier and slot", async ({ page }) => {
     })
   ).toHaveAttribute(
     "href",
-    "mailto:sponsors@shadscan.dev?subject=shadscan%20Diamond%20sponsorship"
+    "mailto:sponsors@shadscan.com?subject=shadscan%20Diamond%20sponsorship"
   );
 
   const results = await new AxeBuilder({ page }).analyze();

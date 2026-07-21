@@ -55,7 +55,7 @@ Give the agent a `SHADSCAN_API_KEY` environment variable, then send it this
 prompt:
 
 ```text
-Read https://shadscan.dev/agent.md and follow it. Scan this repository,
+Read https://www.shadscan.com/agent.md and follow it. Scan this repository,
 inspect every cited finding, fix the verified P0 and P1 issues, run the
 project's checks, then rescan and summarize the before/after result. Never put
 the API key or repository secrets in a prompt, log, archive, or committed file.
@@ -66,9 +66,9 @@ snapshots of the current working tree. A successful JSON response contains the
 versioned report and `handoff.promptMarkdown`; request `text/markdown` to receive
 only the paste-ready remediation prompt.
 
-- Agent instructions: <https://shadscan.dev/agent.md>
-- OpenAPI 3.1 contract: <https://shadscan.dev/openapi.json>
-- Scan endpoint: `POST https://shadscan.dev/v1/scans`
+- Agent instructions: <https://www.shadscan.com/agent.md>
+- OpenAPI 3.1 contract: <https://www.shadscan.com/openapi.json>
+- Scan endpoint: `POST https://www.shadscan.com/v1/scans`
 - Self-hosting and key setup: [docs/hosted-api.md](docs/hosted-api.md)
 
 ## Web Scanner

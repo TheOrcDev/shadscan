@@ -1,4 +1,4 @@
-const SHADSCAN_PUBLIC_ORIGIN = "https://shadscan.dev";
+const SHADSCAN_PUBLIC_ORIGIN = "https://www.shadscan.com";
 const SHADSCAN_SCAN_ENDPOINT = `${SHADSCAN_PUBLIC_ORIGIN}/v1/scans`;
 const SHADSCAN_AGENT_INSTRUCTIONS_URL = `${SHADSCAN_PUBLIC_ORIGIN}/agent.md`;
 const SHADSCAN_OPENAPI_URL = `${SHADSCAN_PUBLIC_ORIGIN}/openapi.json`;

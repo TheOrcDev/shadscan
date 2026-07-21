@@ -1,4 +1,4 @@
-const SPONSOR_CONTACT_EMAIL = "sponsors@shadscan.dev";
+const SPONSOR_CONTACT_EMAIL = "sponsors@shadscan.com";
 
 type SponsorTierId = "diamond" | "gold" | "platinum" | "silver";
 

@@ -70,7 +70,7 @@ commit to an immutable commit SHA before scanning.
 printf 'Authorization: Bearer %s\n' "$SHADSCAN_API_KEY" | \
 curl --fail-with-body --silent --show-error \
   --request POST \
-  --url 'https://shadscan.dev/v1/scans' \
+  --url 'https://www.shadscan.com/v1/scans' \
   --header @- \
   --header 'Accept: application/json' \
   --header 'Content-Type: application/json' \
@@ -98,7 +98,7 @@ links, devices, and other special entries are rejected.
 printf 'Authorization: Bearer %s\n' "$SHADSCAN_API_KEY" | \
 curl --fail-with-body --silent --show-error \
   --request POST \
-  --url 'https://shadscan.dev/v1/scans?subdirectory=.' \
+  --url 'https://www.shadscan.com/v1/scans?subdirectory=.' \
   --header @- \
   --header 'Accept: text/markdown' \
   --header 'Content-Type: application/vnd.shadscan.snapshot+tar+gzip' \

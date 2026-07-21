@@ -58,7 +58,7 @@ const API_KEY_HASHES = JSON.stringify({
   other: hashApiKey(SECONDARY_API_KEY),
   route: hashApiKey(PRIMARY_API_KEY),
 });
-const SCAN_URL = "https://shadscan.dev/v1/scans";
+const SCAN_URL = "https://www.shadscan.com/v1/scans";
 const IMMUTABLE_COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567";
 const SCAN_ID_PATTERN = /^scan_[a-f0-9]{32}$/;
 const CLI_ENTRYPOINT = resolve("packages/cli/dist/cli.js");

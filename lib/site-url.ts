@@ -1,10 +1,9 @@
 const LOCAL_SITE_URL = "http://localhost:3000";
-const PRODUCTION_SITE_URL = "https://shadscan.vercel.app";
+const PRODUCTION_SITE_URL = "https://www.shadscan.com";
 
 interface SiteUrlEnvironment {
   NEXT_PUBLIC_SITE_URL?: string;
   NODE_ENV?: string;
-  VERCEL_PROJECT_PRODUCTION_URL?: string;
 }
 
 const withProtocol = (value: string): string =>
@@ -14,15 +13,12 @@ const withProtocol = (value: string): string =>
 
 const getSiteUrl = (environment: SiteUrlEnvironment = process.env): URL => {
   const configuredUrl = environment.NEXT_PUBLIC_SITE_URL;
-  const vercelProductionUrl = environment.VERCEL_PROJECT_PRODUCTION_URL;
   const fallbackUrl =
     environment.NODE_ENV === "production"
       ? PRODUCTION_SITE_URL
       : LOCAL_SITE_URL;
 
-  return new URL(
-    withProtocol(configuredUrl ?? vercelProductionUrl ?? fallbackUrl)
-  );
+  return new URL(withProtocol(configuredUrl ?? fallbackUrl));
 };
 
 export { getSiteUrl };

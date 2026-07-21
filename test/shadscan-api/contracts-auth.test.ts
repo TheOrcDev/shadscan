@@ -40,7 +40,7 @@ const OPENAPI_SUBDIRECTORY_PATTERN = new RegExp(
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 const createAuthenticatedRequest = (authorization?: string): Request =>
-  new Request("https://shadscan.dev/v1/scans", {
+  new Request("https://www.shadscan.com/v1/scans", {
     headers: authorization === undefined ? {} : { authorization },
   });
 
