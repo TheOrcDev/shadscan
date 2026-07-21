@@ -61,7 +61,8 @@ normal traffic.
 `next.config.ts` excludes repository source and development files from the
 scanner route traces while retaining `packages/cli/dist/index.js` and its
 license. Every production build runs `pnpm verify:trace` through `postbuild` and
-fails if the scanner runtime is missing or unrelated project source is traced.
+fails if the scanner runtime is missing, unrelated project source is traced, or
+either traced entry cannot load from an isolated deployment sandbox.
 
 ## Local Verification
 

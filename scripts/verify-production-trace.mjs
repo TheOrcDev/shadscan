@@ -1,5 +1,18 @@
-import { readFile, realpath } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import {
+  copyFile,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  realpath,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -17,11 +30,24 @@ const ALLOWED_PROJECT_FILES = new Set([
 ]);
 const NEXT_DIST_MARKER = "/node_modules/next/dist/";
 const RUNTIME_REQUIRE_PATTERN = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
+const projectRoot = process.cwd();
+const sharedNextPackagePath = path.join(projectRoot, ".next/package.json");
+const sharedServerChunksPath = path.join(projectRoot, ".next/server/chunks");
+const tracedRuntimePaths = new Set();
+const traceEntryPaths = [];
 
 const toAbsoluteTracePath = (tracePath, tracedFile) =>
   path.resolve(path.dirname(path.resolve(tracePath)), tracedFile);
 
 const toComparablePath = (filePath) => filePath.split(path.sep).join("/");
+
+const toSandboxPath = (sandboxRoot, sourcePath) => {
+  const relativePath = path.relative(projectRoot, sourcePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    throw new Error(`Trace escaped the project root: ${sourcePath}`);
+  }
+  return path.join(sandboxRoot, relativePath);
+};
 
 const toRealPath = async (filePath) => {
   try {
@@ -88,6 +114,90 @@ const findMissingNextRuntimeFiles = async (tracedPaths) => {
     .sort();
 };
 
+const copyTracedRuntime = async (sandboxRoot, sourcePaths) => {
+  const entries = await Promise.all(
+    [...sourcePaths].map(async (sourcePath) => ({
+      sourcePath,
+      stats: await lstat(sourcePath),
+    }))
+  );
+
+  for (const { sourcePath, stats } of entries) {
+    if (stats.isDirectory()) {
+      await mkdir(toSandboxPath(sandboxRoot, sourcePath), { recursive: true });
+    }
+  }
+
+  for (const { sourcePath, stats } of entries) {
+    if (!stats.isSymbolicLink()) {
+      continue;
+    }
+
+    const destinationPath = toSandboxPath(sandboxRoot, sourcePath);
+    const sourceTarget = await readlink(sourcePath);
+    const target = path.isAbsolute(sourceTarget)
+      ? path.relative(path.dirname(sourcePath), sourceTarget)
+      : sourceTarget;
+    await mkdir(path.dirname(destinationPath), { recursive: true });
+    await symlink(target, destinationPath);
+  }
+
+  for (const { sourcePath, stats } of entries) {
+    if (!stats.isFile()) {
+      continue;
+    }
+
+    const destinationPath = toSandboxPath(sandboxRoot, sourcePath);
+    await mkdir(path.dirname(destinationPath), { recursive: true });
+    await copyFile(sourcePath, destinationPath);
+  }
+};
+
+const smokeTraceEntries = async (entryPaths, sourcePaths) => {
+  const sandboxRoot = await mkdtemp(
+    path.join(tmpdir(), "shadscan-production-trace-")
+  );
+
+  try {
+    await copyTracedRuntime(sandboxRoot, sourcePaths);
+    await cp(
+      sharedServerChunksPath,
+      toSandboxPath(sandboxRoot, sharedServerChunksPath),
+      { recursive: true }
+    );
+    await copyFile(
+      sharedNextPackagePath,
+      toSandboxPath(sandboxRoot, sharedNextPackagePath)
+    );
+
+    for (const sourceEntryPath of entryPaths) {
+      const entryPath = toSandboxPath(sandboxRoot, sourceEntryPath);
+      const result = spawnSync(
+        process.execPath,
+        ["-e", `require(${JSON.stringify(entryPath)})`],
+        {
+          cwd: sandboxRoot,
+          encoding: "utf8",
+          env: { ...process.env, NODE_ENV: "production" },
+        }
+      );
+
+      if (result.status !== 0) {
+        const detail = (
+          result.stderr ||
+          result.stdout ||
+          "Unknown error"
+        ).trim();
+        throw new Error(
+          `${path.relative(projectRoot, sourceEntryPath)} failed in an isolated trace: ${detail}`
+        );
+      }
+    }
+  } finally {
+    await rm(sandboxRoot, { force: true, recursive: true });
+  }
+};
+
 const toProjectPath = (tracePath, tracedFile) => {
   const traceDirectory = path.dirname(path.resolve(tracePath));
   const absolutePath = path.resolve(traceDirectory, tracedFile);
@@ -110,9 +220,15 @@ const toProjectPath = (tracePath, tracedFile) => {
 
 for (const tracePath of TRACE_PATHS) {
   const trace = JSON.parse(await readFile(tracePath, "utf8"));
+  const entryPath = path.resolve(tracePath.replace(/\.nft\.json$/, ""));
   const tracedPaths = trace.files.map((tracedFile) =>
     toAbsoluteTracePath(tracePath, tracedFile)
   );
+  traceEntryPaths.push(entryPath);
+  tracedRuntimePaths.add(entryPath);
+  for (const tracedPath of tracedPaths) {
+    tracedRuntimePaths.add(tracedPath);
+  }
   const projectFiles = new Set(
     trace.files
       .map((tracedFile) => toProjectPath(tracePath, tracedFile))
@@ -147,4 +263,8 @@ for (const tracePath of TRACE_PATHS) {
   }
 }
 
-process.stdout.write("Production traces contain only the scanner runtime.\n");
+await smokeTraceEntries(traceEntryPaths, tracedRuntimePaths);
+
+process.stdout.write(
+  "Production traces contain only the scanner runtime and load in isolation.\n"
+);
