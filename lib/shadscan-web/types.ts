@@ -5,6 +5,7 @@ const MAX_REPOSITORY_INPUT_LENGTH = 256;
 const WEB_SCAN_ERROR_CODES = [
   "GITHUB_SOURCE_NOT_FOUND",
   "INTERNAL_ERROR",
+  "INVALID_PROJECT_PATH",
   "INVALID_REPOSITORY",
   "PRIVATE_REPOSITORY_UNSUPPORTED",
   "PROJECT_DISCOVERY_FAILED",
@@ -19,6 +20,7 @@ const WEB_SCAN_ERROR_CODES = [
 ] as const;
 
 interface NormalizedGitHubRepository {
+  projectPath?: string;
   repository: string;
   repositoryInput: string;
   repositoryKey: string;
@@ -41,21 +43,42 @@ interface WebScanIdleState {
 
 interface WebScanErrorState {
   error: WebScanError;
+  projectPath?: string;
   repositoryInput: string;
   status: "error";
 }
 
+interface WebProjectOption {
+  label: string;
+  path: string;
+}
+
+interface WebProjectSelectionState {
+  projects: WebProjectOption[];
+  repository: string;
+  repositoryInput: string;
+  repositoryUrl: string;
+  status: "project_selection_required";
+}
+
 interface WebScanCompleteState {
+  projectPath: string;
   repository: string;
   repositoryUrl: string;
   result: HostedScanResponse;
   status: "complete";
 }
 
-type WebScanState = WebScanCompleteState | WebScanErrorState | WebScanIdleState;
+type WebScanState =
+  | WebProjectSelectionState
+  | WebScanCompleteState
+  | WebScanErrorState
+  | WebScanIdleState;
 
 export type {
   NormalizedGitHubRepository,
+  WebProjectOption,
+  WebProjectSelectionState,
   WebScanCompleteState,
   WebScanError,
   WebScanErrorCode,

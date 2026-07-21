@@ -1,5 +1,4 @@
 import path from "node:path";
-import { classifyScanInputPath } from "@shadscan/cli";
 import { z } from "zod";
 import {
   type ArchiveLimits,
@@ -11,6 +10,19 @@ import {
   type MaterializedScanSource,
 } from "./contracts";
 import { HostedScanError } from "./errors";
+import {
+  materializeSparseGitHubSource,
+  planSparseGitHubSource,
+} from "./github-sparse-source";
+import {
+  classifyGitHubProjectPath,
+  type GitHubTreeEntry,
+  type GitHubTreeResponse,
+  GitHubTreeResponseSchema,
+  getRetainedGitHubTreeEntries,
+  normalizeGitHubTreeEntries,
+  type RetainedGitHubTreeEntry,
+} from "./github-tree";
 import {
   cleanupMaterializationDirectory,
   createMaterializationDirectory,
@@ -24,6 +36,8 @@ import {
 
 const MAX_GITHUB_REQUEST_BYTES = 16 * 1024;
 const MAX_GITHUB_METADATA_BYTES = 64 * 1024;
+const MAX_GITHUB_TREE_BYTES = 8 * 1024 * 1024;
+const MAX_GITHUB_TREE_REQUESTS = 100;
 const GITHUB_SOURCE_TIMEOUT_MS = 12_000;
 const GITHUB_API_ORIGIN = "https://api.github.com";
 const GITHUB_ARCHIVE_HOSTS = new Set(["codeload.github.com"]);
@@ -37,10 +51,26 @@ const GitHubCommitSchema = z.object({
 
 type FetchImplementation = typeof fetch;
 type GitHubScanRequest = z.infer<typeof GitHubScanRequestSchema>;
+type GitHubSourceMode = "archive" | "auto" | "sparse";
 
-const getGitHubHeaders = (includeAuthorization = true): Headers => {
+interface ResolvedPublicGitHubSource {
+  commitSha: string;
+  repository: string;
+}
+
+interface MaterializeResolvedGitHubSourceOptions {
+  limits?: Partial<ArchiveLimits>;
+  sourceMode?: GitHubSourceMode;
+  sourceSignal?: AbortSignal;
+  treeEntries?: GitHubTreeEntry[];
+}
+
+const getGitHubHeaders = (
+  includeAuthorization = true,
+  accept = "application/vnd.github+json"
+): Headers => {
   const headers = new Headers({
-    Accept: "application/vnd.github+json",
+    Accept: accept,
     "User-Agent": "shadscan-hosted-api",
     "X-GitHub-Api-Version": "2022-11-28",
   });
@@ -164,7 +194,8 @@ const throwGitHubResponseError = (
 const readGitHubJson = async (
   response: Response,
   notFoundMessage: string,
-  sourceSignal: AbortSignal
+  sourceSignal: AbortSignal,
+  maxBytes = MAX_GITHUB_METADATA_BYTES
 ): Promise<unknown> => {
   if (!response.ok) {
     throwGitHubResponseError(response, notFoundMessage);
@@ -177,7 +208,7 @@ const readGitHubJson = async (
       emptyMessage: "GitHub returned an empty metadata response.",
       emptyRetryable: true,
       emptyStatus: 502,
-      maxBytes: MAX_GITHUB_METADATA_BYTES,
+      maxBytes,
       tooLargeCode: "GITHUB_INVALID_RESPONSE",
       tooLargeMessage: "GitHub returned an oversized metadata response.",
       tooLargeRetryable: true,
@@ -264,6 +295,189 @@ const resolveGitHubRevision = async (
   }
 
   return commit.data.sha;
+};
+
+const createGitHubSourceSignal = (
+  deadlineSignal?: AbortSignal
+): AbortSignal => {
+  const sourceTimeoutSignal = AbortSignal.timeout(GITHUB_SOURCE_TIMEOUT_MS);
+  return deadlineSignal
+    ? AbortSignal.any([deadlineSignal, sourceTimeoutSignal])
+    : sourceTimeoutSignal;
+};
+
+const resolvePublicGitHubSourceWithSignal = async (
+  repository: string,
+  revision: string,
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
+): Promise<ResolvedPublicGitHubSource> => {
+  try {
+    sourceSignal.throwIfAborted();
+    await assertPublicGitHubRepository(
+      repository,
+      fetchImplementation,
+      sourceSignal
+    );
+    const commitSha = await resolveGitHubRevision(
+      repository,
+      revision,
+      fetchImplementation,
+      sourceSignal
+    );
+    return { commitSha, repository };
+  } catch (error) {
+    return rethrowGitHubSourceError(error, sourceSignal);
+  }
+};
+
+const resolvePublicGitHubSource = (
+  repository: string,
+  revision: string,
+  fetchImplementation: FetchImplementation = fetch,
+  deadlineSignal?: AbortSignal
+): Promise<ResolvedPublicGitHubSource> =>
+  resolvePublicGitHubSourceWithSignal(
+    repository,
+    revision,
+    fetchImplementation,
+    createGitHubSourceSignal(deadlineSignal)
+  );
+
+const createTreeEntryLimitError = (
+  limit: number,
+  observed: number
+): HostedScanError =>
+  new HostedScanError("The GitHub tree contains too many entries.", {
+    code: "ARCHIVE_TOO_MANY_ENTRIES",
+    sourceLimit: {
+      kind: "archive_entries",
+      limit,
+      observed,
+      unit: "entries",
+    },
+    status: 422,
+  });
+
+const fetchGitHubTreePage = async (
+  repository: string,
+  treeSha: string,
+  recursive: boolean,
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
+): Promise<GitHubTreeResponse> => {
+  const recursiveQuery = recursive ? "?recursive=1" : "";
+  const response = await fetchGitHub(
+    `${GITHUB_API_ORIGIN}/repos/${repository}/git/trees/${treeSha}${recursiveQuery}`,
+    { headers: getGitHubHeaders(), redirect: "error" },
+    fetchImplementation,
+    sourceSignal
+  );
+  const parsedTree = GitHubTreeResponseSchema.safeParse(
+    await readGitHubJson(
+      response,
+      "The GitHub source tree was not found.",
+      sourceSignal,
+      MAX_GITHUB_TREE_BYTES
+    )
+  );
+  if (!parsedTree.success) {
+    throw new HostedScanError("GitHub returned an invalid source tree.", {
+      cause: parsedTree.error,
+      code: "GITHUB_INVALID_RESPONSE",
+      retryable: true,
+      status: 502,
+    });
+  }
+  return parsedTree.data;
+};
+
+const loadCompleteGitHubTree = async (
+  repository: string,
+  commitSha: string,
+  maxEntries: number,
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
+): Promise<GitHubTreeEntry[]> => {
+  const recursiveTree = await fetchGitHubTreePage(
+    repository,
+    commitSha,
+    true,
+    fetchImplementation,
+    sourceSignal
+  );
+  if (recursiveTree.tree.length > maxEntries) {
+    throw createTreeEntryLimitError(maxEntries, recursiveTree.tree.length);
+  }
+  if (!recursiveTree.truncated) {
+    return normalizeGitHubTreeEntries(recursiveTree.tree);
+  }
+
+  const entries: GitHubTreeEntry[] = [];
+  const pendingTrees = [{ pathPrefix: "", sha: commitSha }];
+  let requestCount = 1;
+  while (pendingTrees.length > 0) {
+    sourceSignal.throwIfAborted();
+    if (requestCount >= MAX_GITHUB_TREE_REQUESTS) {
+      throw new HostedScanError(
+        "The truncated GitHub tree requires too many metadata requests.",
+        {
+          code: "GITHUB_TREE_TOO_LARGE",
+          status: 422,
+        }
+      );
+    }
+    const pendingTree = pendingTrees.shift();
+    if (!pendingTree) {
+      break;
+    }
+    const treePage = await fetchGitHubTreePage(
+      repository,
+      pendingTree.sha,
+      false,
+      fetchImplementation,
+      sourceSignal
+    );
+    requestCount += 1;
+    for (const entry of treePage.tree) {
+      const fullPath = pendingTree.pathPrefix
+        ? `${pendingTree.pathPrefix}/${entry.path}`
+        : entry.path;
+      const resolvedEntry = { ...entry, path: fullPath };
+      entries.push(resolvedEntry);
+      if (entries.length > maxEntries) {
+        throw createTreeEntryLimitError(maxEntries, entries.length);
+      }
+      if (entry.type === "tree") {
+        pendingTrees.push({ pathPrefix: fullPath, sha: entry.sha });
+      }
+    }
+  }
+
+  return normalizeGitHubTreeEntries(entries);
+};
+
+const loadGitHubRepositoryTree = async (
+  repository: string,
+  commitSha: string,
+  maxEntries: number,
+  fetchImplementation: FetchImplementation = fetch,
+  deadlineSignal?: AbortSignal,
+  sharedSourceSignal?: AbortSignal
+): Promise<GitHubTreeEntry[]> => {
+  const sourceSignal =
+    sharedSourceSignal ?? createGitHubSourceSignal(deadlineSignal);
+  try {
+    return await loadCompleteGitHubTree(
+      repository,
+      commitSha,
+      maxEntries,
+      fetchImplementation,
+      sourceSignal
+    );
+  } catch (error) {
+    return rethrowGitHubSourceError(error, sourceSignal);
+  }
 };
 
 const getAllowedRedirectUrl = (response: Response): string => {
@@ -380,6 +594,41 @@ const getResponseContentLength = (response: Response): number | undefined => {
     : undefined;
 };
 
+const downloadGitHubBlob = async (
+  repository: string,
+  entry: RetainedGitHubTreeEntry,
+  maxBytes: number,
+  fetchImplementation: FetchImplementation,
+  sourceSignal: AbortSignal
+): Promise<Buffer> => {
+  if (entry.size === 0) {
+    return Buffer.alloc(0);
+  }
+  const response = await fetchGitHub(
+    `${GITHUB_API_ORIGIN}/repos/${repository}/git/blobs/${entry.sha}`,
+    {
+      headers: getGitHubHeaders(true, "application/vnd.github.raw+json"),
+      redirect: "error",
+    },
+    fetchImplementation,
+    sourceSignal
+  );
+  if (!response.ok) {
+    throwGitHubResponseError(response, "A GitHub source blob was not found.");
+  }
+  return readGitHubResponseBytes(
+    response,
+    {
+      maxBytes,
+      tooLargeCode: "GITHUB_INVALID_RESPONSE",
+      tooLargeMessage: "GitHub returned an oversized source blob.",
+      tooLargeRetryable: true,
+      tooLargeStatus: 502,
+    },
+    sourceSignal
+  );
+};
+
 const parseGitHubScanRequest = async (
   request: Request,
   signal?: AbortSignal
@@ -414,61 +663,85 @@ const parseGitHubScanRequest = async (
   return parsedRequest.data;
 };
 
-const materializeGitHubSource = async (
+const materializeResolvedGitHubSource = async (
   requestData: GitHubScanRequest,
+  resolvedSource: ResolvedPublicGitHubSource,
   fetchImplementation: FetchImplementation = fetch,
   deadlineSignal?: AbortSignal,
-  limits?: Partial<ArchiveLimits>
+  options: MaterializeResolvedGitHubSourceOptions = {}
 ): Promise<MaterializedScanSource> => {
-  const { repository, revision, subdirectory } = requestData.source;
-  const sourceTimeoutSignal = AbortSignal.timeout(GITHUB_SOURCE_TIMEOUT_MS);
-  const sourceSignal = deadlineSignal
-    ? AbortSignal.any([deadlineSignal, sourceTimeoutSignal])
-    : sourceTimeoutSignal;
+  const { repository, subdirectory } = requestData.source;
+  const sourceSignal =
+    options.sourceSignal ?? createGitHubSourceSignal(deadlineSignal);
+  const limits = { ...DEFAULT_ARCHIVE_LIMITS, ...options.limits };
   let cleanupDirectory: string | undefined;
 
   try {
     sourceSignal.throwIfAborted();
-    await assertPublicGitHubRepository(
-      repository,
-      fetchImplementation,
-      sourceSignal
-    );
-    const commitSha = await resolveGitHubRevision(
-      repository,
-      revision,
-      fetchImplementation,
-      sourceSignal
-    );
-    const archiveResponse = await fetchGitHubArchiveResponse(
-      repository,
-      commitSha,
-      fetchImplementation,
-      sourceSignal
-    );
-    if (!archiveResponse.body) {
-      throw new HostedScanError("GitHub returned an empty source archive.", {
+    if (resolvedSource.repository !== repository) {
+      throw new HostedScanError("The resolved GitHub source is invalid.", {
         code: "GITHUB_INVALID_RESPONSE",
-        retryable: true,
-        status: 502,
+        status: 500,
       });
     }
-    sourceSignal.throwIfAborted();
+
+    const retainedEntries = options.treeEntries
+      ? getRetainedGitHubTreeEntries(options.treeEntries, subdirectory)
+      : undefined;
+    const sparsePlan = retainedEntries
+      ? planSparseGitHubSource(retainedEntries, limits)
+      : undefined;
+    const useSparseAcquisition =
+      options.sourceMode !== "archive" &&
+      sparsePlan?.useSparseAcquisition === true;
+
     cleanupDirectory = await createMaterializationDirectory();
     const extractionRoot = path.join(cleanupDirectory, "source");
+    let sourceDigest: string;
 
-    const streamedArchive = await extractTarGzipStream(
-      archiveResponse.body,
-      extractionRoot,
-      {
-        compressedSize: getResponseContentLength(archiveResponse),
-        entryPolicy: classifyScanInputPath,
-        forbiddenPathBehavior: "skip",
-        limits,
-        signal: sourceSignal,
-        stripComponents: 1,
+    if (useSparseAcquisition && sparsePlan) {
+      sourceDigest = await materializeSparseGitHubSource(
+        sparsePlan,
+        extractionRoot,
+        (entry, signal) =>
+          downloadGitHubBlob(
+            repository,
+            entry,
+            entry.size ?? limits.maxFileBytes,
+            fetchImplementation,
+            signal ?? sourceSignal
+          ),
+        sourceSignal
+      );
+    } else {
+      const archiveResponse = await fetchGitHubArchiveResponse(
+        repository,
+        resolvedSource.commitSha,
+        fetchImplementation,
+        sourceSignal
+      );
+      if (!archiveResponse.body) {
+        throw new HostedScanError("GitHub returned an empty source archive.", {
+          code: "GITHUB_INVALID_RESPONSE",
+          retryable: true,
+          status: 502,
+        });
       }
-    );
+      const streamedArchive = await extractTarGzipStream(
+        archiveResponse.body,
+        extractionRoot,
+        {
+          compressedSize: getResponseContentLength(archiveResponse),
+          entryPolicy: (relativePath) =>
+            classifyGitHubProjectPath(relativePath, subdirectory),
+          forbiddenPathBehavior: "skip",
+          limits,
+          signal: sourceSignal,
+          stripComponents: 1,
+        }
+      );
+      sourceDigest = streamedArchive.sourceDigest;
+    }
     sourceSignal.throwIfAborted();
     const projectRoot = await resolveProjectRoot(extractionRoot, subdirectory);
     sourceSignal.throwIfAborted();
@@ -477,8 +750,8 @@ const materializeGitHubSource = async (
       category: requestData.category,
       cleanupDirectory,
       projectRoot,
-      resolvedRevision: commitSha,
-      sourceDigest: streamedArchive.sourceDigest,
+      resolvedRevision: resolvedSource.commitSha,
+      sourceDigest,
       sourceKind: "git",
       sourceRoot: extractionRoot,
     };
@@ -490,12 +763,45 @@ const materializeGitHubSource = async (
   }
 };
 
-export type { FetchImplementation, GitHubScanRequest };
+const materializeGitHubSource = async (
+  requestData: GitHubScanRequest,
+  fetchImplementation: FetchImplementation = fetch,
+  deadlineSignal?: AbortSignal,
+  limits?: Partial<ArchiveLimits>
+): Promise<MaterializedScanSource> => {
+  // One source signal bounds the entire acquisition so the GitHub timeout
+  // applies end to end instead of resetting between resolve and materialize.
+  const sourceSignal = createGitHubSourceSignal(deadlineSignal);
+  const resolvedSource = await resolvePublicGitHubSourceWithSignal(
+    requestData.source.repository,
+    requestData.source.revision,
+    fetchImplementation,
+    sourceSignal
+  );
+  return materializeResolvedGitHubSource(
+    requestData,
+    resolvedSource,
+    fetchImplementation,
+    deadlineSignal,
+    { limits, sourceMode: "archive", sourceSignal }
+  );
+};
+
+export type {
+  FetchImplementation,
+  GitHubScanRequest,
+  GitHubSourceMode,
+  MaterializeResolvedGitHubSourceOptions,
+  ResolvedPublicGitHubSource,
+};
 export {
   downloadGitHubArchive,
   fetchGitHubArchiveResponse,
   GITHUB_SOURCE_TIMEOUT_MS,
+  loadGitHubRepositoryTree,
   materializeGitHubSource,
+  materializeResolvedGitHubSource,
   parseGitHubScanRequest,
   resolveGitHubRevision,
+  resolvePublicGitHubSource,
 };

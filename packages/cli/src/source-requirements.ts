@@ -16,6 +16,11 @@ const CONTENT_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
 ]);
+const SCAN_SOURCE_LIMITS = {
+  maxFileBytes: 2 * 1024 * 1024,
+  maxFiles: 10_000,
+  maxTotalBytes: 50 * 1024 * 1024,
+} as const;
 const PACKAGE_MANAGER_MARKERS = new Set([
   "bun.lock",
   "bun.lockb",
@@ -56,4 +61,4 @@ const classifyScanInputPath = (
 };
 
 export type { ScanInputRetention };
-export { classifyScanInputPath };
+export { classifyScanInputPath, SCAN_SOURCE_LIMITS };

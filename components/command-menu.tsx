@@ -21,7 +21,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 
-const SOURCE_COMMAND = "node packages/cli/dist/cli.js /path/to/app";
+const SOURCE_COMMAND = "npx @shadscan/cli@next /path/to/app";
 interface CommandMenuProps {
   repositoryUrl?: string;
 }
@@ -78,15 +78,14 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
       <Button
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label="Open command menu"
         onClick={() => setOpen(true)}
+        size="icon"
         type="button"
         variant="outline"
       >
         <MagnifyingGlass data-icon="inline-start" weight="bold" />
-        Commands
-        <kbd className="ml-1 hidden border bg-muted px-1 font-mono text-[10px] sm:inline">
-          Ctrl K
-        </kbd>
+        <span className="sr-only">Commands</span>
       </Button>
       <CommandDialog
         description="Navigate shadscan and copy common commands."

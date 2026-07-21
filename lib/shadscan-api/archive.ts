@@ -505,36 +505,53 @@ const createArchiveLimitError = (
   );
 };
 
-const iterateWebStream = async function* (
+interface WebStreamAdapter {
+  cancel: (reason?: unknown) => Promise<void>;
+  iterable: AsyncGenerator<Uint8Array>;
+}
+
+const createWebStreamAdapter = (
   stream: ReadableStream<Uint8Array>,
   signal?: AbortSignal
-): AsyncGenerator<Uint8Array> {
+): WebStreamAdapter => {
   const reader = stream.getReader();
   let completed = false;
+  let cancelPromise: Promise<void> | undefined;
+  const cancel = (reason?: unknown): Promise<void> => {
+    if (completed) {
+      return Promise.resolve();
+    }
+    cancelPromise ??= reader.cancel(reason).catch(() => undefined);
+    return cancelPromise;
+  };
   const cancelOnAbort = (): void => {
-    reader.cancel(signal?.reason).catch(() => undefined);
+    cancel(signal?.reason).catch(() => undefined);
   };
 
   signal?.throwIfAborted();
   signal?.addEventListener("abort", cancelOnAbort, { once: true });
-  try {
-    while (true) {
-      signal?.throwIfAborted();
-      const result = await reader.read();
-      signal?.throwIfAborted();
-      if (result.done) {
-        completed = true;
-        return;
+  const iterable = (async function* (): AsyncGenerator<Uint8Array> {
+    try {
+      while (true) {
+        signal?.throwIfAborted();
+        const result = await reader.read();
+        signal?.throwIfAborted();
+        if (result.done) {
+          completed = true;
+          return;
+        }
+        yield result.value;
       }
-      yield result.value;
+    } finally {
+      signal?.removeEventListener("abort", cancelOnAbort);
+      if (!completed) {
+        await cancel();
+      }
+      reader.releaseLock();
     }
-  } finally {
-    signal?.removeEventListener("abort", cancelOnAbort);
-    if (!completed) {
-      await reader.cancel().catch(() => undefined);
-    }
-    reader.releaseLock();
-  }
+  })();
+
+  return { cancel, iterable };
 };
 
 const extractTarGzipStream = async (
@@ -606,10 +623,11 @@ const extractTarGzipStream = async (
     destinationRoot,
     extractionOptions
   );
+  const streamAdapter = createWebStreamAdapter(archiveStream, options.signal);
 
   try {
     await pipeline(
-      Readable.from(iterateWebStream(archiveStream, options.signal)),
+      Readable.from(streamAdapter.iterable),
       compressedCounter,
       createGunzip(),
       expandedCounter,
@@ -617,6 +635,7 @@ const extractTarGzipStream = async (
       { signal: options.signal }
     );
   } catch (error) {
+    await streamAdapter.cancel(options.signal?.reason);
     rethrowTarPipelineError(error, getEntryFailure(), options.signal);
   }
 

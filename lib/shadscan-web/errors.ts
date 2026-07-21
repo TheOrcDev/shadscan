@@ -17,6 +17,7 @@ const SOURCE_TOO_LARGE_CODES = new Set([
   "ARCHIVE_FILE_TOO_LARGE",
   "ARCHIVE_TOO_MANY_ENTRIES",
   "GITHUB_ARCHIVE_TOO_LARGE",
+  "GITHUB_TREE_TOO_LARGE",
 ]);
 
 const SOURCE_UNSUPPORTED_CODES = new Set([
@@ -153,10 +154,11 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
 
   if (
     error.code === "PROJECT_DISCOVERY_FAILED" ||
-    error.code === "PROJECT_ROOT_NOT_FOUND"
+    error.code === "PROJECT_ROOT_NOT_FOUND" ||
+    error.code === "PROJECT_SELECTION_TOO_LARGE"
   ) {
     return new WebScanServiceError(
-      "No supported React project was found at the repository root.",
+      "No supported React project was found at the selected repository path.",
       { cause: error, code: "PROJECT_DISCOVERY_FAILED" }
     );
   }

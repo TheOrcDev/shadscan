@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { HostedScanResponseSchema } from "../shadscan-api/contracts";
+import {
+  HostedScanResponseSchema,
+  PortableSubdirectorySchema,
+} from "../shadscan-api/contracts";
 import { SourceLimitDetailSchema } from "../shadscan-api/source-limits";
 import { MAX_REPOSITORY_INPUT_LENGTH, WEB_SCAN_ERROR_CODES } from "./types";
 
@@ -12,6 +15,7 @@ const RepositoryInputSchema = z
 const NormalizedGitHubRepositorySchema = z
   .object({
     repository: z.string().min(3).max(140),
+    projectPath: PortableSubdirectorySchema.optional(),
     repositoryInput: RepositoryInputSchema,
     repositoryKey: z.string().min(3).max(140),
     repositoryUrl: z.string().url(),
@@ -35,6 +39,7 @@ const WebScanIdleStateSchema = z.object({ status: z.literal("idle") }).strict();
 const WebScanErrorStateSchema = z
   .object({
     error: WebScanErrorSchema,
+    projectPath: PortableSubdirectorySchema.optional(),
     repositoryInput: z.string().max(MAX_REPOSITORY_INPUT_LENGTH),
     status: z.literal("error"),
   })
@@ -42,6 +47,7 @@ const WebScanErrorStateSchema = z
 
 const WebScanCompleteStateSchema = z
   .object({
+    projectPath: PortableSubdirectorySchema,
     repository: z.string().min(3).max(140),
     repositoryUrl: z.string().url(),
     result: HostedScanResponseSchema,
@@ -49,14 +55,34 @@ const WebScanCompleteStateSchema = z
   })
   .strict();
 
+const WebProjectOptionSchema = z
+  .object({
+    label: z.string().min(1).max(512),
+    path: PortableSubdirectorySchema,
+  })
+  .strict();
+
+const WebProjectSelectionStateSchema = z
+  .object({
+    projects: z.array(WebProjectOptionSchema).min(2).max(50),
+    repository: z.string().min(3).max(140),
+    repositoryInput: RepositoryInputSchema,
+    repositoryUrl: z.string().url(),
+    status: z.literal("project_selection_required"),
+  })
+  .strict();
+
 const WebScanStateSchema = z.discriminatedUnion("status", [
   WebScanIdleStateSchema,
+  WebProjectSelectionStateSchema,
   WebScanErrorStateSchema,
   WebScanCompleteStateSchema,
 ]);
 
 export type {
   NormalizedGitHubRepository,
+  WebProjectOption,
+  WebProjectSelectionState,
   WebScanCompleteState,
   WebScanError,
   WebScanErrorCode,
@@ -66,6 +92,8 @@ export type {
 export {
   NormalizedGitHubRepositorySchema,
   RepositoryInputSchema,
+  WebProjectOptionSchema,
+  WebProjectSelectionStateSchema,
   WebScanCompleteStateSchema,
   WebScanErrorCodeSchema,
   WebScanErrorSchema,

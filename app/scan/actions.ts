@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
+import { PortableSubdirectorySchema } from "@/lib/shadscan-api/contracts";
 import { WebScanErrorStateSchema } from "@/lib/shadscan-web/contracts";
 import { toWebScanError } from "@/lib/shadscan-web/errors";
 import { writeWebScanLog } from "@/lib/shadscan-web/log";
@@ -22,6 +23,7 @@ const FORWARDED_HEADER_NAMES = [
 ] as const;
 const FORWARDED_ADDRESS_SEPARATOR = ",";
 const MAX_CLIENT_ADDRESS_LENGTH = 128;
+const MAX_PROJECT_PATH_LENGTH = 512;
 
 const getClientAddress = (requestHeaders: HeaderReader): string => {
   for (const headerName of FORWARDED_HEADER_NAMES) {
@@ -47,14 +49,34 @@ const scanGitHubRepository = async (
   const startedAt = Date.now();
   const requestId = randomUUID();
   const repositoryValue = formData.get("repository");
+  const projectPathValue = formData.get("projectPath");
   const repositoryInput = getBoundedRepositoryInput(repositoryValue);
+  const projectPathResult = PortableSubdirectorySchema.safeParse(
+    typeof projectPathValue === "string"
+      ? projectPathValue.slice(0, MAX_PROJECT_PATH_LENGTH)
+      : undefined
+  );
 
   try {
     const requestHeaders = await headers();
     const result = await executeWebRepositoryScan({
       clientAddress: getClientAddress(requestHeaders),
+      projectPath:
+        typeof projectPathValue === "string" && projectPathValue.length > 0
+          ? projectPathValue
+          : undefined,
       repositoryInput: repositoryValue,
     });
+    if (result.status === "project_selection_required") {
+      writeWebScanLog({
+        durationMs: Date.now() - startedAt,
+        event: "web_scan",
+        outcome: "selection_required",
+        repository: result.repository,
+        requestId,
+      });
+      return result;
+    }
     const { report, scan } = result.result;
     writeWebScanLog({
       actionableCount: report.agentHandoff.workItems.length,
@@ -80,6 +102,9 @@ const scanGitHubRepository = async (
     });
     return WebScanErrorStateSchema.parse({
       error: publicError,
+      projectPath: projectPathResult.success
+        ? projectPathResult.data
+        : undefined,
       repositoryInput,
       status: "error",
     });

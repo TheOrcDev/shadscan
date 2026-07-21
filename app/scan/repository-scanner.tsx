@@ -7,7 +7,13 @@ import {
   TerminalWindowIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useActionState, useEffect, useRef, useState } from "react";
+import {
+  type RefObject,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { CopyButton } from "@/components/copy-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -38,6 +44,7 @@ const INITIAL_SCAN_STATE = { status: "idle" } as const satisfies WebScanState;
 const REPOSITORY_FORM_ID = "scan-repository-form";
 const REPOSITORY_INPUT_ID = "github-repository";
 const REPOSITORY_ERROR_ID = "github-repository-error";
+const PROJECT_SELECT_ID = "github-project-path";
 const CLI_FALLBACK_CODES = new Set<WebScanErrorCode>([
   "PRIVATE_REPOSITORY_UNSUPPORTED",
   "PROJECT_DISCOVERY_FAILED",
@@ -48,17 +55,22 @@ const CLI_FALLBACK_CODES = new Set<WebScanErrorCode>([
 ]);
 const LOCAL_SCAN_COMMAND = "npx @shadscan/cli@next";
 
-function CliFallback() {
+function CliFallback({ projectPath }: { projectPath?: string }) {
+  const command =
+    projectPath && projectPath !== "."
+      ? `${LOCAL_SCAN_COMMAND} ${projectPath}`
+      : LOCAL_SCAN_COMMAND;
+
   return (
     <div className="mt-3 flex min-w-0 items-center gap-2 border-destructive/20 border-t pt-3">
       <TerminalWindowIcon aria-hidden="true" className="shrink-0" />
       <code className="min-w-0 flex-1 truncate text-foreground text-xs">
-        {LOCAL_SCAN_COMMAND}
+        {command}
       </code>
       <CopyButton
         aria-label="Copy local scan command"
         size="sm"
-        text={LOCAL_SCAN_COMMAND}
+        text={command}
         variant="outline"
       >
         Copy command
@@ -67,20 +79,70 @@ function CliFallback() {
   );
 }
 
-function RepositoryScanner() {
+const getSubmitLabel = (isPending: boolean, state: WebScanState): string => {
+  if (isPending) {
+    return "Scanning";
+  }
+  return state.status === "project_selection_required"
+    ? "Scan project"
+    : "Scan";
+};
+
+function ProjectSelector({
+  disabled,
+  selectRef,
+  state,
+}: {
+  disabled: boolean;
+  selectRef: RefObject<HTMLSelectElement | null>;
+  state: Extract<WebScanState, { status: "project_selection_required" }>;
+}) {
+  return (
+    <Field className="mt-5">
+      <FieldLabel htmlFor={PROJECT_SELECT_ID}>Project</FieldLabel>
+      <select
+        className="h-9 w-full border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        defaultValue=""
+        disabled={disabled}
+        id={PROJECT_SELECT_ID}
+        name="projectPath"
+        ref={selectRef}
+        required
+      >
+        <option disabled value="">
+          Choose a project
+        </option>
+        {state.projects.map((project) => (
+          <option key={project.path} value={project.path}>
+            {project.label}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+function RepositoryForm() {
   const [state, formAction, isPending] = useActionState(
     scanGitHubRepository,
     INITIAL_SCAN_STATE
   );
   const [repositoryInput, setRepositoryInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const projectSelectRef = useRef<HTMLSelectElement>(null);
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
   const inputError =
     state.status === "error" && state.error.code === "INVALID_REPOSITORY";
+  const inputErrorMessage = state.status === "error" ? state.error.message : "";
 
   useEffect(() => {
     if (state.status === "complete") {
       resultHeadingRef.current?.focus();
+      return;
+    }
+
+    if (state.status === "project_selection_required") {
+      projectSelectRef.current?.focus();
       return;
     }
 
@@ -133,70 +195,118 @@ function RepositoryScanner() {
                     data-icon="inline-start"
                   />
                 )}
-                {isPending ? "Scanning" : "Scan"}
+                {getSubmitLabel(isPending, state)}
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
           {inputError ? (
             <FieldError id={REPOSITORY_ERROR_ID}>
-              {state.error.message}
+              {inputErrorMessage}
             </FieldError>
           ) : null}
         </Field>
+
+        {state.status === "project_selection_required" ? (
+          <ProjectSelector
+            disabled={isPending}
+            selectRef={projectSelectRef}
+            state={state}
+          />
+        ) : null}
+
+        {state.status === "error" && state.projectPath ? (
+          <input name="projectPath" type="hidden" value={state.projectPath} />
+        ) : null}
       </form>
 
       <p aria-live="polite" className="sr-only">
-        {isPending ? "Scanning repository" : null}
-        {!isPending && state.status === "complete"
-          ? `Scan complete. Score ${state.result.report.score ?? "unassessed"}.`
-          : null}
+        {getLiveStatus(isPending, state)}
       </p>
-
-      {isPending ? <ScanLoading /> : null}
-
-      {!isPending && state.status === "idle" ? (
-        <Empty className="min-h-80 border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <MagnifyingGlassIcon aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>No scan yet</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
-      ) : null}
-
-      {!isPending && state.status === "error" && !inputError ? (
-        <Alert variant="destructive">
-          <WarningCircleIcon aria-hidden="true" />
-          <AlertTitle>Scan failed</AlertTitle>
-          <AlertDescription>
-            <p>{state.error.message}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {state.error.retryable ? (
-                <Button
-                  form={REPOSITORY_FORM_ID}
-                  size="sm"
-                  type="submit"
-                  variant="outline"
-                >
-                  <ArrowClockwiseIcon
-                    aria-hidden="true"
-                    data-icon="inline-start"
-                  />
-                  Retry
-                </Button>
-              ) : null}
-            </div>
-            {CLI_FALLBACK_CODES.has(state.error.code) ? <CliFallback /> : null}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {!isPending && state.status === "complete" ? (
-        <ScanResult headingRef={resultHeadingRef} state={state} />
-      ) : null}
+      <ScanFeedback
+        inputError={inputError}
+        isPending={isPending}
+        resultHeadingRef={resultHeadingRef}
+        state={state}
+      />
     </div>
   );
+}
+
+const getLiveStatus = (isPending: boolean, state: WebScanState): string => {
+  if (isPending) {
+    return "Scanning repository";
+  }
+  if (state.status === "complete") {
+    return `Scan complete. Score ${state.result.report.score ?? "unassessed"}.`;
+  }
+  return state.status === "project_selection_required"
+    ? "Choose a project to scan."
+    : "";
+};
+
+function ScanFeedback({
+  inputError,
+  isPending,
+  resultHeadingRef,
+  state,
+}: {
+  inputError: boolean;
+  isPending: boolean;
+  resultHeadingRef: RefObject<HTMLHeadingElement | null>;
+  state: WebScanState;
+}) {
+  if (isPending) {
+    return <ScanLoading />;
+  }
+  if (state.status === "idle") {
+    return (
+      <Empty className="min-h-80 border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <MagnifyingGlassIcon aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle>No scan yet</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+  if (state.status === "error" && !inputError) {
+    return (
+      <Alert variant="destructive">
+        <WarningCircleIcon aria-hidden="true" />
+        <AlertTitle>Scan failed</AlertTitle>
+        <AlertDescription>
+          <p>{state.error.message}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {state.error.retryable ? (
+              <Button
+                form={REPOSITORY_FORM_ID}
+                size="sm"
+                type="submit"
+                variant="outline"
+              >
+                <ArrowClockwiseIcon
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                />
+                Retry
+              </Button>
+            ) : null}
+          </div>
+          {CLI_FALLBACK_CODES.has(state.error.code) ? (
+            <CliFallback projectPath={state.projectPath} />
+          ) : null}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  return state.status === "complete" ? (
+    <ScanResult headingRef={resultHeadingRef} state={state} />
+  ) : null;
+}
+
+function RepositoryScanner() {
+  return <RepositoryForm />;
 }
 
 export { RepositoryScanner };

@@ -3,7 +3,9 @@ import { expect, type Page } from "@playwright/test";
 import { test } from "next/experimental/testmode/playwright.js";
 import {
   createGitHubFetchHandler,
+  createMonorepoProjectArchive,
   createReactProjectArchive,
+  MONOREPO_PROJECT_TREE,
 } from "./github-fixtures";
 
 const VIEWPORTS = [
@@ -207,6 +209,39 @@ test("retries an upstream failure and completes the scan", async ({
     page.getByRole("heading", { level: 2, name: "Scan complete" })
   ).toBeFocused();
   await expect(input).toHaveValue(repository);
+});
+
+test("selects and scans one project from an ambiguous monorepo", async ({
+  next,
+  page,
+}) => {
+  const archive = await createMonorepoProjectArchive();
+  const repository = "e2e/monorepo";
+  next.onFetch(
+    createGitHubFetchHandler({
+      archive,
+      repository,
+      tree: MONOREPO_PROJECT_TREE,
+    })
+  );
+  await visitScanPage(page, "203.0.113.18");
+  await page.getByLabel("GitHub repository").fill(repository);
+  await page.getByRole("button", { name: "Scan" }).click();
+
+  const projectSelect = page.getByLabel("Project");
+  await expect(projectSelect).toBeFocused();
+  await expect(projectSelect.locator("option")).toHaveCount(3);
+  await projectSelect.selectOption("apps/store");
+  await page.getByRole("button", { name: "Scan project" }).click();
+
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Scan complete" })
+  ).toBeFocused();
+  await expect(
+    page.getByRole("definition").filter({ hasText: "apps/store" })
+  ).toBeVisible();
+  await expectNoDocumentOverflow(page);
+  await expectNoSevereAxeViolations(page);
 });
 
 test("supports result keyboard navigation, copying, and axe", async ({

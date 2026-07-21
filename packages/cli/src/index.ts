@@ -35,5 +35,6 @@ export type { ScanOptions } from "./scan";
 export { BUNDLED_RULESET_VERSION, scanProject } from "./scan";
 export {
   classifyScanInputPath,
+  SCAN_SOURCE_LIMITS,
   type ScanInputRetention,
 } from "./source-requirements";

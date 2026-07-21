@@ -26,6 +26,33 @@ describe("normalizeGitHubRepository", () => {
     });
   });
 
+  it("keeps a validated project path separate from the repository URL", () => {
+    expect(
+      normalizeGitHubRepository(
+        "https://github.com/TheOrcDev/headless-shadcn",
+        "apps/web"
+      )
+    ).toMatchObject({
+      projectPath: "apps/web",
+      repository: "TheOrcDev/headless-shadcn",
+    });
+  });
+
+  it.each([
+    "../apps/web",
+    "/apps/web",
+    "apps\\web",
+    "apps//web",
+  ])("rejects an unsafe project path: %s", (projectPath) => {
+    expect(() =>
+      normalizeGitHubRepository("TheOrcDev/headless-shadcn", projectPath)
+    ).toThrow(
+      expect.objectContaining({
+        code: "INVALID_PROJECT_PATH",
+      })
+    );
+  });
+
   it.each([
     "",
     "github.com/TheOrcDev/headless-shadcn",

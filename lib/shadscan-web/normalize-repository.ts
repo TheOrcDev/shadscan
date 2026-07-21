@@ -1,4 +1,7 @@
-import { GitHubSourceSchema } from "../shadscan-api/contracts";
+import {
+  GitHubSourceSchema,
+  PortableSubdirectorySchema,
+} from "../shadscan-api/contracts";
 import {
   NormalizedGitHubRepositorySchema,
   RepositoryInputSchema,
@@ -10,6 +13,8 @@ const GITHUB_HOSTNAME = "github.com";
 const GIT_SUFFIX = ".git";
 const INVALID_REPOSITORY_MESSAGE =
   "Enter a GitHub repository as owner/repository or a canonical https://github.com/owner/repository URL.";
+const INVALID_PROJECT_PATH_MESSAGE =
+  "Choose a repository-relative project path without parent segments or backslashes.";
 
 const throwInvalidRepository = (cause?: unknown): never => {
   throw new WebScanServiceError(INVALID_REPOSITORY_MESSAGE, {
@@ -74,7 +79,8 @@ const getRepositoryFromSlug = (repositoryInput: string): string => {
 };
 
 const normalizeGitHubRepository = (
-  input: unknown
+  input: unknown,
+  projectPathInput?: unknown
 ): NormalizedGitHubRepository => {
   const repositoryInputResult = RepositoryInputSchema.safeParse(input);
   if (!repositoryInputResult.success) {
@@ -93,7 +99,21 @@ const normalizeGitHubRepository = (
     return throwInvalidRepository(sourceResult.error);
   }
 
+  let projectPath: string | undefined;
+  if (projectPathInput !== undefined && projectPathInput !== "") {
+    const projectPathResult =
+      PortableSubdirectorySchema.safeParse(projectPathInput);
+    if (!projectPathResult.success) {
+      throw new WebScanServiceError(INVALID_PROJECT_PATH_MESSAGE, {
+        cause: projectPathResult.error,
+        code: "INVALID_PROJECT_PATH",
+      });
+    }
+    projectPath = projectPathResult.data;
+  }
+
   return NormalizedGitHubRepositorySchema.parse({
+    ...(projectPath ? { projectPath } : {}),
     repository: sourceResult.data.repository,
     repositoryInput,
     repositoryKey: sourceResult.data.repository.toLowerCase(),
@@ -101,4 +121,8 @@ const normalizeGitHubRepository = (
   });
 };
 
-export { INVALID_REPOSITORY_MESSAGE, normalizeGitHubRepository };
+export {
+  INVALID_PROJECT_PATH_MESSAGE,
+  INVALID_REPOSITORY_MESSAGE,
+  normalizeGitHubRepository,
+};

@@ -29,6 +29,7 @@ vi.mock("@/lib/shadscan-web/run-repository-scan", () => ({
 const { scanGitHubRepository } = await import("../../app/scan/actions");
 
 const COMPLETED_RESULT = {
+  projectPath: ".",
   repository: "acme/widget",
   repositoryUrl: "https://github.com/acme/widget",
   result: {
@@ -66,6 +67,7 @@ describe("scanGitHubRepository", () => {
 
     expect(mocks.executeScan).toHaveBeenCalledWith({
       clientAddress: "203.0.113.4",
+      projectPath: undefined,
       repositoryInput: "acme/widget",
     });
     expect(result).toBe(COMPLETED_RESULT);
@@ -94,6 +96,7 @@ describe("scanGitHubRepository", () => {
         message: "The scan could not be completed. Try again.",
         retryable: true,
       },
+      projectPath: undefined,
       repositoryInput: repositoryInput.slice(0, 256),
       status: "error",
     });
@@ -104,5 +107,31 @@ describe("scanGitHubRepository", () => {
       })
     );
     expect(JSON.stringify(result)).not.toContain(internalMessage);
+  });
+
+  it("returns project selection without logging a completed scan", async () => {
+    const selection = {
+      projects: [
+        { label: "apps/admin", path: "apps/admin" },
+        { label: "apps/store", path: "apps/store" },
+      ],
+      repository: "acme/monorepo",
+      repositoryInput: "acme/monorepo",
+      repositoryUrl: "https://github.com/acme/monorepo",
+      status: "project_selection_required",
+    };
+    mocks.executeScan.mockResolvedValue(selection);
+    const formData = new FormData();
+    formData.set("repository", "acme/monorepo");
+
+    const result = await scanGitHubRepository({ status: "idle" }, formData);
+
+    expect(result).toBe(selection);
+    expect(mocks.writeLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "selection_required",
+        repository: "acme/monorepo",
+      })
+    );
   });
 });

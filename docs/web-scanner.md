@@ -5,6 +5,12 @@ audits the default branch of a public repository. It uses a React Server Action;
 the browser receives no shadscan API key, GitHub token, source archive, or
 internal filesystem detail.
 
+The scanner resolves the default branch to an immutable commit and inspects a
+bounded GitHub tree before acquiring source. A root app is selected
+automatically. One nested app is also selected automatically; ambiguous
+monorepos show a project-path selector and do not consume full scan quota until
+the user chooses an app.
+
 ## Production Environment
 
 Configure these variables on every production deployment:
@@ -86,6 +92,13 @@ normal traffic.
   retained; path-sensitive assets such as favicons become zero-byte markers.
 - Limit errors identify the failed counter, configured threshold, measured
   value at cancellation, and a normalized path when one retained file failed.
+- `SHADSCAN_WEB_SOURCE_MODE=auto` uses bounded GitHub blob requests for selected
+  manifests of at most 64 content files and 8 MiB, then falls back to streamed
+  archive acquisition. Sparse identity hashes the immutable, path-sorted blob
+  manifest; archive identity hashes the compressed archive bytes.
+- Recursive GitHub trees are capped by the configured raw-entry limit. A
+  truncated tree is completed through at most 100 non-recursive subtree
+  requests; incomplete trees are never scanned silently.
 - Temporary source is removed after success and failure.
 - The browser result is session-only; no source or report is persisted.
 

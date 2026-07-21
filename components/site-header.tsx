@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CommandMenu } from "@/components/command-menu";
 import { GitHubStars } from "@/components/github-stars";
 import { ModeSwitcher } from "@/components/mode-switcher";
 import { ShadscanMark } from "@/components/shadscan-mark";
@@ -63,6 +64,13 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
           </nav>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
+          <CommandMenu
+            repositoryUrl={
+              githubRepository
+                ? `https://github.com/${githubRepository.name}`
+                : undefined
+            }
+          />
           <Link
             aria-current={isSponsorsActive ? "page" : undefined}
             className={cn(

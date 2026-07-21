@@ -486,10 +486,22 @@ describe("hosted scan archive extraction", () => {
     const destination = await createDestination();
     const controller = new AbortController();
     const abortReason = new Error("stream stopped");
+    const pendingPull = Promise.withResolvers<void>();
+    const pullStarted = Promise.withResolvers<void>();
     let cancelled = false;
+    let sentHeader = false;
     const stream = new ReadableStream<Uint8Array>({
       cancel() {
         cancelled = true;
+      },
+      pull(streamController) {
+        if (!sentHeader) {
+          sentHeader = true;
+          streamController.enqueue(Uint8Array.from([0x1f, 0x8b]));
+          return;
+        }
+        pullStarted.resolve();
+        return pendingPull.promise;
       },
     });
 
@@ -497,10 +509,9 @@ describe("hosted scan archive extraction", () => {
       forbiddenPathBehavior: "skip",
       signal: controller.signal,
     });
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await pullStarted.promise;
     controller.abort(abortReason);
+    pendingPull.resolve();
 
     await expect(extraction).rejects.toBe(abortReason);
     expect(cancelled).toBe(true);

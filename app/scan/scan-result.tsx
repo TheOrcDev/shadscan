@@ -65,6 +65,11 @@ function ScanMetadata({ state }: { state: WebScanCompleteState }) {
         <code className="truncate text-muted-foreground text-xs">
           {scan.resolvedRevision?.slice(0, 12) ?? "Revision unavailable"}
         </code>
+        {state.projectPath === "." ? null : (
+          <code className="truncate text-muted-foreground text-xs">
+            {state.projectPath}
+          </code>
+        )}
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">Rules {scan.rulesetVersion}</Badge>
           <Badge variant="outline">
@@ -78,6 +83,8 @@ function ScanMetadata({ state }: { state: WebScanCompleteState }) {
         <dd className="truncate text-right">
           {report.packageName ?? "Unnamed package"}
         </dd>
+        <dt className="text-muted-foreground">Path</dt>
+        <dd className="truncate text-right">{state.projectPath}</dd>
         <dt className="text-muted-foreground">Framework</dt>
         <dd className="text-right">
           {FRAMEWORK_LABELS[report.framework.adapter]}

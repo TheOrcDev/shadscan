@@ -16,6 +16,7 @@ const EMPTY_STATE_EVIDENCE = [
 ];
 
 const WEB_SCAN_COMPLETE_FIXTURE = {
+  projectPath: ".",
   repository: "acme/widget",
   repositoryUrl: "https://github.com/acme/widget",
   result: {

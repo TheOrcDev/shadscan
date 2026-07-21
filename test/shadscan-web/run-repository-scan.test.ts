@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostedScanAdmissionController } from "../../lib/shadscan-api/admission";
 import { HostedScanError } from "../../lib/shadscan-api/errors";
+import type { GitHubTreeEntry } from "../../lib/shadscan-api/github-tree";
 import { executeWebRepositoryScan } from "../../lib/shadscan-web/run-repository-scan";
 import { createTarGzip } from "../shadscan-api/test-archive";
 
@@ -10,12 +11,33 @@ const COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567";
 const getFetchUrl = (input: Parameters<typeof fetch>[0]): string =>
   input instanceof Request ? input.url : input.toString();
 
+const blob = (filePath: string, size = 32): GitHubTreeEntry => ({
+  mode: "100644",
+  path: filePath,
+  sha: COMMIT_SHA,
+  size,
+  type: "blob",
+});
+
+const ROOT_PROJECT_TREE = [blob("package.json"), blob("src/App.tsx")];
+
+const createDiscoveryDependencies = (
+  treeEntries: GitHubTreeEntry[] = ROOT_PROJECT_TREE
+) => ({
+  enforceDiscoveryRateLimit: vi.fn(() => Promise.resolve()),
+  enforceRateLimit: vi.fn(() => Promise.resolve()),
+  loadTree: vi.fn(() => Promise.resolve(treeEntries)),
+  resolveSource: vi.fn((repository: string) =>
+    Promise.resolve({ commitSha: COMMIT_SHA, repository })
+  ),
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe("executeWebRepositoryScan", () => {
-  it("resolves, materializes, and scans a public GitHub repository", async () => {
+  it("resolves, discovers, materializes, and scans a public GitHub repository", async () => {
     const archive = await createTarGzip([
       {
         contents: `${JSON.stringify({
@@ -45,6 +67,18 @@ describe("executeWebRepositoryScan", () => {
         return Promise.resolve(Response.json({ sha: COMMIT_SHA }));
       }
       if (
+        url ===
+        `https://api.github.com/repos/acme/widget/git/trees/${COMMIT_SHA}?recursive=1`
+      ) {
+        return Promise.resolve(
+          Response.json({
+            sha: COMMIT_SHA,
+            tree: ROOT_PROJECT_TREE,
+            truncated: false,
+          })
+        );
+      }
+      if (
         url === `https://api.github.com/repos/acme/widget/tarball/${COMMIT_SHA}`
       ) {
         return Promise.resolve(
@@ -59,6 +93,7 @@ describe("executeWebRepositoryScan", () => {
       }
       throw new Error(`Unexpected GitHub request: ${url}`);
     });
+    const enforceDiscoveryRateLimit = vi.fn(() => Promise.resolve());
     const enforceRateLimit = vi.fn(() => Promise.resolve());
 
     const result = await executeWebRepositoryScan(
@@ -66,14 +101,20 @@ describe("executeWebRepositoryScan", () => {
         clientAddress: "203.0.113.4",
         repositoryInput: "https://github.com/acme/widget",
       },
-      { enforceRateLimit, fetchImplementation }
+      {
+        enforceDiscoveryRateLimit,
+        enforceRateLimit,
+        fetchImplementation,
+      }
     );
 
+    expect(enforceDiscoveryRateLimit).toHaveBeenCalledOnce();
     expect(enforceRateLimit).toHaveBeenCalledWith({
       clientAddress: "203.0.113.4",
       repositoryKey: "acme/widget",
     });
     expect(result).toMatchObject({
+      projectPath: ".",
       repository: "acme/widget",
       repositoryUrl: "https://github.com/acme/widget",
       result: {
@@ -94,10 +135,42 @@ describe("executeWebRepositoryScan", () => {
       },
       status: "complete",
     });
-    expect(fetchImplementation).toHaveBeenCalledTimes(4);
+    expect(fetchImplementation).toHaveBeenCalledTimes(5);
   });
 
-  it("rejects invalid input before rate limiting or fetching", async () => {
+  it("returns project choices without consuming full scan quota", async () => {
+    const dependencies = createDiscoveryDependencies([
+      blob("package.json"),
+      blob("apps/admin/package.json"),
+      blob("apps/admin/src/App.tsx"),
+      blob("apps/store/package.json"),
+      blob("apps/store/src/App.tsx"),
+    ]);
+
+    const result = await executeWebRepositoryScan(
+      {
+        clientAddress: "203.0.113.4",
+        repositoryInput: "acme/monorepo",
+      },
+      dependencies
+    );
+
+    expect(result).toEqual({
+      projects: [
+        { label: "apps/admin", path: "apps/admin" },
+        { label: "apps/store", path: "apps/store" },
+      ],
+      repository: "acme/monorepo",
+      repositoryInput: "acme/monorepo",
+      repositoryUrl: "https://github.com/acme/monorepo",
+      status: "project_selection_required",
+    });
+    expect(dependencies.enforceDiscoveryRateLimit).toHaveBeenCalledOnce();
+    expect(dependencies.enforceRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid input before admission, rate limiting, or fetching", async () => {
+    const enforceDiscoveryRateLimit = vi.fn(() => Promise.resolve());
     const enforceRateLimit = vi.fn(() => Promise.resolve());
     const fetchImplementation = vi.fn<typeof fetch>();
 
@@ -107,18 +180,23 @@ describe("executeWebRepositoryScan", () => {
           clientAddress: "203.0.113.4",
           repositoryInput: "https://example.com/acme/widget",
         },
-        { enforceRateLimit, fetchImplementation }
+        {
+          enforceDiscoveryRateLimit,
+          enforceRateLimit,
+          fetchImplementation,
+        }
       )
     ).rejects.toMatchObject({ code: "INVALID_REPOSITORY" });
+    expect(enforceDiscoveryRateLimit).not.toHaveBeenCalled();
     expect(enforceRateLimit).not.toHaveBeenCalled();
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
 
-  it("rejects at capacity before consuming scan quota", async () => {
+  it("rejects at capacity before consuming discovery or scan quota", async () => {
     const admissionController = new HostedScanAdmissionController(1);
     const activeOperation = Promise.withResolvers<void>();
     const activeRun = admissionController.run(() => activeOperation.promise);
-    const enforceRateLimit = vi.fn(() => Promise.resolve());
+    const dependencies = createDiscoveryDependencies();
 
     await expect(
       executeWebRepositoryScan(
@@ -126,27 +204,27 @@ describe("executeWebRepositoryScan", () => {
           clientAddress: "203.0.113.4",
           repositoryInput: "acme/widget",
         },
-        { admissionController, enforceRateLimit }
+        { admissionController, ...dependencies }
       )
     ).rejects.toMatchObject({
       code: "SCAN_BUSY",
       retryAfterSeconds: 5,
       retryable: true,
     });
-    expect(enforceRateLimit).not.toHaveBeenCalled();
+    expect(dependencies.enforceDiscoveryRateLimit).not.toHaveBeenCalled();
+    expect(dependencies.enforceRateLimit).not.toHaveBeenCalled();
 
     activeOperation.resolve();
     await activeRun;
   });
 
-  it("maps hosted private-repository failures to the public contract", async () => {
-    const materializeSource = vi.fn(() =>
-      Promise.reject(
-        new HostedScanError("Internal upstream detail", {
-          code: "PRIVATE_REPOSITORY_UNSUPPORTED",
-          status: 422,
-        })
-      )
+  it("maps private-repository failures from immutable resolution", async () => {
+    const dependencies = createDiscoveryDependencies();
+    dependencies.resolveSource.mockRejectedValue(
+      new HostedScanError("Internal upstream detail", {
+        code: "PRIVATE_REPOSITORY_UNSUPPORTED",
+        status: 422,
+      })
     );
 
     await expect(
@@ -155,10 +233,7 @@ describe("executeWebRepositoryScan", () => {
           clientAddress: "203.0.113.4",
           repositoryInput: "acme/private-widget",
         },
-        {
-          enforceRateLimit: () => Promise.resolve(),
-          materializeSource,
-        }
+        dependencies
       )
     ).rejects.toEqual(
       expect.objectContaining({
@@ -169,6 +244,7 @@ describe("executeWebRepositoryScan", () => {
   });
 
   it("maps conflicting archive paths to unsupported source", async () => {
+    const dependencies = createDiscoveryDependencies();
     const materializeSource = vi.fn(() =>
       Promise.reject(
         new HostedScanError("The archive contains conflicting paths.", {
@@ -184,10 +260,7 @@ describe("executeWebRepositoryScan", () => {
           clientAddress: "203.0.113.4",
           repositoryInput: "acme/conflicting-widget",
         },
-        {
-          enforceRateLimit: () => Promise.resolve(),
-          materializeSource,
-        }
+        { ...dependencies, materializeSource }
       )
     ).rejects.toMatchObject({
       code: "SOURCE_UNSUPPORTED",
@@ -196,6 +269,7 @@ describe("executeWebRepositoryScan", () => {
   });
 
   it("maps isolated scanner failures to a retryable local fallback", async () => {
+    const dependencies = createDiscoveryDependencies();
     const materializeSource = vi.fn(() =>
       Promise.resolve({
         cleanupDirectory: "/tmp/shadscan-test",
@@ -222,11 +296,7 @@ describe("executeWebRepositoryScan", () => {
           clientAddress: "203.0.113.4",
           repositoryInput: "acme/worker-failure",
         },
-        {
-          enforceRateLimit: () => Promise.resolve(),
-          materializeSource,
-          runScan,
-        }
+        { ...dependencies, materializeSource, runScan }
       )
     ).rejects.toMatchObject({
       code: "SCAN_WORKER_FAILED",
@@ -236,10 +306,12 @@ describe("executeWebRepositoryScan", () => {
   });
 
   it("aborts and maps scans that exceed the hosted deadline", async () => {
+    const dependencies = createDiscoveryDependencies();
     let operationSignal: AbortSignal | undefined;
     const materializeSource = vi.fn(
       (
         _request: unknown,
+        _resolvedSource: unknown,
         _fetchImplementation: unknown,
         signal?: AbortSignal
       ) => {
@@ -255,8 +327,8 @@ describe("executeWebRepositoryScan", () => {
           repositoryInput: "acme/slow-widget",
         },
         {
+          ...dependencies,
           deadlineMs: 5,
-          enforceRateLimit: () => Promise.resolve(),
           materializeSource,
         }
       )

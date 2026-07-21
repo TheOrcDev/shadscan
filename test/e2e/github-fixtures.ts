@@ -2,6 +2,18 @@ import type { FetchHandlerResult } from "next/experimental/testmode/playwright.j
 import { createTarGzip } from "../shadscan-api/test-archive";
 
 const COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567";
+const ROOT_PROJECT_TREE = [
+  "package.json",
+  "components.json",
+  "app/layout.tsx",
+  "app/page.tsx",
+].map((path) => ({
+  mode: "100644",
+  path,
+  sha: COMMIT_SHA,
+  size: 256,
+  type: "blob",
+}));
 
 interface GitHubFixtureOptions {
   archive: Buffer;
@@ -9,6 +21,7 @@ interface GitHubFixtureOptions {
   repositoryResponse?: (
     requestCount: number
   ) => FetchHandlerResult | Promise<FetchHandlerResult>;
+  tree?: typeof ROOT_PROJECT_TREE;
 }
 
 const createReactProjectArchive = (): Promise<Buffer> =>
@@ -56,14 +69,66 @@ const createReactProjectArchive = (): Promise<Buffer> =>
     },
   ]);
 
+const MONOREPO_PROJECT_TREE = [
+  "package.json",
+  "apps/admin/package.json",
+  "apps/admin/src/App.tsx",
+  "apps/store/package.json",
+  "apps/store/src/App.tsx",
+].map((path) => ({
+  mode: "100644",
+  path,
+  sha: COMMIT_SHA,
+  size: 256,
+  type: "blob",
+}));
+
+const createMonorepoProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: '{"name":"workspace","private":true}\n',
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: '{"name":"admin","dependencies":{"react":"19.2.4"}}\n',
+      header: {
+        name: "shadscan-e2e/apps/admin/package.json",
+        type: "file",
+      },
+    },
+    {
+      contents: "export const App = () => <main>Admin</main>;\n",
+      header: {
+        name: "shadscan-e2e/apps/admin/src/App.tsx",
+        type: "file",
+      },
+    },
+    {
+      contents: '{"name":"store","dependencies":{"react":"19.2.4"}}\n',
+      header: {
+        name: "shadscan-e2e/apps/store/package.json",
+        type: "file",
+      },
+    },
+    {
+      contents: "export const App = () => <main>Store</main>;\n",
+      header: {
+        name: "shadscan-e2e/apps/store/src/App.tsx",
+        type: "file",
+      },
+    },
+  ]);
+
 const createGitHubFetchHandler = ({
   archive,
   repository,
   repositoryResponse,
+  tree = ROOT_PROJECT_TREE,
 }: GitHubFixtureOptions) => {
   const repositoryUrl = `https://api.github.com/repos/${repository}`;
   const revisionUrl = `${repositoryUrl}/commits/HEAD`;
   const tarballUrl = `${repositoryUrl}/tarball/${COMMIT_SHA}`;
+  const treeUrl = `${repositoryUrl}/git/trees/${COMMIT_SHA}?recursive=1`;
   const archiveUrl = `https://codeload.github.com/${repository}/legacy.tar.gz/${COMMIT_SHA}`;
   let repositoryRequestCount = 0;
 
@@ -78,6 +143,14 @@ const createGitHubFetchHandler = ({
 
     if (request.url === revisionUrl) {
       return Response.json({ sha: COMMIT_SHA });
+    }
+
+    if (request.url === treeUrl) {
+      return Response.json({
+        sha: COMMIT_SHA,
+        tree,
+        truncated: false,
+      });
     }
 
     if (request.url === tarballUrl) {
@@ -97,4 +170,9 @@ const createGitHubFetchHandler = ({
   };
 };
 
-export { createGitHubFetchHandler, createReactProjectArchive };
+export {
+  createGitHubFetchHandler,
+  createMonorepoProjectArchive,
+  createReactProjectArchive,
+  MONOREPO_PROJECT_TREE,
+};

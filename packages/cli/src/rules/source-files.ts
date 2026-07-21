@@ -4,6 +4,7 @@ import { glob } from "tinyglobby";
 import type { AuditContext } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
+import { SCAN_SOURCE_LIMITS } from "../source-requirements";
 
 interface SourceFile {
   content: string;
@@ -57,9 +58,9 @@ const PROJECT_IGNORES = [
   "**/*.stories.{js,jsx,ts,tsx}",
   "**/*.generated.{js,jsx,ts,tsx}",
 ];
-const MAX_PROJECT_FILES = 10_000;
-const MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024;
-const MAX_TOTAL_SOURCE_BYTES = 50 * 1024 * 1024;
+const MAX_PROJECT_FILES = SCAN_SOURCE_LIMITS.maxFiles;
+const MAX_SOURCE_FILE_BYTES = SCAN_SOURCE_LIMITS.maxFileBytes;
+const MAX_TOTAL_SOURCE_BYTES = SCAN_SOURCE_LIMITS.maxTotalBytes;
 const sourceFileCache = new WeakMap<ProjectDiscovery, Promise<SourceFile[]>>();
 const styleFileCache = new WeakMap<ProjectDiscovery, Promise<SourceFile[]>>();
 
