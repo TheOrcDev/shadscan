@@ -1,4 +1,8 @@
 import {
+  type HostedScanAdmissionController,
+  hostedScanAdmissionController,
+} from "../shadscan-api/admission";
+import {
   GitHubScanRequestSchema,
   type HostedScanResponse,
   HostedScanResponseSchema,
@@ -21,6 +25,7 @@ interface ExecuteWebRepositoryScanInput {
 }
 
 interface ExecuteWebRepositoryScanDependencies {
+  admissionController?: HostedScanAdmissionController;
   deadlineMs?: number;
   enforceRateLimit?: (input: WebRateLimitInput) => Promise<unknown> | unknown;
   fetchImplementation?: FetchImplementation;
@@ -38,41 +43,45 @@ const executeWebRepositoryScan = async (
   try {
     return await runWithHostedScanDeadline(async (signal) => {
       const repository = normalizeGitHubRepository(input.repositoryInput);
-      const enforceRateLimit =
-        dependencies.enforceRateLimit ?? enforceWebScanRateLimit;
-      await enforceRateLimit({
-        clientAddress: input.clientAddress,
-        repositoryKey: repository.repositoryKey,
-      });
-      signal.throwIfAborted();
+      const admissionController =
+        dependencies.admissionController ?? hostedScanAdmissionController;
+      return await admissionController.run(async () => {
+        const enforceRateLimit =
+          dependencies.enforceRateLimit ?? enforceWebScanRateLimit;
+        await enforceRateLimit({
+          clientAddress: input.clientAddress,
+          repositoryKey: repository.repositoryKey,
+        });
+        signal.throwIfAborted();
 
-      const request = GitHubScanRequestSchema.parse({
-        source: {
-          kind: "github",
+        const request = GitHubScanRequestSchema.parse({
+          source: {
+            kind: "github",
+            repository: repository.repository,
+            revision: "HEAD",
+            subdirectory: ".",
+          },
+        });
+        const materializeSource =
+          dependencies.materializeSource ?? materializeGitHubSource;
+        const source = await materializeSource(
+          request,
+          dependencies.fetchImplementation,
+          signal
+        );
+        signal.throwIfAborted();
+        const runScan = dependencies.runScan ?? runHostedScan;
+        const result = HostedScanResponseSchema.parse(
+          await runScan(source, signal)
+        );
+        signal.throwIfAborted();
+
+        return WebScanCompleteStateSchema.parse({
           repository: repository.repository,
-          revision: "HEAD",
-          subdirectory: ".",
-        },
-      });
-      const materializeSource =
-        dependencies.materializeSource ?? materializeGitHubSource;
-      const source = await materializeSource(
-        request,
-        dependencies.fetchImplementation,
-        signal
-      );
-      signal.throwIfAborted();
-      const runScan = dependencies.runScan ?? runHostedScan;
-      const result = HostedScanResponseSchema.parse(
-        await runScan(source, signal)
-      );
-      signal.throwIfAborted();
-
-      return WebScanCompleteStateSchema.parse({
-        repository: repository.repository,
-        repositoryUrl: repository.repositoryUrl,
-        result,
-        status: "complete",
+          repositoryUrl: repository.repositoryUrl,
+          result,
+          status: "complete",
+        });
       });
     }, dependencies.deadlineMs);
   } catch (error) {

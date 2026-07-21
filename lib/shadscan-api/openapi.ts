@@ -33,6 +33,10 @@ const RATE_LIMIT_RESPONSE_HEADERS = {
     schema: { minimum: 0, type: "integer" },
   },
 } as const;
+const RETRY_AFTER_RESPONSE_HEADER = {
+  description: "Seconds to wait before retrying.",
+  schema: { minimum: 1, type: "integer" },
+} as const;
 
 const ERROR_RESPONSE_CONTENT = {
   [JSON_MEDIA_TYPE]: {
@@ -231,19 +235,21 @@ const OPENAPI_DOCUMENT = {
             ...createErrorResponse("The API key exceeded a scan rate limit."),
             headers: {
               ...RATE_LIMIT_RESPONSE_HEADERS,
-              "Retry-After": {
-                description: "Seconds to wait before retrying.",
-                schema: { minimum: 1, type: "integer" },
-              },
+              "Retry-After": RETRY_AFTER_RESPONSE_HEADER,
             },
           },
           "500": createErrorResponse("The scan failed unexpectedly."),
           "502": createErrorResponse(
             "GitHub was unavailable, rate-limited the service, or returned an invalid response."
           ),
-          "503": createErrorResponse(
-            "Authentication or distributed rate limiting is not configured or is temporarily unavailable."
-          ),
+          "503": {
+            ...createErrorResponse(
+              "Authentication or distributed rate limiting is unavailable, or the scanner has reached its per-process concurrency capacity."
+            ),
+            headers: {
+              "Retry-After": RETRY_AFTER_RESPONSE_HEADER,
+            },
+          },
           "504": createErrorResponse(
             "The source fetch or scan exceeded the hosted execution deadline."
           ),

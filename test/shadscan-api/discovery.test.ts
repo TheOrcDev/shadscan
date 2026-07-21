@@ -114,6 +114,8 @@ describe("hosted API OpenAPI document", () => {
     expect(responses).toHaveProperty("422");
     expect(responses).toHaveProperty("429");
     expect(responses["429"].headers).toHaveProperty("Retry-After");
+    expect(responses).toHaveProperty("503");
+    expect(responses["503"].headers).toHaveProperty("Retry-After");
   });
 });
 

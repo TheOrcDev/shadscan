@@ -133,6 +133,7 @@ With \`Accept: text/markdown\`, a successful response body is the prompt itself.
 - Snapshot bodies are limited to ${SNAPSHOT_MAX_COMPRESSED_MEBIBYTES} MiB compressed and reject forbidden or unsafe entries.
 - A hosted request has at most ${HOSTED_SCAN_MAX_DURATION_SECONDS} seconds to finish.
 - Rate-limit state is returned in \`RateLimit-Limit\`, \`RateLimit-Remaining\`, and \`RateLimit-Reset\`; a 429 response also includes \`Retry-After\`.
+- A retryable 503 \`SCAN_BUSY\` response means the current process is at scan capacity; wait for its \`Retry-After\` interval before retrying.
 - The service scans source files but does not install dependencies, execute repository scripts, or modify the uploaded source.
 `;
 

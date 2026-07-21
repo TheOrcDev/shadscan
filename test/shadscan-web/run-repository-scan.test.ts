@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HostedScanAdmissionController } from "../../lib/shadscan-api/admission";
 import { HostedScanError } from "../../lib/shadscan-api/errors";
 import { executeWebRepositoryScan } from "../../lib/shadscan-web/run-repository-scan";
 import { createTarGzip } from "../shadscan-api/test-archive";
@@ -111,6 +112,31 @@ describe("executeWebRepositoryScan", () => {
     ).rejects.toMatchObject({ code: "INVALID_REPOSITORY" });
     expect(enforceRateLimit).not.toHaveBeenCalled();
     expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+
+  it("rejects at capacity before consuming scan quota", async () => {
+    const admissionController = new HostedScanAdmissionController(1);
+    const activeOperation = Promise.withResolvers<void>();
+    const activeRun = admissionController.run(() => activeOperation.promise);
+    const enforceRateLimit = vi.fn(() => Promise.resolve());
+
+    await expect(
+      executeWebRepositoryScan(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryInput: "acme/widget",
+        },
+        { admissionController, enforceRateLimit }
+      )
+    ).rejects.toMatchObject({
+      code: "SCAN_BUSY",
+      retryAfterSeconds: 5,
+      retryable: true,
+    });
+    expect(enforceRateLimit).not.toHaveBeenCalled();
+
+    activeOperation.resolve();
+    await activeRun;
   });
 
   it("maps hosted private-repository failures to the public contract", async () => {

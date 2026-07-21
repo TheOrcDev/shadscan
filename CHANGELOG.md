@@ -15,6 +15,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Bound each hosted process to two active scans and reject excess work without
+  queueing or consuming quota, using a retryable `SCAN_BUSY` contract.
 - Bound distributed rate-limit calls with PostgreSQL lock and statement
   timeouts plus an abortable Neon transport deadline.
 - Align development rate limiting with production's epoch-based sliding windows

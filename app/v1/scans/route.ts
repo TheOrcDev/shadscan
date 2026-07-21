@@ -1,3 +1,4 @@
+import { hostedScanAdmissionController } from "@/lib/shadscan-api/admission";
 import { authenticateApiRequest } from "@/lib/shadscan-api/auth";
 import type { HostedScanResponse } from "@/lib/shadscan-api/contracts";
 import { runWithHostedScanDeadline } from "@/lib/shadscan-api/deadline";
@@ -255,14 +256,16 @@ export const POST = async (request: Request): Promise<Response> => {
   try {
     return await runWithHostedScanDeadline(async (signal) => {
       const authentication = authenticateApiRequest(request);
-      const rateLimit = await enforceRateLimit(authentication.keyId);
-      signal.throwIfAborted();
       const format = getResponseFormat(request);
-      const source = await materializeRequestSource(request, signal);
-      signal.throwIfAborted();
-      const result = await runHostedScan(source, signal);
-      signal.throwIfAborted();
-      return createSuccessResponse(result, format, rateLimit);
+      return await hostedScanAdmissionController.run(async () => {
+        const rateLimit = await enforceRateLimit(authentication.keyId);
+        signal.throwIfAborted();
+        const source = await materializeRequestSource(request, signal);
+        signal.throwIfAborted();
+        const result = await runHostedScan(source, signal);
+        signal.throwIfAborted();
+        return createSuccessResponse(result, format, rateLimit);
+      });
     });
   } catch (error) {
     return createErrorResponse(error);

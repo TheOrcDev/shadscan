@@ -58,6 +58,9 @@ normal traffic.
 
 ## Runtime Boundaries
 
+- Each process admits at most two active scans. Additional submissions are not
+  queued and return retryable `SCAN_BUSY` with a five-second retry interval;
+  rejected submissions do not consume scan quota.
 - `/scan` runs in the Node.js runtime with a 30-second execution limit.
 - The full server action has a 25-second deadline so it can return a stable
   `SCAN_TIMEOUT` error before the platform terminates it.

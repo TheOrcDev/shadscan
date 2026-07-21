@@ -64,6 +64,18 @@ const getRetryAfterSeconds = (error: HostedScanError): number | undefined => {
 };
 
 const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
+  if (error.code === "SCAN_BUSY") {
+    return new WebScanServiceError(
+      "The web scanner is busy. Try again shortly.",
+      {
+        cause: error,
+        code: "SCAN_BUSY",
+        retryable: true,
+        retryAfterSeconds: getRetryAfterSeconds(error),
+      }
+    );
+  }
+
   if (error.code === "SCAN_TIMEOUT") {
     return new WebScanServiceError(
       "The scan took too long to finish. Try again or run shadscan locally.",

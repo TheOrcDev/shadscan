@@ -124,6 +124,9 @@ hash and should not be compared with a Git tree hash.
 
 ## Operational boundaries
 
+- Each process admits at most two active scans. Additional requests are not
+  queued and return retryable `SCAN_BUSY` status 503 with `Retry-After: 5`;
+  rejected requests do not consume scan quota.
 - Hosted work has a 25-second deadline within the 30-second route limit and
   returns a retryable `SCAN_TIMEOUT` error with status 504.
 - Distributed rate-limit calls fail closed behind 1-second lock, 3-second
