@@ -18,8 +18,12 @@ import {
 } from "typescript";
 import { type ParsedSourceFile, type SourceScope, walkNodes } from "../ast";
 
-const TYPING_TARGET_PATTERN =
-  /(?:INPUT|TEXTAREA|SELECT|isContentEditable|closest\(\s*["'][^"']*(?:input|textarea|select))/i;
+const TYPING_TARGET_PATTERNS = [
+  /(?:\bINPUT\b|HTMLInputElement|(?:closest|matches)\s*\([^)]*\binput\b)/i,
+  /(?:\bTEXTAREA\b|HTMLTextAreaElement|(?:closest|matches)\s*\([^)]*\btextarea\b)/i,
+  /(?:\bSELECT\b|HTMLSelectElement|(?:closest|matches)\s*\([^)]*\bselect\b)/i,
+  /(?:isContentEditable|contenteditable)/i,
+] as const;
 const TARGET_ARGUMENT_PATTERN = /\btarget\b/;
 
 interface TargetPredicateCall {
@@ -79,6 +83,9 @@ const statementExits = (node: Node): boolean => {
   );
 };
 
+const hasCompleteTypingTargetCheck = (content: string): boolean =>
+  TYPING_TARGET_PATTERNS.every((pattern) => pattern.test(content));
+
 const getPositiveTargetPredicateCalls = (
   file: ParsedSourceFile,
   condition: Expression
@@ -114,14 +121,9 @@ const getPositiveTargetPredicateCalls = (
 
 const rangeHasTypingTargetGuard = (
   file: ParsedSourceFile,
-  content: string,
   start: number,
   end: number
 ): boolean => {
-  if (TYPING_TARGET_PATTERN.test(content)) {
-    return true;
-  }
-
   let hasGuard = false;
 
   walkNodes(file.sourceFile, (node) => {
@@ -132,6 +134,13 @@ const rangeHasTypingTargetGuard = (
       node.getEnd() > end ||
       !statementExits(node.thenStatement)
     ) {
+      return;
+    }
+
+    if (
+      hasCompleteTypingTargetCheck(node.expression.getText(file.sourceFile))
+    ) {
+      hasGuard = true;
       return;
     }
 
@@ -147,7 +156,7 @@ const rangeHasTypingTargetGuard = (
 
       if (
         predicate &&
-        TYPING_TARGET_PATTERN.test(predicate.getText(file.sourceFile))
+        hasCompleteTypingTargetCheck(predicate.getText(file.sourceFile))
       ) {
         hasGuard = true;
         return;
@@ -164,12 +173,11 @@ const nodeHasTypingTargetGuard = (
 ): boolean =>
   rangeHasTypingTargetGuard(
     file,
-    node.getText(file.sourceFile),
     node.getStart(file.sourceFile),
     node.getEnd()
   );
 
 const sourceScopeHasTypingTargetGuard = (scope: SourceScope): boolean =>
-  rangeHasTypingTargetGuard(scope.file, scope.content, scope.start, scope.end);
+  rangeHasTypingTargetGuard(scope.file, scope.start, scope.end);
 
 export { nodeHasTypingTargetGuard, sourceScopeHasTypingTargetGuard };

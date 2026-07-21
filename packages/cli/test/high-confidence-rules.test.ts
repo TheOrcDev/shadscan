@@ -383,7 +383,7 @@ describe("high confidence rules", () => {
           const { setTheme } = useTheme();
           useEffect(() => {
             function onKeyDown(event: KeyboardEvent) {
-              if (event.target instanceof HTMLElement && event.target.tagName === "INPUT") return;
+              if (event.target instanceof HTMLElement && (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.tagName === "SELECT" || event.target.isContentEditable)) return;
               if (event.key.toLowerCase() !== "d") return;
               setTheme("dark");
             }

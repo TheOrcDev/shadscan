@@ -236,6 +236,41 @@ describe("interaction rules", () => {
         `
           useEffect(() => {
             const onKeyDown = (event) => {
+              const supportedTargets = ["INPUT", "TEXTAREA", "SELECT"];
+              const contentEditableProperty = "isContentEditable";
+              if (event.key === "d") setTheme(supportedTargets.length && contentEditableProperty ? "dark" : "light");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          useEffect(() => {
+            const onKeyDown = (event) => {
+              if (event.target.tagName === "INPUT") return;
+              if (event.key === "d") setTheme("dark");
+            };
+            window.addEventListener("keydown", onKeyDown);
+            return () => window.removeEventListener("keydown", onKeyDown);
+          }, []);
+        `
+      );
+      expect(
+        (await runRule(fixture.rootDir, globalHotkeysAreSafeRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/hotkeys.tsx",
+        `
+          useEffect(() => {
+            const onKeyDown = (event) => {
               if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName) || event.target.isContentEditable) return;
               if (event.key === "d") setTheme("dark");
             };

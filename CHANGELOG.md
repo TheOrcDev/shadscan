@@ -6,6 +6,12 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- Require dark-mode and bare-key shortcuts to prove complete, exiting guards
+  for inputs, textareas, selects, and contenteditable targets; unrelated target
+  names and partial guards no longer earn safe-hotkey credit.
+
 ## 0.1.0-rc.2 - 2026-07-21
 
 ### Added
