@@ -303,13 +303,12 @@ describe("expanded accessibility rules", () => {
 
     try {
       await fixture.write(
-        "src/Navbar.tsx",
+        "src/App.tsx",
         `
-          export function Navbar() {
-            const [open, setOpen] = useState(false);
+          export function App() {
             return <>
-              <NavigationMenu className="max-lg:hidden" />
-              <div className={cn("lg:hidden", open ? "visible" : "invisible")}>
+              <div className="max-lg:hidden"><NavigationMenu /></div>
+              <div className="lg:hidden">
                 <nav><a href="/account">Account</a></nav>
               </div>
             </>;
@@ -321,9 +320,9 @@ describe("expanded accessibility rules", () => {
       ).toBe("pass");
 
       await fixture.write(
-        "src/Navbar.tsx",
+        "src/App.tsx",
         `
-          export function Navbar({ navClass }) {
+          export function App({ navClass }) {
             return <><nav className={navClass}>Primary</nav><nav>Account</nav></>;
           }
         `
@@ -333,8 +332,8 @@ describe("expanded accessibility rules", () => {
       ).toBe("advisory");
 
       await fixture.write(
-        "src/Navbar.tsx",
-        "export function Navbar() { return <><NavigationMenu /><NavigationMenu /></>; }"
+        "src/App.tsx",
+        "export function App() { return <><NavigationMenu /><NavigationMenu /></>; }"
       );
       expect(
         (await runRule(fixture.rootDir, navLandmarksHaveNamesRule)).status

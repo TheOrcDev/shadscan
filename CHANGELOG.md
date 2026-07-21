@@ -8,6 +8,10 @@ stable releases published under `latest`.
 
 ### Changed
 
+- Correlate navigation landmarks through a bounded component render graph that
+  preserves route surfaces, repeated instances, child projection, responsive
+  visibility, and mutually exclusive branches without executing application
+  code.
 - Detect Next.js projects containing both App Router and Pages Router trees,
   audit both root shells and route-boundary families, and report them through
   the explicit `next-hybrid-router` adapter.
