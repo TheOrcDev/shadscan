@@ -154,6 +154,7 @@ interface MaterializedScanSource {
   resolvedRevision: string | null;
   sourceDigest: string;
   sourceKind: "git" | "snapshot";
+  sourceRoot: string;
 }
 
 export type {

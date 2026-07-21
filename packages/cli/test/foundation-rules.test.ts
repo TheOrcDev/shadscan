@@ -1,4 +1,8 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { runAudit } from "../src/audit";
 import { componentsAliasesResolveRule } from "../src/rules/components-aliases-resolve";
 import { metadataTitleDescriptionCompleteRule } from "../src/rules/metadata-title-description-complete";
 import { noStarterCopyRule } from "../src/rules/no-starter-copy";
@@ -128,6 +132,99 @@ describe("foundation rules", () => {
       ).toBe("pass");
     } finally {
       await fixture.cleanup();
+    }
+  });
+
+  it("confines alias resolution and extended configs to the scan boundary", async () => {
+    const fixture = await createRuleFixture();
+    const outsideRoot = await mkdtemp(
+      path.join(tmpdir(), "shadscan-alias-outside-")
+    );
+
+    try {
+      await fixture.write(
+        "components.json",
+        JSON.stringify({ aliases: { components: "@/components" } })
+      );
+      await mkdir(path.join(outsideRoot, "components"), { recursive: true });
+      await writeFile(
+        path.join(outsideRoot, "components", "Button.tsx"),
+        "export function Button() { return <button />; }"
+      );
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({
+          compilerOptions: { paths: { "@/*": [`${outsideRoot}/*`] } },
+        })
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, componentsAliasesResolveRule)).status
+      ).toBe("fail");
+
+      await writeFile(
+        path.join(outsideRoot, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            paths: { "@/*": [`${fixture.rootDir}/*`] },
+          },
+        })
+      );
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({ extends: path.join(outsideRoot, "tsconfig.json") })
+      );
+      await fixture.write(
+        "components/Button.tsx",
+        "export function Button() { return <button />; }"
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, componentsAliasesResolveRule)).status
+      ).toBe("fail");
+    } finally {
+      await Promise.all([
+        fixture.cleanup(),
+        rm(outsideRoot, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it("allows monorepo aliases inside an explicit source boundary", async () => {
+    const sourceRoot = await mkdtemp(
+      path.join(tmpdir(), "shadscan-alias-source-")
+    );
+    const projectRoot = path.join(sourceRoot, "apps", "web");
+
+    try {
+      await mkdir(path.join(sourceRoot, "shared", "ui"), { recursive: true });
+      await mkdir(projectRoot, { recursive: true });
+      await writeFile(
+        path.join(projectRoot, "package.json"),
+        JSON.stringify({ dependencies: { react: "19.2.4" } })
+      );
+      await writeFile(
+        path.join(projectRoot, "components.json"),
+        JSON.stringify({ aliases: { ui: "@/shared/ui" } })
+      );
+      await writeFile(
+        path.join(projectRoot, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { paths: { "@/*": ["../../*"] } },
+        })
+      );
+      await writeFile(
+        path.join(sourceRoot, "shared", "ui", "Button.tsx"),
+        "export function Button() { return <button />; }"
+      );
+
+      const report = await runAudit(projectRoot, {
+        filesystemRoot: sourceRoot,
+        rules: [componentsAliasesResolveRule],
+      });
+      expect(report.findings[0]?.status).toBe("pass");
+    } finally {
+      await rm(sourceRoot, { force: true, recursive: true });
     }
   });
 

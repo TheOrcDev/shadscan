@@ -4,6 +4,7 @@ import { defaultRules } from "./rules/default-rules";
 
 interface ScanOptions {
   category?: AuditCategory;
+  filesystemRoot?: string;
   signal?: AbortSignal;
   source?: ScanSource;
 }
@@ -16,6 +17,7 @@ const scanProject = async (
 ): Promise<AuditReport> =>
   runAudit(rootDir, {
     category: options.category,
+    filesystemRoot: options.filesystemRoot,
     rules: defaultRules,
     rulesetVersion: BUNDLED_RULESET_VERSION,
     signal: options.signal,

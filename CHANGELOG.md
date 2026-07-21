@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Confine hosted TypeScript config loading and shadcn alias probes to the
+  materialized repository while preserving aliases across selected monorepo
+  subdirectories.
 - Require dark-mode and bare-key shortcuts to prove complete, exiting guards
   for inputs, textareas, selects, and contenteditable targets; unrelated target
   names and partial guards no longer earn safe-hotkey credit.

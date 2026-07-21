@@ -410,6 +410,7 @@ const materializeGitHubSource = async (
       resolvedRevision: commitSha,
       sourceDigest,
       sourceKind: "git",
+      sourceRoot: extractionRoot,
     };
   } catch (error) {
     await cleanupMaterializationDirectory(cleanupDirectory);

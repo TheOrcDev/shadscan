@@ -97,6 +97,7 @@ const materializeSnapshotSource = async (
       resolvedRevision: null,
       sourceDigest,
       sourceKind: "snapshot",
+      sourceRoot: extractionRoot,
     };
   } catch (error) {
     await cleanupMaterializationDirectory(cleanupDirectory);

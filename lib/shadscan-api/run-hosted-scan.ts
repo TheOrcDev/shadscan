@@ -24,6 +24,7 @@ const runHostedScan = async (
     signal?.throwIfAborted();
     const report = await scanProject(source.projectRoot, {
       category: source.category,
+      filesystemRoot: source.sourceRoot,
       signal,
       source: {
         digest: source.sourceDigest,

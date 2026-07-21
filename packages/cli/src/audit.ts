@@ -83,6 +83,7 @@ interface AuditEvidence {
 }
 
 interface AuditContext {
+  filesystemRoot: string;
   project: ProjectDiscovery;
 }
 
@@ -202,6 +203,7 @@ interface AuditReport {
 
 interface RunAuditOptions {
   category?: AuditCategory;
+  filesystemRoot?: string;
   rules: AuditRule[];
   rulesetVersion?: string;
   signal?: AbortSignal;
@@ -1157,7 +1159,10 @@ const runAudit = async (
   options.signal?.throwIfAborted();
   const project = await discoverProject(cwd);
   options.signal?.throwIfAborted();
-  const context: AuditContext = { project };
+  const context: AuditContext = {
+    filesystemRoot: path.resolve(options.filesystemRoot ?? project.rootDir),
+    project,
+  };
   const findings: AuditFinding[] = [];
 
   for (const rule of options.rules) {
