@@ -2,6 +2,8 @@
 
 Audit a React shadcn app for missing UI fundamentals.
 
+Requires Node.js 18 or newer.
+
 Run the release candidate from npm's `next` channel:
 
 ```bash

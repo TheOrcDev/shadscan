@@ -26,6 +26,10 @@ credentials.
 
 ## Release Gates
 
+Use Node.js 24 from `.node-version` and pnpm 11.15.1 from the root
+`packageManager` field for repository and release work. The packed-package CI
+matrix separately proves that the published CLI still runs on Node.js 18.
+
 From the repository root, run:
 
 ```bash

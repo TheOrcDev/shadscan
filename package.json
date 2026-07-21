@@ -30,7 +30,7 @@
     "@next/env": "16.2.10",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/tar-stream": "^3.1.4",
@@ -42,19 +42,10 @@
   },
   "name": "shadscan-site",
   "engines": {
-    "node": ">=20.9.0"
+    "node": "24.x",
+    "pnpm": "11.15.1"
   },
-  "packageManager": "pnpm@10.16.0",
-  "pnpm": {
-    "overrides": {
-      "brace-expansion": "5.0.7",
-      "js-yaml": "4.3.0",
-      "next>postcss": "8.5.15"
-    },
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  },
+  "packageManager": "pnpm@11.15.1",
   "scripts": {
     "predev": "pnpm cli:build",
     "dev": "next dev",

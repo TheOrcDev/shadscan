@@ -75,7 +75,11 @@ const main = async () => {
   assert.equal(manifest.bugs?.email, SUPPORT_EMAIL);
   assert.equal(manifest.bugs?.url, undefined);
   assert.equal(manifest.repository?.url, REPOSITORY_URL);
-  assert.ok(manifest.engines?.node, "Declare the supported Node.js range.");
+  assert.equal(
+    manifest.engines?.node,
+    ">=18",
+    "The package must preserve its tested Node.js 18 compatibility floor."
+  );
 
   for (const scriptName of FORBIDDEN_LIFECYCLE_SCRIPTS) {
     assert.equal(

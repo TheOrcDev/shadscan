@@ -91,6 +91,10 @@ rule ID, confidence level, score behavior, description, and supported adapter.
 
 ## Local Development
 
+Repository development and deployment use Node.js 24 and pnpm 11.15.1. The
+published CLI keeps a separate Node.js 18 compatibility floor and is exercised
+at that minimum in the packed-package matrix.
+
 ```bash
 pnpm install
 pnpm cli:test

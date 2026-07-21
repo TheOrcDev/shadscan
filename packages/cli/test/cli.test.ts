@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import packageJson from "../package.json";
 import { createProgram, scoreFailsThreshold } from "../src/cli";
@@ -7,9 +8,11 @@ import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
 import { createRuleFixture } from "./rule-fixture";
 
+const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+
 const captureOutput = async (
   args: string[],
-  cwd = path.resolve(import.meta.dirname, "../../..")
+  cwd = path.resolve(testDirectory, "../../..")
 ): Promise<string> => {
   const previousCwd = process.cwd();
   let output = "";
