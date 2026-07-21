@@ -8,7 +8,7 @@ import { HostedScanError } from "./errors";
 
 const HOSTED_SCAN_WORKER_RELATIVE_PATH =
   "lib/shadscan-api/hosted-scan-worker.mjs";
-const SHADSCAN_CLI_RUNTIME_RELATIVE_PATH = "packages/cli/dist/index.js";
+const SHADSCAN_CLI_RUNTIME_RELATIVE_PATH = ".shadscan-runtime/index.js";
 const HOSTED_SCAN_WORKER_RESOURCE_LIMITS = {
   codeRangeSizeMb: 32,
   maxOldGenerationSizeMb: 192,

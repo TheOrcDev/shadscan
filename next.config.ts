@@ -43,18 +43,9 @@ const SCANNER_TRACE_EXCLUDES = [
   "./vitest.config.ts",
 ] as const;
 const SCANNER_TRACE_INCLUDES = [
+  "./.shadscan-runtime/index.js",
   "./lib/shadscan-api/hosted-scan-worker.mjs",
-  "./node_modules/.pnpm/fdir@*/node_modules/fdir/**/*",
-  "./node_modules/.pnpm/fdir@*/node_modules/picomatch",
-  "./node_modules/.pnpm/picomatch@*/node_modules/picomatch/**/*",
-  "./node_modules/.pnpm/tinyglobby@*/node_modules/fdir",
-  "./node_modules/.pnpm/tinyglobby@*/node_modules/picomatch",
-  "./node_modules/.pnpm/tinyglobby@*/node_modules/tinyglobby/**/*",
-  "./packages/cli/node_modules/jsonc-parser/**/*",
-  "./packages/cli/node_modules/tinyglobby",
-  "./packages/cli/node_modules/tinyglobby/**/*",
-  "./packages/cli/node_modules/typescript/**/*",
-  "./packages/cli/node_modules/zod/**/*",
+  "./packages/cli/LICENSE",
 ] as const;
 
 const nextConfig: NextConfig = {
@@ -65,7 +56,6 @@ const nextConfig: NextConfig = {
     "/v1/scans": [...SCANNER_TRACE_EXCLUDES],
   },
   outputFileTracingIncludes: {
-    "/scan": [...SCANNER_TRACE_INCLUDES],
     "/v1/scans": [...SCANNER_TRACE_INCLUDES],
   },
   serverExternalPackages: ["@shadscan/cli"],

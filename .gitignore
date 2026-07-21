@@ -21,6 +21,7 @@
 
 # production
 /build
+/.shadscan-runtime/
 /packages/*/dist
 
 # misc

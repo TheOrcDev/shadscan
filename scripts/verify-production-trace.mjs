@@ -20,21 +20,26 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 
-const TRACE_PATHS = [
-  ".next/server/app/scan/page.js.nft.json",
-  ".next/server/app/v1/scans/route.js.nft.json",
-];
-const REQUIRED_RUNTIME_FILES = new Set([
+const HOSTED_SCANNER_RUNTIME_FILES = new Set([
+  ".shadscan-runtime/index.js",
   "lib/shadscan-api/hosted-scan-worker.mjs",
   "packages/cli/LICENSE",
   "packages/cli/dist/index.js",
 ]);
-const ALLOWED_PROJECT_FILES = new Set([
-  "package.json",
-  ...REQUIRED_RUNTIME_FILES,
-]);
+const TRACE_TARGETS = [
+  {
+    requiredRuntimeFiles: HOSTED_SCANNER_RUNTIME_FILES,
+    tracePath: ".next/server/app/scan/page.js.nft.json",
+  },
+  {
+    requiredRuntimeFiles: HOSTED_SCANNER_RUNTIME_FILES,
+    tracePath: ".next/server/app/v1/scans/route.js.nft.json",
+  },
+];
 const NEXT_DIST_MARKER = "/node_modules/next/dist/";
 const RUNTIME_REQUIRE_PATTERN = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
+const SCANNER_DEPENDENCY_SYMLINK_PATTERN =
+  /(?:\/packages\/cli\/node_modules\/|\/node_modules\/\.pnpm\/(?:fdir|tinyglobby)@[^/]+\/node_modules\/(?:fdir|picomatch|tinyglobby)$)/;
 const projectRoot = process.cwd();
 const sharedNextPackagePath = path.join(projectRoot, ".next/package.json");
 const sharedServerChunksPath = path.join(projectRoot, ".next/server/chunks");
@@ -46,7 +51,7 @@ const HOSTED_SCAN_WORKER_PATH = path.join(
 );
 const SHADSCAN_CLI_RUNTIME_PATH = path.join(
   projectRoot,
-  "packages/cli/dist/index.js"
+  ".shadscan-runtime/index.js"
 );
 
 const toAbsoluteTracePath = (tracePath, tracedFile) =>
@@ -124,6 +129,24 @@ const findMissingNextRuntimeFiles = async (tracedPaths) => {
       const relativePath = filePath.split(NEXT_DIST_MARKER)[1];
       return `next/dist/${relativePath}`;
     })
+    .sort();
+};
+
+const findScannerDependencySymlinks = async (tracedPaths) => {
+  const candidates = tracedPaths.filter((filePath) =>
+    SCANNER_DEPENDENCY_SYMLINK_PATTERN.test(toComparablePath(filePath))
+  );
+  const entries = await Promise.all(
+    candidates.map(async (filePath) => ({
+      filePath,
+      stats: await lstat(filePath),
+    }))
+  );
+
+  return entries
+    .filter(({ stats }) => stats.isSymbolicLink())
+    .map(({ filePath }) => path.relative(projectRoot, filePath))
+    .map(toComparablePath)
     .sort();
 };
 
@@ -303,7 +326,7 @@ const toProjectPath = (tracePath, tracedFile) => {
   return relativePath.split(path.sep).join("/");
 };
 
-for (const tracePath of TRACE_PATHS) {
+for (const { requiredRuntimeFiles, tracePath } of TRACE_TARGETS) {
   const trace = JSON.parse(await readFile(tracePath, "utf8"));
   const entryPath = path.resolve(tracePath.replace(/\.nft\.json$/, ""));
   const tracedPaths = trace.files.map((tracedFile) =>
@@ -319,18 +342,25 @@ for (const tracePath of TRACE_PATHS) {
       .map((tracedFile) => toProjectPath(tracePath, tracedFile))
       .filter(Boolean)
   );
-  const missingRuntimeFiles = [...REQUIRED_RUNTIME_FILES].filter(
+  const missingRuntimeFiles = [...requiredRuntimeFiles].filter(
     (filePath) => !projectFiles.has(filePath)
   );
+  const allowedProjectFiles = new Set([
+    "package.json",
+    ...requiredRuntimeFiles,
+  ]);
   const unrelatedFiles = [...projectFiles].filter(
-    (filePath) => !ALLOWED_PROJECT_FILES.has(filePath)
+    (filePath) => !allowedProjectFiles.has(filePath)
   );
   const missingNextRuntimeFiles =
     await findMissingNextRuntimeFiles(tracedPaths);
+  const scannerDependencySymlinks =
+    await findScannerDependencySymlinks(tracedPaths);
 
   if (
     missingRuntimeFiles.length > 0 ||
     missingNextRuntimeFiles.length > 0 ||
+    scannerDependencySymlinks.length > 0 ||
     unrelatedFiles.length > 0
   ) {
     const details = [
@@ -339,6 +369,9 @@ for (const tracePath of TRACE_PATHS) {
         : null,
       missingNextRuntimeFiles.length > 0
         ? `missing Next runtime: ${missingNextRuntimeFiles.join(", ")}`
+        : null,
+      scannerDependencySymlinks.length > 0
+        ? `scanner dependency symlinks: ${scannerDependencySymlinks.join(", ")}`
         : null,
       unrelatedFiles.length > 0
         ? `unrelated source: ${unrelatedFiles.join(", ")}`
