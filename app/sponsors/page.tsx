@@ -22,9 +22,15 @@ function SponsorSection({ tier }: SponsorSectionProps) {
   return (
     <section aria-label={`${tier.name} sponsors`}>
       <div className="flex flex-col gap-3">
-        <h2 className="font-mono font-semibold text-muted-foreground text-xs uppercase">
-          {tier.name}
-        </h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-mono font-semibold text-muted-foreground text-xs uppercase">
+            {tier.name}
+          </h2>
+          <p className="font-mono font-semibold text-foreground text-xs">
+            ${tier.monthlyPriceUsd}
+            <span className="text-muted-foreground">/mo</span>
+          </p>
+        </div>
         <Separator />
       </div>
       <ul className={cn("grid gap-3 pt-4", tier.gridClassName)}>
@@ -65,9 +71,9 @@ export default function SponsorsPage() {
             Sponsor shadscan
           </h1>
           <p className="max-w-xl text-balance text-muted-foreground">
-            Keep deterministic open-source UI audits shipping. Every tier puts
-            your logo and name on this page, links to your site, and includes
-            you in major release notes.
+            Keep deterministic open-source UI audits shipping. Each tier is a
+            recurring monthly sponsorship that puts your logo and name on this
+            page, links to your site, and includes you in major release notes.
           </p>
         </header>
 

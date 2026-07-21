@@ -6,6 +6,7 @@ interface SponsorTier {
   checkoutHref: string;
   gridClassName: string;
   id: SponsorTierId;
+  monthlyPriceUsd: number;
   name: string;
   slotClassName: string;
   slotIds: readonly string[];
@@ -42,6 +43,7 @@ const getCheckoutHref = (id: SponsorTierId, name: string): string => {
 const createTier = ({
   gridClassName,
   id,
+  monthlyPriceUsd,
   name,
   slotClassName,
   slots,
@@ -51,6 +53,7 @@ const createTier = ({
   checkoutHref: getCheckoutHref(id, name),
   gridClassName,
   id,
+  monthlyPriceUsd,
   name,
   slotClassName,
   slotIds: Array.from({ length: slots }, (_, index) => `${id}-${index + 1}`),
@@ -60,6 +63,7 @@ const SPONSOR_TIERS = [
   createTier({
     gridClassName: "grid-cols-1 sm:grid-cols-2",
     id: "diamond",
+    monthlyPriceUsd: 500,
     name: "Diamond",
     slotClassName: "min-h-32",
     slots: 4,
@@ -67,6 +71,7 @@ const SPONSOR_TIERS = [
   createTier({
     gridClassName: "grid-cols-2 sm:grid-cols-3",
     id: "platinum",
+    monthlyPriceUsd: 250,
     name: "Platinum",
     slotClassName: "min-h-24",
     slots: 6,
@@ -74,6 +79,7 @@ const SPONSOR_TIERS = [
   createTier({
     gridClassName: "grid-cols-2 sm:grid-cols-4",
     id: "gold",
+    monthlyPriceUsd: 100,
     name: "Gold",
     slotClassName: "min-h-20",
     slots: 8,
@@ -81,6 +87,7 @@ const SPONSOR_TIERS = [
   createTier({
     gridClassName: "grid-cols-3 sm:grid-cols-6",
     id: "silver",
+    monthlyPriceUsd: 50,
     name: "Silver",
     slotClassName: "min-h-12",
     slots: 12,
