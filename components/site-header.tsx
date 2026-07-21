@@ -22,8 +22,8 @@ interface SiteHeaderProps {
   } | null;
 }
 
-const isActivePath = (pathname: string, href: string): boolean =>
-  pathname === href || pathname.startsWith(`${href}/`);
+const isActivePath = (pathname: string | null, href: string): boolean =>
+  pathname !== null && (pathname === href || pathname.startsWith(`${href}/`));
 
 function SiteHeader({ githubRepository }: SiteHeaderProps) {
   const pathname = usePathname();
