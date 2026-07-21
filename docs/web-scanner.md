@@ -18,7 +18,7 @@ Optional server-only variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `GITHUB_TOKEN` | Raises GitHub metadata limits. Public repositories remain the only web-supported source, and authorization is not forwarded to `codeload.github.com`. |
+| `GITHUB_TOKEN` | Raises GitHub API limits for repository checks, revision resolution, and the archive request. Public repositories remain the only web-supported source, and authorization is not forwarded to `codeload.github.com`. |
 | `SHADSCAN_PUBLIC_GITHUB_REPOSITORY` | Enables the public source link and star count after an unauthenticated GitHub lookup confirms the configured `owner/repository` is public. Leave unset while the source repository is private. |
 | `SHADSCAN_WEB_RATE_LIMIT_MODE=database` | Exercises the production web limiter outside `NODE_ENV=production`. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the authenticated `/v1/scans` limiter outside production. |

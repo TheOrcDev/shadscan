@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const SCANNER_TRACE_EXCLUDES = [
+  "./.git",
   "./.git/**/*",
   "./app/**/*",
   // Common directory names must not strip matching JavaScript from Next.
@@ -44,14 +45,9 @@ const SCANNER_TRACE_EXCLUDES = [
 ] as const;
 const SCANNER_TRACE_INCLUDES = [
   "./lib/shadscan-api/hosted-scan-worker.mjs",
-  "./node_modules/.pnpm/fdir@*/node_modules/fdir/**/*",
-  "./node_modules/.pnpm/fdir@*/node_modules/picomatch",
-  "./node_modules/.pnpm/picomatch@*/node_modules/picomatch/**/*",
-  "./node_modules/.pnpm/tinyglobby@*/node_modules/fdir",
-  "./node_modules/.pnpm/tinyglobby@*/node_modules/picomatch",
-  "./node_modules/.pnpm/tinyglobby@*/node_modules/tinyglobby/**/*",
+  "./packages/cli/node_modules/fdir/**/*",
   "./packages/cli/node_modules/jsonc-parser/**/*",
-  "./packages/cli/node_modules/tinyglobby",
+  "./packages/cli/node_modules/picomatch/**/*",
   "./packages/cli/node_modules/tinyglobby/**/*",
   "./packages/cli/node_modules/typescript/**/*",
   "./packages/cli/node_modules/zod/**/*",

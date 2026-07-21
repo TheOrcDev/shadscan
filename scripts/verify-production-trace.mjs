@@ -127,6 +127,43 @@ const findMissingNextRuntimeFiles = async (tracedPaths) => {
     .sort();
 };
 
+const findTracedWorkspaceSymlinkDescendants = async (tracedPaths) => {
+  const workspaceSymlinkPaths = [];
+
+  for (const tracedPath of tracedPaths) {
+    const relativePath = path.relative(projectRoot, tracedPath);
+    if (!relativePath.startsWith(`packages${path.sep}`)) {
+      continue;
+    }
+
+    const stats = await lstat(tracedPath);
+    if (stats.isSymbolicLink()) {
+      workspaceSymlinkPaths.push(tracedPath);
+    }
+  }
+
+  const symlinkDescendants = [];
+  for (const tracedPath of tracedPaths) {
+    const isInsideWorkspaceSymlink = workspaceSymlinkPaths.some(
+      (symlinkPath) => {
+        const relativePath = path.relative(symlinkPath, tracedPath);
+        return (
+          relativePath.length > 0 &&
+          !relativePath.startsWith("..") &&
+          !path.isAbsolute(relativePath)
+        );
+      }
+    );
+    if (isInsideWorkspaceSymlink) {
+      symlinkDescendants.push(
+        toComparablePath(path.relative(projectRoot, tracedPath))
+      );
+    }
+  }
+
+  return symlinkDescendants.sort();
+};
+
 const copyTracedRuntime = async (sandboxRoot, sourcePaths) => {
   const entries = await Promise.all(
     [...sourcePaths].map(async (sourcePath) => ({
@@ -327,10 +364,13 @@ for (const tracePath of TRACE_PATHS) {
   );
   const missingNextRuntimeFiles =
     await findMissingNextRuntimeFiles(tracedPaths);
+  const tracedWorkspaceSymlinkDescendants =
+    await findTracedWorkspaceSymlinkDescendants(tracedPaths);
 
   if (
     missingRuntimeFiles.length > 0 ||
     missingNextRuntimeFiles.length > 0 ||
+    tracedWorkspaceSymlinkDescendants.length > 0 ||
     unrelatedFiles.length > 0
   ) {
     const details = [
@@ -339,6 +379,9 @@ for (const tracePath of TRACE_PATHS) {
         : null,
       missingNextRuntimeFiles.length > 0
         ? `missing Next runtime: ${missingNextRuntimeFiles.join(", ")}`
+        : null,
+      tracedWorkspaceSymlinkDescendants.length > 0
+        ? `workspace symlink descendants: ${tracedWorkspaceSymlinkDescendants.join(", ")}`
         : null,
       unrelatedFiles.length > 0
         ? `unrelated source: ${unrelatedFiles.join(", ")}`

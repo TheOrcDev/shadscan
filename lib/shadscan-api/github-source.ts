@@ -309,7 +309,7 @@ const downloadGitHubArchive = async (
 ): Promise<Buffer> => {
   const initialResponse = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/tarball/${commitSha}`,
-    { headers: getGitHubHeaders(false), redirect: "manual" },
+    { headers: getGitHubHeaders(), redirect: "manual" },
     fetchImplementation,
     sourceSignal
   );

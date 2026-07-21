@@ -724,16 +724,24 @@ describe("POST /v1/scans", () => {
           expect(new Headers(init?.headers).get("authorization")).toBe(
             "Bearer server-side-github-token"
           );
+          expect(init?.redirect).toBe("error");
           return Response.json({ private: false });
         }
         if (url === "https://api.github.com/repos/acme/widget/commits/main") {
+          expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer server-side-github-token"
+          );
+          expect(init?.redirect).toBe("error");
           return Response.json({ sha: IMMUTABLE_COMMIT_SHA });
         }
         if (
           url ===
           `https://api.github.com/repos/acme/widget/tarball/${IMMUTABLE_COMMIT_SHA}`
         ) {
-          expect(new Headers(init?.headers).has("authorization")).toBe(false);
+          expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer server-side-github-token"
+          );
+          expect(init?.redirect).toBe("manual");
           return new Response(null, {
             headers: { location: archiveUrl },
             status: 302,
@@ -741,6 +749,7 @@ describe("POST /v1/scans", () => {
         }
         if (url === archiveUrl) {
           expect(new Headers(init?.headers).has("authorization")).toBe(false);
+          expect(init?.redirect).toBe("error");
           return new Response(new Blob([Uint8Array.from(archive)]));
         }
 
