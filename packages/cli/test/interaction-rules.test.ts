@@ -107,9 +107,12 @@ describe("interaction rules", () => {
           }
         `
       );
-      expect(
-        (await runRule(fixture.rootDir, commandMenuHotkeyPresentRule)).status
-      ).toBe("pass");
+      const passingResult = await runRule(
+        fixture.rootDir,
+        commandMenuHotkeyPresentRule
+      );
+      expect(passingResult.status).toBe("pass");
+      expect(passingResult.evidence?.[0]?.line).toBe(6);
 
       await fixture.write(
         "components/command-menu.tsx",

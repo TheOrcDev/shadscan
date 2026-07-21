@@ -272,10 +272,11 @@ describe("high confidence rules", () => {
       rules: highConfidenceRules,
     });
 
-    expect(
-      report.findings.find((finding) => finding.id === "theme-hotkey-present")
-        ?.status
-    ).toBe("pass");
+    const themeHotkeyFinding = report.findings.find(
+      (finding) => finding.id === "theme-hotkey-present"
+    );
+    expect(themeHotkeyFinding?.status).toBe("pass");
+    expect(themeHotkeyFinding?.evidence[0]?.line).toBe(15);
   });
 
   it("recognizes a theme hotkey that calls an extracted toggle helper", async () => {

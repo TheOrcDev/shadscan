@@ -1,4 +1,4 @@
-import { findOwnedSourceScopes } from "../ast";
+import { findOwnedSourceScopes, getSourceScopeMatchLine } from "../ast";
 import type { AuditRule } from "../audit";
 import { findFumadocsCommandRuntime } from "./fumadocs-command-runtime";
 import { fail, pass } from "./rule-result";
@@ -54,7 +54,7 @@ const commandMenuHotkeyPresentRule: AuditRule = {
         return pass(
           "Cmd/Ctrl+K command-menu shortcut found.",
           scope.file.filePath,
-          scope.line
+          getSourceScopeMatchLine(scope, K_KEY_PATTERN)
         );
       }
     }

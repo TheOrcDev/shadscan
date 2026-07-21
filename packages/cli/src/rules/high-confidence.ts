@@ -19,6 +19,7 @@ import {
 } from "typescript";
 import {
   findOwnedSourceScopes,
+  getSourceScopeMatchLine,
   type ParsedSourceFile,
   parseProjectSourceFiles,
   type SourceScope,
@@ -433,7 +434,7 @@ const themeHotkeyPresentRule: AuditRule = {
         return pass(
           "Dark-mode keyboard shortcut found and typing targets are guarded.",
           scope.file.filePath,
-          scope.line
+          getSourceScopeMatchLine(scope, D_KEY_PATTERN)
         );
       }
     }

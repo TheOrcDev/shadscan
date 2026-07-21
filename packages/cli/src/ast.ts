@@ -143,6 +143,10 @@ const getOwnedSourceScopes = (
     const end = ownerNode?.getEnd() ?? file.content.length;
     const key = `${start}:${end}`;
 
+    if (scopes.has(key)) {
+      continue;
+    }
+
     scopes.set(key, {
       content: file.content.slice(start, end),
       end,
@@ -153,6 +157,23 @@ const getOwnedSourceScopes = (
   }
 
   return [...scopes.values()];
+};
+
+const getSourceScopeMatchLine = (
+  scope: SourceScope,
+  pattern: RegExp
+): number => {
+  const matchIndex = getPatternIndexes(scope.content, pattern)[0];
+
+  if (matchIndex === undefined) {
+    return scope.line;
+  }
+
+  return (
+    scope.file.sourceFile.getLineAndCharacterOfPosition(
+      scope.start + matchIndex
+    ).line + 1
+  );
 };
 
 const findOwnedSourceScopes = async (
@@ -501,6 +522,7 @@ export {
   getJsxAttributeValue,
   getJsxTagName,
   getLineNumber,
+  getSourceScopeMatchLine,
   getTextAttributeState,
   hasAccessibleText,
   hasJsxAttribute,
