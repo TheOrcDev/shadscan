@@ -1,19 +1,19 @@
 import path from "node:path";
 import {
+  isArrayLiteralExpression,
+  isIdentifier,
   isPropertyAssignment,
   isShorthandPropertyAssignment,
+  isStringLiteralLike,
+  isVariableStatement,
 } from "typescript";
 import { walkNodes } from "../ast";
 import { compareCodeUnits } from "../deterministic-order";
 import { getNamedSlotBindings } from "./component-properties";
 import {
-  APP_LAYOUT_NAMES,
-  APP_PAGE_PATTERN,
-  APP_TEMPLATE_NAMES,
   GET_LAYOUT_PATTERN,
   NEXT_INTERCEPTION_SEGMENT_PATTERN,
   ROUTE_GROUP_SEGMENT_PATTERN,
-  SCRIPT_EXTENSION_PATTERN,
   TRAILING_SLASH_PATTERN,
 } from "./constants";
 import { addSurfacePlan } from "./surface-plan-budget";
@@ -29,11 +29,108 @@ import type {
 } from "./types";
 
 const NEXT_CONFIG_FILE_PATTERN = /^next\.config\.[cm]?[jt]s$/;
+const DEFAULT_PAGE_EXTENSIONS = ["tsx", "ts", "jsx", "js"] as const;
+
+interface PageExtensionConfig {
+  extensions: readonly string[];
+  partial: boolean;
+}
+
+const getStringArray = (
+  expression: import("typescript").Expression
+): string[] | null => {
+  if (!isArrayLiteralExpression(expression)) {
+    return null;
+  }
+  const values: string[] = [];
+  for (const element of expression.elements) {
+    if (!isStringLiteralLike(element)) {
+      return null;
+    }
+    values.push(element.text);
+  }
+  return values;
+};
 
 const getSortedRecords = (state: GraphBuildState): FileRecord[] =>
   [...state.fileRecords.values()].sort((left, right) =>
     compareCodeUnits(left.parsed.filePath, right.parsed.filePath)
   );
+
+const getPageExtensionConfig = (
+  state: GraphBuildState
+): PageExtensionConfig => {
+  const config = getSortedRecords(state).find((record) =>
+    NEXT_CONFIG_FILE_PATTERN.test(path.basename(record.parsed.filePath))
+  );
+  if (!config) {
+    return { extensions: DEFAULT_PAGE_EXTENSIONS, partial: false };
+  }
+
+  const arrays = new Map<string, readonly string[]>();
+  for (const statement of config.parsed.sourceFile.statements) {
+    if (!isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        isIdentifier(declaration.name) &&
+        declaration.initializer &&
+        isArrayLiteralExpression(declaration.initializer)
+      ) {
+        const values = getStringArray(declaration.initializer);
+        if (!values) {
+          continue;
+        }
+        arrays.set(declaration.name.text, values);
+      }
+    }
+  }
+
+  let found = false;
+  let extensions: readonly string[] | null = null;
+  walkNodes(config.parsed.sourceFile, (node) => {
+    if (!(isPropertyAssignment(node) || isShorthandPropertyAssignment(node))) {
+      return;
+    }
+    const propertyName = node.name.getText(config.parsed.sourceFile);
+    if (
+      !["pageExtensions", '"pageExtensions"', "'pageExtensions'"].includes(
+        propertyName
+      )
+    ) {
+      return;
+    }
+    found = true;
+    if (isShorthandPropertyAssignment(node)) {
+      extensions = arrays.get(node.name.text) ?? null;
+    } else if (isArrayLiteralExpression(node.initializer)) {
+      extensions = getStringArray(node.initializer);
+    } else if (isIdentifier(node.initializer)) {
+      extensions = arrays.get(node.initializer.text) ?? null;
+    }
+  });
+
+  return found && extensions
+    ? { extensions, partial: false }
+    : { extensions: DEFAULT_PAGE_EXTENSIONS, partial: found };
+};
+
+const getConventionName = (
+  filePath: string,
+  convention: string,
+  extensions: readonly string[]
+): boolean =>
+  extensions.some(
+    (extension) => path.basename(filePath) === `${convention}.${extension}`
+  );
+
+const hasPrivateAppSegment = (appDir: string, filePath: string): boolean =>
+  path
+    .relative(appDir, filePath)
+    .split(path.sep)
+    .slice(0, -1)
+    .some((segment) => segment.startsWith("_"));
 
 const getAppRouteKey = (appDir: string, filePath: string): string => {
   const relativeDirectory = path.relative(appDir, path.dirname(filePath));
@@ -83,15 +180,32 @@ const getAncestorDirectories = (
 const getAncestorAppWrappers = (
   appDir: string,
   pagePath: string,
-  state: GraphBuildState
+  state: GraphBuildState,
+  wrappersByDirectory: ReadonlyMap<string, FileRecord[]>
 ): FileRecord[] =>
-  getAncestorDirectories(appDir, pagePath, state).flatMap((directory) =>
-    [...APP_LAYOUT_NAMES, ...APP_TEMPLATE_NAMES]
-      .map((fileName) =>
-        state.fileRecords.get(path.resolve(directory, fileName))
-      )
-      .filter((record): record is FileRecord => Boolean(record))
+  getAncestorDirectories(appDir, pagePath, state).flatMap(
+    (directory) => wrappersByDirectory.get(path.resolve(directory)) ?? []
   );
+
+const getAppWrappersByDirectory = (
+  records: FileRecord[],
+  extensions: readonly string[]
+): ReadonlyMap<string, FileRecord[]> => {
+  const wrappers = new Map<string, FileRecord[]>();
+  for (const record of records) {
+    const isWrapper =
+      getConventionName(record.parsed.filePath, "layout", extensions) ||
+      getConventionName(record.parsed.filePath, "template", extensions);
+    if (!isWrapper) {
+      continue;
+    }
+    const directory = path.dirname(record.parsed.filePath);
+    const directoryWrappers = wrappers.get(directory) ?? [];
+    directoryWrappers.push(record);
+    wrappers.set(directory, directoryWrappers);
+  }
+  return wrappers;
+};
 
 const hasParallelSlots = (
   appDir: string,
@@ -166,6 +280,62 @@ const wrapSeedWithAppWrappers = (
   return seed;
 };
 
+const addAppLoadingSurfacePlans = (
+  appDir: string,
+  extensions: readonly string[],
+  records: FileRecord[],
+  state: GraphBuildState,
+  plans: SurfacePlan[],
+  wrappersByDirectory: ReadonlyMap<string, FileRecord[]>
+): void => {
+  for (const loadingRecord of records) {
+    const isLoadingFile =
+      path
+        .resolve(loadingRecord.parsed.filePath)
+        .startsWith(`${path.resolve(appDir)}${path.sep}`) &&
+      getConventionName(loadingRecord.parsed.filePath, "loading", extensions);
+    if (
+      !isLoadingFile ||
+      hasPrivateAppSegment(appDir, loadingRecord.parsed.filePath)
+    ) {
+      continue;
+    }
+    const loadingNode = getRecordDefault(loadingRecord, state);
+    const boundaryReasons: string[] = [];
+    if (!loadingNode) {
+      boundaryReasons.push(
+        "The App Router loading fallback has no resolvable default component."
+      );
+    }
+    const routeKey = getAppRouteKey(appDir, loadingRecord.parsed.filePath);
+    const added = addSurfacePlan(state, plans, {
+      adapter: "next-app-router",
+      boundaryReasons,
+      dynamicComponent: null,
+      id: `next-app-loading:${routeKey}:${path.relative(appDir, loadingRecord.parsed.filePath)}`,
+      roots: loadingNode
+        ? [
+            wrapSeedWithAppWrappers(
+              loadingNode,
+              getAncestorAppWrappers(
+                appDir,
+                loadingRecord.parsed.filePath,
+                state,
+                wrappersByDirectory
+              ),
+              state,
+              boundaryReasons
+            ),
+          ]
+        : [],
+      routeKey,
+    });
+    if (!added) {
+      return;
+    }
+  }
+};
+
 const addAppSurfacePlans = (
   state: GraphBuildState,
   plans: SurfacePlan[]
@@ -175,13 +345,21 @@ const addAppSurfacePlans = (
     return;
   }
 
-  for (const pageRecord of getSortedRecords(state)) {
+  const extensionConfig = getPageExtensionConfig(state);
+  if (extensionConfig.partial) {
+    return;
+  }
+  const { extensions } = extensionConfig;
+  const records = getSortedRecords(state);
+  const wrappersByDirectory = getAppWrappersByDirectory(records, extensions);
+  for (const pageRecord of records) {
     if (
       !(
         path
           .resolve(pageRecord.parsed.filePath)
           .startsWith(`${path.resolve(appDir)}${path.sep}`) &&
-        APP_PAGE_PATTERN.test(path.basename(pageRecord.parsed.filePath))
+        getConventionName(pageRecord.parsed.filePath, "page", extensions) &&
+        !hasPrivateAppSegment(appDir, pageRecord.parsed.filePath)
       )
     ) {
       continue;
@@ -218,7 +396,12 @@ const addAppSurfacePlans = (
         ? [
             wrapSeedWithAppWrappers(
               pageNode,
-              getAncestorAppWrappers(appDir, pageRecord.parsed.filePath, state),
+              getAncestorAppWrappers(
+                appDir,
+                pageRecord.parsed.filePath,
+                state,
+                wrappersByDirectory
+              ),
               state,
               boundaryReasons
             ),
@@ -231,25 +414,47 @@ const addAppSurfacePlans = (
       return;
     }
   }
+
+  addAppLoadingSurfacePlans(
+    appDir,
+    extensions,
+    records,
+    state,
+    plans,
+    wrappersByDirectory
+  );
 };
 
-const isPagesRouteFile = (pagesDir: string, filePath: string): boolean => {
+const isPagesRouteFile = (
+  pagesDir: string,
+  filePath: string,
+  extensions: readonly string[]
+): boolean => {
   const relative = path.relative(pagesDir, filePath);
   const segments = relative.split(path.sep);
   const basename = path.basename(relative);
 
   return (
     !relative.startsWith("..") &&
-    SCRIPT_EXTENSION_PATTERN.test(relative) &&
+    extensions.some((extension) => relative.endsWith(`.${extension}`)) &&
     segments[0] !== "api" &&
     !basename.startsWith("_")
   );
 };
 
-const getPagesRouteKey = (pagesDir: string, filePath: string): string => {
-  const relative = path
-    .relative(pagesDir, filePath)
-    .replace(SCRIPT_EXTENSION_PATTERN, "");
+const getPagesRouteKey = (
+  pagesDir: string,
+  filePath: string,
+  extensions: readonly string[]
+): string => {
+  const matchingExtension = [...extensions]
+    .sort((left, right) => right.length - left.length)
+    .find((extension) => filePath.endsWith(`.${extension}`));
+  const relative = matchingExtension
+    ? path
+        .relative(pagesDir, filePath)
+        .slice(0, -(matchingExtension.length + 1))
+    : path.relative(pagesDir, filePath);
   let route = relative;
 
   if (relative.endsWith(`${path.sep}index`)) {
@@ -274,9 +479,14 @@ const createPagesSurfacePlan = (
   pagesDir: string,
   pageRecord: FileRecord,
   app: PagesAppContext,
-  state: GraphBuildState
+  state: GraphBuildState,
+  extensions: readonly string[]
 ): SurfacePlan => {
-  const routeKey = getPagesRouteKey(pagesDir, pageRecord.parsed.filePath);
+  const routeKey = getPagesRouteKey(
+    pagesDir,
+    pageRecord.parsed.filePath,
+    extensions
+  );
   const boundaryReasons: string[] = [];
   const pageNode = getRecordDefault(pageRecord, state);
   const hasGetLayout = GET_LAYOUT_PATTERN.test(
@@ -329,11 +539,16 @@ const addPagesSurfacePlans = (
     return;
   }
 
-  const appRecord = APP_LAYOUT_NAMES.map((fileName) =>
-    fileName.replace("layout", "_app")
-  )
-    .map((fileName) => state.fileRecords.get(path.resolve(pagesDir, fileName)))
-    .find((record): record is FileRecord => Boolean(record));
+  const extensionConfig = getPageExtensionConfig(state);
+  if (extensionConfig.partial) {
+    return;
+  }
+  const { extensions } = extensionConfig;
+  const appRecord = getSortedRecords(state).find(
+    (record) =>
+      path.dirname(record.parsed.filePath) === path.resolve(pagesDir) &&
+      getConventionName(record.parsed.filePath, "_app", extensions)
+  );
   const appNode = appRecord ? getRecordDefault(appRecord, state) : null;
   const app: PagesAppContext = {
     appNode,
@@ -344,7 +559,7 @@ const addPagesSurfacePlans = (
   };
 
   for (const pageRecord of getSortedRecords(state)) {
-    if (!isPagesRouteFile(pagesDir, pageRecord.parsed.filePath)) {
+    if (!isPagesRouteFile(pagesDir, pageRecord.parsed.filePath, extensions)) {
       continue;
     }
 
@@ -352,7 +567,7 @@ const addPagesSurfacePlans = (
       !addSurfacePlan(
         state,
         plans,
-        createPagesSurfacePlan(pagesDir, pageRecord, app, state)
+        createPagesSurfacePlan(pagesDir, pageRecord, app, state, extensions)
       )
     ) {
       return;
@@ -361,33 +576,9 @@ const addPagesSurfacePlans = (
 };
 
 const addNextConfigBoundary = (state: GraphBuildState): void => {
-  const config = getSortedRecords(state).find((record) =>
-    NEXT_CONFIG_FILE_PATTERN.test(path.basename(record.parsed.filePath))
-  );
-  let declaresPageExtensions = false;
-
-  if (config) {
-    walkNodes(config.parsed.sourceFile, (node) => {
-      if (
-        !(isPropertyAssignment(node) || isShorthandPropertyAssignment(node))
-      ) {
-        return;
-      }
-
-      const propertyName = node.name.getText(config.parsed.sourceFile);
-      if (
-        ["pageExtensions", '"pageExtensions"', "'pageExtensions'"].includes(
-          propertyName
-        )
-      ) {
-        declaresPageExtensions = true;
-      }
-    });
-  }
-
-  if (declaresPageExtensions) {
+  if (getPageExtensionConfig(state).partial) {
     state.graphBoundaryReasons.add(
-      "Custom Next.js pageExtensions are not fully supported by render surface discovery."
+      "Dynamic Next.js pageExtensions could not be read statically for render surface discovery."
     );
   }
 };

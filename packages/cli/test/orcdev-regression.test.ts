@@ -44,6 +44,8 @@ describe("OrcDev regression contract", () => {
       await fixture.write(
         "app/layout.tsx",
         `
+          import { Navbar } from "@/components/navbar";
+          import { ThemeProvider } from "@/components/theme-provider";
           import { Toaster } from "@/components/ui/toaster";
 
           export const metadata = {
@@ -52,7 +54,27 @@ describe("OrcDev regression contract", () => {
           };
 
           export default function Layout({ children }) {
-            return <html lang="en"><body>{children}<Toaster /></body></html>;
+            return (
+              <html lang="en">
+                <body>
+                  <ThemeProvider>
+                    <Navbar />
+                    {children}
+                    <Toaster />
+                  </ThemeProvider>
+                </body>
+              </html>
+            );
+          }
+        `
+      );
+      await fixture.write(
+        "components/theme-provider.tsx",
+        `
+          import { ThemeProvider as NextThemesProvider } from "next-themes";
+
+          export function ThemeProvider({ children }) {
+            return <NextThemesProvider attribute="class">{children}</NextThemesProvider>;
           }
         `
       );
@@ -101,11 +123,31 @@ describe("OrcDev regression contract", () => {
       await fixture.write(
         "components/navbar.tsx",
         `
+          import { Button } from "@/components/ui/button";
+          import {
+            NavigationMenu,
+            NavigationMenuItem,
+            NavigationMenuList,
+          } from "@/components/ui/navigation-menu";
+
+          const ITEMS = [
+            { href: "/sponsor-me", label: "Sponsor Me" },
+            { href: "/my-sponsors", label: "Sponsors" },
+          ];
+
           export function Navbar() {
             const [isMenuOpen, setIsMenuOpen] = useState(false);
             return (
               <>
-                <NavigationMenu className="max-lg:hidden" />
+                <NavigationMenu className="max-lg:hidden">
+                  <NavigationMenuList>
+                    {ITEMS.map((link) => (
+                      <NavigationMenuItem key={link.label}>
+                        <a href={link.href}>{link.label}</a>
+                      </NavigationMenuItem>
+                    ))}
+                  </NavigationMenuList>
+                </NavigationMenu>
                 <Button
                   className="lg:hidden"
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -113,9 +155,73 @@ describe("OrcDev regression contract", () => {
                   <span className="sr-only">Open main menu</span>
                 </Button>
                 <div className={cn("lg:hidden", isMenuOpen ? "visible" : "invisible")}>
-                  <nav><a href="/one">One</a></nav>
+                  <nav>
+                    {ITEMS.map((link) => (
+                      <a href={link.href} key={link.label}>{link.label}</a>
+                    ))}
+                  </nav>
                 </div>
               </>
+            );
+          }
+        `
+      );
+      await fixture.write(
+        "components/ui/button.tsx",
+        `
+          export function Button({ children, ...props }) {
+            return <button {...props}>{children}</button>;
+          }
+        `
+      );
+      await fixture.write(
+        "components/ui/navigation-menu.tsx",
+        `
+          import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
+
+          export function NavigationMenu({
+            children,
+            className,
+            viewport = true,
+            ...props
+          }) {
+            return (
+              <NavigationMenuPrimitive.Root
+                className={cn("relative flex max-w-max flex-1 items-center", className)}
+                {...props}
+              >
+                {children}
+                {viewport ? <NavigationMenuViewport /> : null}
+              </NavigationMenuPrimitive.Root>
+            );
+          }
+
+          export function NavigationMenuList({ className, ...props }) {
+            return (
+              <NavigationMenuPrimitive.List
+                className={cn("flex list-none", className)}
+                {...props}
+              />
+            );
+          }
+
+          export function NavigationMenuItem({ className, ...props }) {
+            return (
+              <NavigationMenuPrimitive.Item
+                className={cn("relative", className)}
+                {...props}
+              />
+            );
+          }
+
+          function NavigationMenuViewport({ className, ...props }) {
+            return (
+              <div className="absolute top-full">
+                <NavigationMenuPrimitive.Viewport
+                  className={cn("relative", className)}
+                  {...props}
+                />
+              </div>
             );
           }
         `
@@ -166,7 +272,11 @@ describe("OrcDev regression contract", () => {
         "toast-provider-mounted",
         "toast-provider-present",
       ]) {
-        expect(findings.get(id)?.status, id).toBe("pass");
+        const finding = findings.get(id);
+        expect(
+          finding?.status,
+          `${id}: ${finding?.evidence.map((item) => item.message).join(" | ")}`
+        ).toBe("pass");
       }
 
       const loadingFinding = findings.get("route-loading-boundary-present");

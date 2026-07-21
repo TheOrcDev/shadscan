@@ -3,6 +3,7 @@ import {
   getResponsiveVisibilityFromClassNames,
   type ResponsiveVisibility,
 } from "../rules/responsive-visibility";
+import { getPropBindings } from "./component-properties";
 import { isPotentialNavigationTag } from "./navigation-syntax";
 import {
   componentMayRenderNavigation,
@@ -10,12 +11,14 @@ import {
   templateMayRenderNavigation,
 } from "./template-extraction";
 import type {
+  ComponentNodeRecord,
   ComponentRenderGraphLimits,
   ComponentRenderSurface,
   ComponentSeed,
   ExpansionState,
   GraphBuildState,
   GuardAppendResult,
+  ImportBinding,
   ProjectionContent,
   RenderElementTemplate,
   RenderedJsxInstance,
@@ -98,16 +101,29 @@ const markSurfaceBoundary = (
 
 const getCallsiteVisibility = (
   item: RenderElementTemplate,
+  state: ExpansionState,
   buildState: GraphBuildState
 ): { reason: string | null; visibility: ResponsiveVisibility } => {
-  const visible = getResponsiveVisibilityFromClassNames([]);
-
   if (item.edge.resolution === "intrinsic") {
-    return { reason: null, visibility: item.localVisibility };
+    const localVisibility = intersectVisibilities(
+      state.visibility,
+      item.localVisibility
+    );
+
+    return {
+      reason: null,
+      visibility:
+        item.usesForwardedClassName && state.forwardedClassNameVisibility
+          ? intersectVisibilities(
+              localVisibility,
+              state.forwardedClassNameVisibility
+            )
+          : localVisibility,
+    };
   }
 
   if (!item.hasMeaningfulCallsiteVisibility) {
-    return { reason: null, visibility: visible };
+    return { reason: null, visibility: state.visibility };
   }
 
   const target = item.edge.target
@@ -115,11 +131,14 @@ const getCallsiteVisibility = (
     : null;
 
   if (target?.classNameForwarding === "forwarded") {
-    return { reason: null, visibility: item.localVisibility };
+    return {
+      reason: null,
+      visibility: intersectVisibilities(state.visibility, item.localVisibility),
+    };
   }
 
   if (target?.classNameForwarding === "ignored") {
-    return { reason: null, visibility: visible };
+    return { reason: null, visibility: state.visibility };
   }
 
   const navigationRelevant =
@@ -134,8 +153,106 @@ const getCallsiteVisibility = (
     reason: navigationRelevant
       ? `Component ${item.edge.tagName} has responsive classes but className forwarding could not be proven.`
       : null,
-    visibility: visible,
+    visibility: state.visibility,
   };
+};
+
+const getForwardedClassNameVisibility = (
+  item: RenderElementTemplate,
+  state: ExpansionState
+): ResponsiveVisibility | null => {
+  if (item.edge.resolution === "intrinsic") {
+    return null;
+  }
+
+  let visibility = item.hasMeaningfulCallsiteVisibility
+    ? item.localVisibility
+    : null;
+
+  if (item.usesForwardedClassName && state.forwardedClassNameVisibility) {
+    visibility = visibility
+      ? intersectVisibilities(visibility, state.forwardedClassNameVisibility)
+      : state.forwardedClassNameVisibility;
+  }
+
+  return visibility;
+};
+
+const guardReferencesProp = (
+  guard: RenderGuard,
+  target: ComponentNodeRecord,
+  propName: string
+): boolean => {
+  const referencedNames = guard.referencedNames ?? [];
+  const bindings = getPropBindings(target.declaration, propName);
+
+  if ([...bindings.valueNames].some((name) => referencedNames.includes(name))) {
+    return true;
+  }
+
+  return Boolean(
+    bindings.objectName &&
+      referencedNames.includes(bindings.objectName) &&
+      referencedNames.includes(propName)
+  );
+};
+
+const templateHasLiteralPropGuard = (
+  items: RenderTemplateItem[],
+  target: ComponentNodeRecord,
+  propNames: string[],
+  buildState: GraphBuildState
+): boolean =>
+  items.some((templateItem) => {
+    const itemMayRenderNavigation =
+      templateMayRenderNavigation(templateItem) ||
+      Boolean(
+        templateItem.kind === "element" &&
+          templateItem.edge.target &&
+          componentMayRenderNavigation(templateItem.edge.target, buildState)
+      );
+    const guardMatches = templateItem.guards.some((guard) =>
+      propNames.some((propName) => guardReferencesProp(guard, target, propName))
+    );
+
+    return (
+      (itemMayRenderNavigation && guardMatches) ||
+      (templateItem.kind === "element" &&
+        templateHasLiteralPropGuard(
+          templateItem.children,
+          target,
+          propNames,
+          buildState
+        ))
+    );
+  });
+
+const getLiteralPropUncertainty = (
+  item: RenderElementTemplate,
+  buildState: GraphBuildState
+): string | null => {
+  if (!(item.literalControlPropNames.length > 0 && item.edge.target)) {
+    return null;
+  }
+
+  const target = buildState.nodeRecords.get(item.edge.target);
+  if (
+    !(
+      target &&
+      templateHasLiteralPropGuard(
+        target.template,
+        target,
+        item.literalControlPropNames,
+        buildState
+      )
+    )
+  ) {
+    return null;
+  }
+
+  return componentMayRenderNavigation(target.id, buildState)
+    ? `Literal props select conditional branches in ${item.edge.tagName}, but prop values were not propagated.`
+    : null;
 };
 
 const emitInstance = (
@@ -163,10 +280,13 @@ const emitInstance = (
 
   const guardResult = appendExpansionGuards(state, item.guards, limits);
   const guardLimitReason = `Render guard limit (${limits.maxGuardAtomsPerPath}) was reached.`;
-  const callsiteVisibility = getCallsiteVisibility(item, buildState);
-  const itemReasons = callsiteVisibility.reason
-    ? [...item.uncertaintyReasons, callsiteVisibility.reason]
-    : item.uncertaintyReasons;
+  const callsiteVisibility = getCallsiteVisibility(item, state, buildState);
+  const literalPropUncertainty = getLiteralPropUncertainty(item, buildState);
+  const itemReasons = [
+    ...item.uncertaintyReasons,
+    ...(callsiteVisibility.reason ? [callsiteVisibility.reason] : []),
+    ...(literalPropUncertainty ? [literalPropUncertainty] : []),
+  ];
   const instance: RenderedJsxInstance = {
     componentId: item.edge.from,
     edgeId: item.edge.id,
@@ -186,10 +306,7 @@ const emitInstance = (
       state.uncertaintyReasons,
       guardResult.truncated ? [...itemReasons, guardLimitReason] : itemReasons
     ),
-    visibility: intersectVisibilities(
-      state.visibility,
-      callsiteVisibility.visibility
-    ),
+    visibility: callsiteVisibility.visibility,
   };
   state.surface.instances.push(instance);
   state.totalInstances.value += 1;
@@ -209,6 +326,77 @@ const expandProjectionContent = (
   expandComponentSeed(content.seed, state, buildState);
 };
 
+const getExternalComponentBinding = (
+  item: RenderElementTemplate,
+  buildState: GraphBuildState
+): {
+  binding: ImportBinding;
+  memberNames: string[];
+} | null => {
+  if (
+    item.edge.resolution === "intrinsic" ||
+    item.edge.resolution === "resolved"
+  ) {
+    return null;
+  }
+
+  const owner = buildState.nodeRecords.get(item.edge.from);
+  const record = owner ? buildState.fileRecords.get(owner.filePath) : undefined;
+  const [rootName, ...memberNames] = item.edge.tagName.split(".");
+  const binding = rootName ? record?.imports.get(rootName) : undefined;
+
+  return binding ? { binding, memberNames } : null;
+};
+
+const isNextThemesProvider = (
+  item: RenderElementTemplate,
+  buildState: GraphBuildState
+): boolean => {
+  const componentBinding = getExternalComponentBinding(item, buildState);
+  if (!componentBinding) {
+    return false;
+  }
+
+  const { binding, memberNames } = componentBinding;
+  if (binding.moduleName !== "next-themes") {
+    return false;
+  }
+
+  const [memberName] = memberNames;
+
+  return binding.kind === "namespace"
+    ? memberNames.length === 1 && memberName === "ThemeProvider"
+    : binding.importedName === "ThemeProvider" && memberNames.length === 0;
+};
+
+const isRadixNavigationMenuRoot = (
+  item: RenderElementTemplate,
+  buildState: GraphBuildState
+): boolean => {
+  const componentBinding = getExternalComponentBinding(item, buildState);
+  if (!componentBinding) {
+    return false;
+  }
+
+  const { binding, memberNames } = componentBinding;
+
+  if (binding.moduleName === "@radix-ui/react-navigation-menu") {
+    return binding.kind === "namespace"
+      ? memberNames.length === 1 && memberNames[0] === "Root"
+      : binding.importedName === "Root" && memberNames.length === 0;
+  }
+
+  if (binding.moduleName !== "radix-ui") {
+    return false;
+  }
+
+  return binding.kind === "namespace"
+    ? memberNames.join(".") === "NavigationMenu.Root"
+    : binding.importedName === "NavigationMenu" &&
+        memberNames.length === 1 &&
+        memberNames[0] === "Root";
+};
+
 const expandElementTarget = (
   item: RenderElementTemplate,
   instance: RenderedJsxInstance,
@@ -216,12 +404,16 @@ const expandElementTarget = (
   projectedChildren: ProjectionContent | null,
   buildState: GraphBuildState
 ): void => {
+  const isIntrinsic = item.edge.resolution === "intrinsic";
   const childState: ExpansionState = {
     ...state,
+    forwardedClassNameVisibility: isIntrinsic
+      ? null
+      : getForwardedClassNameVisibility(item, state),
     guards: instance.guards,
     path: [...state.path, item.edge.id],
     uncertaintyReasons: instance.uncertaintyReasons,
-    visibility: instance.visibility,
+    visibility: isIntrinsic ? instance.visibility : state.visibility,
   };
 
   if (
@@ -259,6 +451,19 @@ const expandElementTarget = (
 
   if (item.edge.resolution === "intrinsic") {
     expandTemplate(item.children, childState, projectedChildren, buildState);
+    return;
+  }
+
+  if (
+    isNextThemesProvider(item, buildState) ||
+    isRadixNavigationMenuRoot(item, buildState)
+  ) {
+    expandTemplate(
+      item.children,
+      { ...childState, forwardedClassNameVisibility: null },
+      projectedChildren,
+      buildState
+    );
     return;
   }
 
@@ -314,6 +519,7 @@ const expandProjectionTemplate = (
   const guardLimitReason = `Render guard limit (${buildState.limits.maxGuardAtomsPerPath}) was reached.`;
   const projectionState: ExpansionState = {
     ...state,
+    forwardedClassNameVisibility: null,
     guards: guardResult.guards,
     path: [...state.path, item.id],
     uncertaintyReasons: appendUniqueReasons(
@@ -484,6 +690,7 @@ const expandSurfacePlan = (
       {
         activeComponents: [],
         dynamicComponent: plan.dynamicComponent,
+        forwardedClassNameVisibility: null,
         graphBoundaryReasons: buildState.graphBoundaryReasons,
         guards: [],
         halted: false,

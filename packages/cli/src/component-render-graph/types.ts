@@ -30,6 +30,7 @@ interface ComponentRenderGraphLimits {
 interface RenderGuard {
   branch: "falsy" | "truthy";
   id: string;
+  referencedNames?: string[];
 }
 
 interface ComponentGraphNode {
@@ -154,6 +155,7 @@ interface RenderElementTemplate {
   guards: RenderGuard[];
   hasMeaningfulCallsiteVisibility: boolean;
   kind: "element";
+  literalControlPropNames: string[];
   localVisibility: ResponsiveVisibility;
   node: JsxOpeningLikeElement;
   relevantBoundaryReason: string | null;
@@ -218,6 +220,7 @@ interface PagesAppContext {
 interface ExpansionState {
   activeComponents: ComponentId[];
   dynamicComponent: ComponentSeed | null;
+  forwardedClassNameVisibility: ResponsiveVisibility | null;
   graphBoundaryReasons: Set<string>;
   guards: RenderGuard[];
   halted: boolean;

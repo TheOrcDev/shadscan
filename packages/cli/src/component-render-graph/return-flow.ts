@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   type Block,
   type Expression,
@@ -7,7 +8,11 @@ import {
   isForInStatement,
   isForOfStatement,
   isForStatement,
+  isIdentifier,
   isIfStatement,
+  isParenthesizedExpression,
+  isPrefixUnaryExpression,
+  isPropertyAccessExpression,
   isReturnStatement,
   isSwitchStatement,
   isThrowStatement,
@@ -15,11 +20,14 @@ import {
   isWhileStatement,
   type Node,
   type Statement,
+  SyntaxKind,
 } from "typescript";
-import { getGuard } from "./source-index";
+import { walkNodes } from "../ast";
+import { compareCodeUnits } from "../deterministic-order";
 import type {
   ComponentNodeRecord,
   GraphBuildState,
+  RenderGuard,
   RenderOpaqueTemplate,
   RenderTemplateItem,
   TemplateContext,
@@ -43,22 +51,94 @@ interface FlowResult {
   items: RenderTemplateItem[];
 }
 
+const invertBranch = (branch: RenderGuard["branch"]): RenderGuard["branch"] =>
+  branch === "truthy" ? "falsy" : "truthy";
+
+const getSimpleGuardExpression = (
+  condition: Expression
+): { expression: Expression; inverted: boolean } => {
+  let expression = condition;
+  let inverted = false;
+
+  while (isParenthesizedExpression(expression)) {
+    expression = expression.expression;
+  }
+
+  while (
+    isPrefixUnaryExpression(expression) &&
+    expression.operator === SyntaxKind.ExclamationToken
+  ) {
+    inverted = !inverted;
+    expression = expression.operand;
+    while (isParenthesizedExpression(expression)) {
+      expression = expression.expression;
+    }
+  }
+
+  return { expression, inverted };
+};
+
+const isSimpleGuardExpression = (expression: Expression): boolean => {
+  if (isIdentifier(expression)) {
+    return true;
+  }
+
+  return (
+    isPropertyAccessExpression(expression) &&
+    isSimpleGuardExpression(expression.expression)
+  );
+};
+
+const getGuardReferencedNames = (condition: Expression): string[] => {
+  const names = new Set<string>();
+  walkNodes(condition, (candidate) => {
+    if (isIdentifier(candidate)) {
+      names.add(candidate.text);
+    }
+  });
+  return [...names].sort(compareCodeUnits);
+};
+
+const getRenderGuard = (
+  owner: ComponentNodeRecord,
+  condition: Expression,
+  branch: RenderGuard["branch"]
+): RenderGuard => {
+  const simple = getSimpleGuardExpression(condition);
+  const resolvedBranch = simple.inverted ? invertBranch(branch) : branch;
+  const id = isSimpleGuardExpression(simple.expression)
+    ? JSON.stringify([
+        owner.id,
+        "guard",
+        simple.expression.getText(owner.file.sourceFile),
+      ])
+    : JSON.stringify([
+        path.resolve(owner.file.filePath),
+        condition.getStart(owner.file.sourceFile),
+      ]);
+
+  return {
+    branch: resolvedBranch,
+    id,
+    referencedNames: getGuardReferencedNames(condition),
+  };
+};
+
 const appendGuard = (
   context: TemplateContext,
   owner: ComponentNodeRecord,
-  condition: Node,
+  condition: Expression,
   branch: "falsy" | "truthy"
 ): TemplateContext => ({
   ...context,
-  guards: [...context.guards, getGuard(owner.file, condition, branch)],
+  guards: [...context.guards, getRenderGuard(owner, condition, branch)],
 });
 
 const createUnsupportedFlow = (
   owner: ComponentNodeRecord,
   node: Node,
   context: TemplateContext,
-  state: GraphBuildState,
-  isNavigationRelevant: IsNavigationRelevant
+  relevant: boolean
 ): RenderOpaqueTemplate => ({
   guards: context.guards,
   id: JSON.stringify([
@@ -69,8 +149,17 @@ const createUnsupportedFlow = (
   kind: "opaque",
   reason:
     "Navigation in unsupported control flow could not be proven concurrent.",
-  relevant: isNavigationRelevant(owner, node, state),
+  relevant,
 });
+
+const isUnsupportedControlFlow = (statement: Statement): boolean =>
+  isSwitchStatement(statement) ||
+  isTryStatement(statement) ||
+  isDoStatement(statement) ||
+  isForInStatement(statement) ||
+  isForOfStatement(statement) ||
+  isForStatement(statement) ||
+  isWhileStatement(statement);
 
 const processBlock = (
   owner: ComponentNodeRecord,
@@ -214,24 +303,15 @@ const processStatement = (
     );
   }
 
-  if (
-    isSwitchStatement(statement) ||
-    isTryStatement(statement) ||
-    isDoStatement(statement) ||
-    isForInStatement(statement) ||
-    isForOfStatement(statement) ||
-    isForStatement(statement) ||
-    isWhileStatement(statement)
-  ) {
+  if (isUnsupportedControlFlow(statement)) {
     return {
-      continuations: [context],
+      continuations: [],
       items: [
         createUnsupportedFlow(
           owner,
           statement,
           context,
-          state,
-          isNavigationRelevant
+          isNavigationRelevant(owner, statement, state)
         ),
       ],
     };
@@ -251,8 +331,21 @@ function processStatements(
   let contexts = initialContexts;
   const items: RenderTemplateItem[] = [];
 
-  for (const statement of statements) {
+  for (const [statementIndex, statement] of statements.entries()) {
     if (contexts.length === 0 || state.edgeTraversalHalted) {
+      break;
+    }
+
+    if (isUnsupportedControlFlow(statement)) {
+      const affectedNodes = statements.slice(statementIndex);
+      const relevant = affectedNodes.some((candidate) =>
+        isNavigationRelevant(owner, candidate, state)
+      );
+
+      for (const context of contexts) {
+        items.push(createUnsupportedFlow(owner, statement, context, relevant));
+      }
+      contexts = [];
       break;
     }
 
@@ -302,4 +395,4 @@ const collectRenderedReturnItems = (
   ).items;
 };
 
-export { collectRenderedReturnItems };
+export { collectRenderedReturnItems, getRenderGuard };

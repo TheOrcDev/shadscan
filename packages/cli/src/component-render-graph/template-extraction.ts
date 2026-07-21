@@ -2,21 +2,42 @@ import {
   type BinaryExpression,
   type ConditionalExpression,
   type Expression,
+  isArrayLiteralExpression,
+  isAsExpression,
+  isAwaitExpression,
   isBinaryExpression,
+  isBlock,
   isCallExpression,
   isConditionalExpression,
+  isIdentifier,
+  isJsxAttribute,
   isJsxElement,
   isJsxExpression,
   isJsxFragment,
   isJsxSelfClosingElement,
+  isNonNullExpression,
+  isNoSubstitutionTemplateLiteral,
+  isNumericLiteral,
+  isOmittedExpression,
   isParenthesizedExpression,
   isPropertyAccessExpression,
+  isSatisfiesExpression,
+  isSpreadElement,
+  isStringLiteral,
+  isTypeAssertionExpression,
+  isVariableStatement,
   type JsxChild,
   type JsxOpeningLikeElement,
   type Node,
+  NodeFlags,
   SyntaxKind,
 } from "typescript";
-import { getJsxTagName, getLineNumber, walkNodes } from "../ast";
+import {
+  getJsxTagName,
+  getLineNumber,
+  isFunctionOwner,
+  walkNodes,
+} from "../ast";
 import { compareCodeUnits } from "../deterministic-order";
 import {
   getResponsiveVisibility,
@@ -25,15 +46,13 @@ import {
 import {
   bodyMayReferenceProp,
   declarationBindsComponentName,
+  declarationBindsValueName,
   expressionProjectsChildren,
-  jsxNodeForwardsClassName,
+  getJsxClassNameForwarding,
 } from "./component-properties";
-import {
-  isPotentialNavigationTag,
-  subtreeHasPotentialNavigation,
-} from "./navigation-syntax";
-import { collectRenderedReturnItems } from "./return-flow";
-import { getEdgeId, getGuard } from "./source-index";
+import { isPotentialNavigationTag } from "./navigation-syntax";
+import { collectRenderedReturnItems, getRenderGuard } from "./return-flow";
+import { getEdgeId } from "./source-index";
 import { resolveElementTarget } from "./symbol-resolution";
 import type {
   ComponentGraphEdge,
@@ -73,6 +92,184 @@ const isMapCall = (node: Node): boolean =>
   isPropertyAccessExpression(node.expression) &&
   node.expression.name.text === "map";
 
+interface ExpressionResolutionState {
+  aliasDeclarations: Set<number>;
+  depth: number;
+}
+
+const MAX_RENDERED_ALIAS_HOPS = 16;
+const MAX_NAVIGATION_RELEVANCE_HOPS = 32;
+const NAVIGATION_MEMBER_NAME_PATTERN =
+  /(?:Content|Indicator|Item|Link|List|Trigger|Viewport)$/;
+const POTENTIAL_REACT_NODE_MEMBER_PATTERN =
+  /^(?:children|component|content|element|fallback|footer|header|navigation|node|render.*|sidebar|slot|view)$/i;
+
+const createExpressionResolutionState = (): ExpressionResolutionState => ({
+  aliasDeclarations: new Set(),
+  depth: 0,
+});
+
+const getLocalConstInitializer = (
+  owner: ComponentNodeRecord,
+  localName: string,
+  before: number
+): { declarationStart: number; expression: Expression } | null => {
+  const body = owner.declaration.body;
+
+  if (!(body && isBlock(body))) {
+    return null;
+  }
+
+  let match: { declarationStart: number; expression: Expression } | null = null;
+
+  for (const statement of body.statements) {
+    if (statement.getStart(owner.file.sourceFile) >= before) {
+      break;
+    }
+
+    if (
+      !isVariableStatement(statement) ||
+      statement.declarationList.flags !== NodeFlags.Const
+    ) {
+      continue;
+    }
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        isIdentifier(declaration.name) &&
+        declaration.name.text === localName &&
+        declaration.initializer
+      ) {
+        match = {
+          declarationStart: declaration.getStart(owner.file.sourceFile),
+          expression: declaration.initializer,
+        };
+      }
+    }
+  }
+
+  return match;
+};
+
+const getRootIdentifier = (expression: Expression): string | null => {
+  let current = expression;
+
+  while (isPropertyAccessExpression(current)) {
+    current = current.expression;
+  }
+
+  return isIdentifier(current) ? current.text : null;
+};
+
+const boundValueMayRenderNavigation = (
+  owner: ComponentNodeRecord,
+  expression: Expression
+): boolean => {
+  const rootIdentifier = getRootIdentifier(expression);
+  if (
+    !(
+      rootIdentifier &&
+      declarationBindsValueName(owner.declaration, rootIdentifier)
+    )
+  ) {
+    return false;
+  }
+
+  if (isIdentifier(expression)) {
+    return POTENTIAL_REACT_NODE_MEMBER_PATTERN.test(expression.text);
+  }
+
+  return (
+    isPropertyAccessExpression(expression) &&
+    POTENTIAL_REACT_NODE_MEMBER_PATTERN.test(expression.name.text)
+  );
+};
+
+const isDefinitelyNonNavigationExpression = (expression: Expression): boolean =>
+  isStringLiteral(expression) ||
+  isNoSubstitutionTemplateLiteral(expression) ||
+  isNumericLiteral(expression) ||
+  [
+    SyntaxKind.FalseKeyword,
+    SyntaxKind.NullKeyword,
+    SyntaxKind.TrueKeyword,
+    SyntaxKind.UndefinedKeyword,
+  ].includes(expression.kind);
+
+const isNavigationNameFallback = (tagName: string): boolean => {
+  const segments = tagName.split(".");
+  const leafName = segments.at(-1) ?? tagName;
+
+  if (NAVIGATION_MEMBER_NAME_PATTERN.test(leafName)) {
+    return false;
+  }
+
+  return isPotentialNavigationTag(tagName);
+};
+
+const unsupportedExpressionMayRenderNavigation = (
+  owner: ComponentNodeRecord,
+  expression: Expression,
+  state: GraphBuildState
+): boolean => {
+  if (subtreeMayRenderNavigation(owner, expression, state)) {
+    return true;
+  }
+
+  if (boundValueMayRenderNavigation(owner, expression)) {
+    return true;
+  }
+
+  if (!isCallExpression(expression)) {
+    return false;
+  }
+
+  if (boundValueMayRenderNavigation(owner, expression.expression)) {
+    return true;
+  }
+
+  return expression.arguments.some(
+    (argument) =>
+      subtreeMayRenderNavigation(owner, argument, state) ||
+      boundValueMayRenderNavigation(owner, argument)
+  );
+};
+
+const getLiteralControlPropNames = (node: JsxOpeningLikeElement): string[] => {
+  const names = new Set<string>();
+
+  for (const property of node.attributes.properties) {
+    if (
+      !isJsxAttribute(property) ||
+      ["aria-label", "aria-labelledby", "class", "className", "key"].includes(
+        property.name.getText()
+      )
+    ) {
+      continue;
+    }
+
+    if (!property.initializer || isStringLiteral(property.initializer)) {
+      names.add(property.name.getText());
+      continue;
+    }
+
+    const isLiteral = Boolean(
+      isJsxExpression(property.initializer) &&
+        property.initializer.expression &&
+        (isStringLiteral(property.initializer.expression) ||
+          isNumericLiteral(property.initializer.expression) ||
+          [SyntaxKind.FalseKeyword, SyntaxKind.TrueKeyword].includes(
+            property.initializer.expression.kind
+          ))
+    );
+    if (isLiteral) {
+      names.add(property.name.getText());
+    }
+  }
+
+  return [...names].sort(compareCodeUnits);
+};
+
 const getOwnerFileRecord = (
   owner: ComponentNodeRecord,
   state: GraphBuildState
@@ -86,18 +283,95 @@ const getOwnerFileRecord = (
     potentialNavigation: false,
   };
 
-const subtreeMayRenderNavigation = (
+const isKnownRadixNavigationMenuRoot = (
   owner: ComponentNodeRecord,
-  node: Node,
+  tagName: string,
   state: GraphBuildState
 ): boolean => {
-  if (subtreeHasPotentialNavigation(node)) {
+  const [rootName, ...memberNames] = tagName.split(".");
+  const binding = rootName
+    ? getOwnerFileRecord(owner, state).imports.get(rootName)
+    : undefined;
+
+  if (!binding) {
+    return false;
+  }
+
+  if (binding.moduleName === "@radix-ui/react-navigation-menu") {
+    return binding.kind === "namespace"
+      ? memberNames.length === 1 && memberNames[0] === "Root"
+      : binding.importedName === "Root" && memberNames.length === 0;
+  }
+
+  return (
+    binding.moduleName === "radix-ui" &&
+    binding.kind === "binding" &&
+    binding.importedName === "NavigationMenu" &&
+    memberNames.length === 1 &&
+    memberNames[0] === "Root"
+  );
+};
+
+interface NavigationRelevanceState {
+  depth: number;
+  visitedComponents: Set<ComponentId>;
+}
+
+const componentDeclarationMayRenderNavigation = (
+  component: ComponentNodeRecord,
+  state: GraphBuildState,
+  relevanceState: NavigationRelevanceState
+): boolean => {
+  if (relevanceState.visitedComponents.has(component.id)) {
+    return false;
+  }
+
+  if (relevanceState.depth >= MAX_NAVIGATION_RELEVANCE_HOPS) {
     return true;
   }
 
+  return nodeMayRenderNavigation(component, component.declaration, state, {
+    depth: relevanceState.depth + 1,
+    visitedComponents: new Set([
+      ...relevanceState.visitedComponents,
+      component.id,
+    ]),
+  });
+};
+
+const isNestedMapCallback = (
+  functionOwner: Node,
+  ancestors: Node[]
+): boolean => {
+  const ownerIndex = ancestors.lastIndexOf(functionOwner);
+  const parent = ownerIndex > 0 ? ancestors[ownerIndex - 1] : undefined;
+  return Boolean(parent && isMapCall(parent));
+};
+
+const nodeMayRenderNavigation = (
+  owner: ComponentNodeRecord,
+  node: Node,
+  state: GraphBuildState,
+  relevanceState: NavigationRelevanceState
+): boolean => {
   let relevant = false;
-  walkNodes(node, (candidate) => {
+  const skipsNestedFunctionBodies = node === owner.declaration;
+
+  walkNodes(node, (candidate, ancestors) => {
     if (relevant) {
+      return;
+    }
+
+    if (
+      skipsNestedFunctionBodies &&
+      ancestors.some((ancestor) => {
+        if (ancestor === owner.declaration || !isFunctionOwner(ancestor)) {
+          return false;
+        }
+
+        return !isNestedMapCallback(ancestor, ancestors);
+      })
+    ) {
       return;
     }
 
@@ -116,18 +390,35 @@ const subtreeMayRenderNavigation = (
     const result = resolveElementTarget(
       getOwnerFileRecord(owner, state),
       tagName,
-      state
+      state,
+      owner
     );
+    if (result.target) {
+      relevant = componentDeclarationMayRenderNavigation(
+        result.target,
+        state,
+        relevanceState
+      );
+      return;
+    }
+
     relevant = Boolean(
-      isPotentialNavigationTag(tagName) ||
-        result.potentialNavigation ||
-        (result.target &&
-          state.fileRecords.get(result.target.filePath)?.potentialNavigation)
+      result.potentialNavigation || isNavigationNameFallback(tagName)
     );
   });
 
   return relevant;
 };
+
+const subtreeMayRenderNavigation = (
+  owner: ComponentNodeRecord,
+  node: Node,
+  state: GraphBuildState
+): boolean =>
+  nodeMayRenderNavigation(owner, node, state, {
+    depth: 0,
+    visitedComponents: new Set([owner.id]),
+  });
 
 const createOpaqueTemplate = (
   owner: ComponentNodeRecord,
@@ -164,12 +455,132 @@ const createEdgeLimitMarker = (
   return createOpaqueTemplate(owner, node, context, reason, true);
 };
 
-const collectRenderedExpression = (
+const collectLocalAlias = (
   owner: ComponentNodeRecord,
   expression: Expression,
   context: TemplateContext,
-  state: GraphBuildState
-): RenderTemplateItem[] => {
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
+): RenderTemplateItem[] | null => {
+  if (!isIdentifier(expression)) {
+    return null;
+  }
+
+  const localAlias = getLocalConstInitializer(
+    owner,
+    expression.text,
+    expression.getStart(owner.file.sourceFile)
+  );
+  if (!localAlias) {
+    return null;
+  }
+
+  const aliasLimitReached =
+    resolutionState.depth >= MAX_RENDERED_ALIAS_HOPS ||
+    resolutionState.aliasDeclarations.has(localAlias.declarationStart);
+
+  if (aliasLimitReached) {
+    return [
+      createOpaqueTemplate(
+        owner,
+        expression,
+        context,
+        "A rendered local JSX alias exceeded the bounded resolution limit.",
+        unsupportedExpressionMayRenderNavigation(
+          owner,
+          localAlias.expression,
+          state
+        )
+      ),
+    ];
+  }
+
+  return collectRenderedExpression(
+    owner,
+    localAlias.expression,
+    context,
+    state,
+    {
+      aliasDeclarations: new Set([
+        ...resolutionState.aliasDeclarations,
+        localAlias.declarationStart,
+      ]),
+      depth: resolutionState.depth + 1,
+    }
+  );
+};
+
+const collectArrayItems = (
+  owner: ComponentNodeRecord,
+  expression: Expression,
+  context: TemplateContext,
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
+): RenderTemplateItem[] | null => {
+  if (!isArrayLiteralExpression(expression)) {
+    return null;
+  }
+
+  const items: RenderTemplateItem[] = [];
+
+  for (const element of expression.elements) {
+    if (state.edgeTraversalHalted) {
+      break;
+    }
+
+    if (isOmittedExpression(element)) {
+      continue;
+    }
+
+    if (isSpreadElement(element)) {
+      const spreadItems = collectRenderedExpression(
+        owner,
+        element.expression,
+        context,
+        state,
+        resolutionState
+      );
+      items.push(
+        ...(spreadItems.length > 0
+          ? spreadItems
+          : [
+              createOpaqueTemplate(
+                owner,
+                element,
+                context,
+                "A spread ReactNode array could not be statically expanded.",
+                unsupportedExpressionMayRenderNavigation(
+                  owner,
+                  element.expression,
+                  state
+                )
+              ),
+            ])
+      );
+      continue;
+    }
+
+    items.push(
+      ...collectRenderedExpression(
+        owner,
+        element,
+        context,
+        state,
+        resolutionState
+      )
+    );
+  }
+
+  return items;
+};
+
+function collectRenderedExpression(
+  owner: ComponentNodeRecord,
+  expression: Expression,
+  context: TemplateContext,
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState = createExpressionResolutionState()
+): RenderTemplateItem[] {
   if (state.edgeTraversalHalted) {
     return [];
   }
@@ -181,7 +592,24 @@ const collectRenderedExpression = (
       owner,
       expression.expression,
       context,
-      state
+      state,
+      resolutionState
+    );
+  }
+
+  if (
+    isAsExpression(expression) ||
+    isAwaitExpression(expression) ||
+    isNonNullExpression(expression) ||
+    isSatisfiesExpression(expression) ||
+    isTypeAssertionExpression(expression)
+  ) {
+    return collectRenderedExpression(
+      owner,
+      expression.expression,
+      context,
+      state,
+      resolutionState
     );
   }
 
@@ -200,6 +628,28 @@ const collectRenderedExpression = (
     ];
   }
 
+  const aliasItems = collectLocalAlias(
+    owner,
+    expression,
+    context,
+    state,
+    resolutionState
+  );
+  if (aliasItems) {
+    return aliasItems;
+  }
+
+  const arrayItems = collectArrayItems(
+    owner,
+    expression,
+    context,
+    state,
+    resolutionState
+  );
+  if (arrayItems) {
+    return arrayItems;
+  }
+
   if (isJsxElement(expression)) {
     return [
       createElementTemplate(
@@ -207,25 +657,53 @@ const collectRenderedExpression = (
         expression.openingElement,
         expression.children,
         context,
-        state
+        state,
+        resolutionState
       ),
     ];
   }
 
   if (isJsxSelfClosingElement(expression)) {
-    return [createElementTemplate(owner, expression, [], context, state)];
+    return [
+      createElementTemplate(
+        owner,
+        expression,
+        [],
+        context,
+        state,
+        resolutionState
+      ),
+    ];
   }
 
   if (isJsxFragment(expression)) {
-    return collectRenderedChildren(owner, expression.children, context, state);
+    return collectRenderedChildren(
+      owner,
+      expression.children,
+      context,
+      state,
+      resolutionState
+    );
   }
 
   if (isConditionalExpression(expression)) {
-    return collectConditionalItems(owner, expression, context, state);
+    return collectConditionalItems(
+      owner,
+      expression,
+      context,
+      state,
+      resolutionState
+    );
   }
 
   if (isBinaryExpression(expression)) {
-    return collectBinaryItems(owner, expression, context, state);
+    return collectBinaryItems(
+      owner,
+      expression,
+      context,
+      state,
+      resolutionState
+    );
   }
 
   if (isMapCall(expression)) {
@@ -241,37 +719,44 @@ const collectRenderedExpression = (
   }
 
   if (
-    isCallExpression(expression) &&
-    subtreeMayRenderNavigation(owner, expression, state)
+    !isDefinitelyNonNavigationExpression(expression) &&
+    unsupportedExpressionMayRenderNavigation(owner, expression, state)
   ) {
     return [
       createOpaqueTemplate(
         owner,
         expression,
         context,
-        "Dynamic component composition could not be statically expanded.",
+        "A returned ReactNode expression could not be statically expanded.",
         true
       ),
     ];
   }
 
   return [];
-};
+}
 
 const collectRenderedChild = (
   owner: ComponentNodeRecord,
   child: JsxChild,
   context: TemplateContext,
-  state: GraphBuildState
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
 ): RenderTemplateItem[] => {
   if (isJsxExpression(child)) {
     return child.expression
-      ? collectRenderedExpression(owner, child.expression, context, state)
+      ? collectRenderedExpression(
+          owner,
+          child.expression,
+          context,
+          state,
+          resolutionState
+        )
       : [];
   }
 
   return isJsxElement(child) || isJsxSelfClosingElement(child)
-    ? collectRenderedExpression(owner, child, context, state)
+    ? collectRenderedExpression(owner, child, context, state, resolutionState)
     : [];
 };
 
@@ -279,7 +764,8 @@ const collectRenderedChildren = (
   owner: ComponentNodeRecord,
   children: readonly JsxChild[],
   context: TemplateContext,
-  state: GraphBuildState
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
 ): RenderTemplateItem[] => {
   const items: RenderTemplateItem[] = [];
 
@@ -287,7 +773,9 @@ const collectRenderedChildren = (
     if (state.edgeTraversalHalted) {
       break;
     }
-    items.push(...collectRenderedChild(owner, child, context, state));
+    items.push(
+      ...collectRenderedChild(owner, child, context, state, resolutionState)
+    );
   }
 
   return items;
@@ -298,7 +786,8 @@ const createElementTemplate = (
   node: JsxOpeningLikeElement,
   children: readonly JsxChild[],
   context: TemplateContext,
-  state: GraphBuildState
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
 ): RenderTemplateItem => {
   if (state.edges.length >= state.limits.maxEdges) {
     return createEdgeLimitMarker(owner, node, context, state);
@@ -308,7 +797,8 @@ const createElementTemplate = (
   const targetResult = resolveElementTarget(
     getOwnerFileRecord(owner, state),
     tagName,
-    state
+    state,
+    owner
   );
   const callsiteStart = node.getStart(owner.file.sourceFile);
   const edge: ComponentGraphEdge = {
@@ -324,12 +814,21 @@ const createElementTemplate = (
   };
   state.edges.push(edge);
 
-  const childItems = collectRenderedChildren(owner, children, context, state);
+  const childItems = collectRenderedChildren(
+    owner,
+    children,
+    context,
+    state,
+    resolutionState
+  );
   const hasNavigationRelevantProp = node.attributes.properties.some(
     (property) => subtreeMayRenderNavigation(owner, property, state)
   );
-  const targetFileHasNavigation = targetResult.target
-    ? state.fileRecords.get(targetResult.target.filePath)?.potentialNavigation
+  const targetMayRenderNavigation = targetResult.target
+    ? componentDeclarationMayRenderNavigation(targetResult.target, state, {
+        depth: 0,
+        visitedComponents: new Set([owner.id]),
+      })
     : targetResult.potentialNavigation;
   let relevantBoundaryReason = hasNavigationRelevantProp
     ? "Navigation JSX supplied through a component prop was not statically expanded."
@@ -338,18 +837,24 @@ const createElementTemplate = (
   if (
     !relevantBoundaryReason &&
     targetResult.boundaryReason &&
-    (isPotentialNavigationTag(tagName) ||
+    !isKnownRadixNavigationMenuRoot(owner, tagName, state) &&
+    ((!targetResult.target && isNavigationNameFallback(tagName)) ||
       declarationBindsComponentName(owner.declaration, tagName) ||
-      targetFileHasNavigation ||
+      targetMayRenderNavigation ||
       childItems.some(templateMayRenderNavigation))
   ) {
     relevantBoundaryReason = targetResult.boundaryReason;
   }
 
-  const rawVisibility = getResponsiveVisibility(node);
-  const usesForwardedClassName =
-    targetResult.resolution === "intrinsic" &&
-    jsxNodeForwardsClassName(node, owner.classNameBindings);
+  const classNameForwarding = getJsxClassNameForwarding(
+    node,
+    owner.classNameBindings
+  );
+  const rawVisibility = classNameForwarding.forwards
+    ? getResponsiveVisibilityFromClassNames(
+        classNameForwarding.staticClassNames
+      )
+    : getResponsiveVisibility(node);
 
   return {
     children: childItems,
@@ -358,13 +863,12 @@ const createElementTemplate = (
     guards: context.guards,
     hasMeaningfulCallsiteVisibility: hasMeaningfulVisibility(rawVisibility),
     kind: "element",
-    localVisibility: usesForwardedClassName
-      ? getResponsiveVisibilityFromClassNames([])
-      : rawVisibility,
+    literalControlPropNames: getLiteralControlPropNames(node),
+    localVisibility: rawVisibility,
     node,
     relevantBoundaryReason,
     uncertaintyReasons: context.uncertaintyReasons,
-    usesForwardedClassName,
+    usesForwardedClassName: classNameForwarding.forwards,
   };
 };
 
@@ -372,19 +876,22 @@ const collectConditionalItems = (
   owner: ComponentNodeRecord,
   node: ConditionalExpression,
   context: TemplateContext,
-  state: GraphBuildState
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
 ): RenderTemplateItem[] => [
   ...collectRenderedExpression(
     owner,
     node.whenTrue,
-    appendGuard(context, getGuard(owner.file, node.condition, "truthy")),
-    state
+    appendGuard(context, getRenderGuard(owner, node.condition, "truthy")),
+    state,
+    resolutionState
   ),
   ...collectRenderedExpression(
     owner,
     node.whenFalse,
-    appendGuard(context, getGuard(owner.file, node.condition, "falsy")),
-    state
+    appendGuard(context, getRenderGuard(owner, node.condition, "falsy")),
+    state,
+    resolutionState
   ),
 ];
 
@@ -392,20 +899,65 @@ const collectBinaryItems = (
   owner: ComponentNodeRecord,
   node: BinaryExpression,
   context: TemplateContext,
-  state: GraphBuildState
+  state: GraphBuildState,
+  resolutionState: ExpressionResolutionState
 ): RenderTemplateItem[] => {
-  const branch = getBinaryBranch(node);
-
-  if (!branch) {
-    return [];
+  if (node.operatorToken.kind === SyntaxKind.CommaToken) {
+    return collectRenderedExpression(
+      owner,
+      node.right,
+      context,
+      state,
+      resolutionState
+    );
   }
 
-  return collectRenderedExpression(
-    owner,
-    node.right,
-    appendGuard(context, getGuard(owner.file, node.left, branch)),
-    state
-  );
+  const branch = getBinaryBranch(node);
+
+  if (branch === "truthy") {
+    return collectRenderedExpression(
+      owner,
+      node.right,
+      appendGuard(context, getRenderGuard(owner, node.left, branch)),
+      state,
+      resolutionState
+    );
+  }
+
+  if (
+    branch === "falsy" ||
+    node.operatorToken.kind === SyntaxKind.QuestionQuestionToken
+  ) {
+    const leftBranch = "truthy";
+    const rightBranch = "falsy";
+
+    return [
+      ...collectRenderedExpression(
+        owner,
+        node.left,
+        appendGuard(context, getRenderGuard(owner, node.left, leftBranch)),
+        state,
+        resolutionState
+      ),
+      ...collectRenderedExpression(
+        owner,
+        node.right,
+        appendGuard(context, getRenderGuard(owner, node.left, rightBranch)),
+        state,
+        resolutionState
+      ),
+    ];
+  }
+
+  return [
+    createOpaqueTemplate(
+      owner,
+      node,
+      context,
+      "A returned binary ReactNode expression could not be statically expanded.",
+      subtreeMayRenderNavigation(owner, node, state)
+    ),
+  ];
 };
 
 const templateMayRenderNavigation = (item: RenderTemplateItem): boolean => {
@@ -418,7 +970,7 @@ const templateMayRenderNavigation = (item: RenderTemplateItem): boolean => {
   }
 
   return (
-    isPotentialNavigationTag(item.edge.tagName) ||
+    (!item.edge.target && isNavigationNameFallback(item.edge.tagName)) ||
     Boolean(item.relevantBoundaryReason) ||
     item.children.some(templateMayRenderNavigation)
   );
@@ -509,17 +1061,16 @@ const projectionContentMayRenderNavigation = (
     return componentMayRenderNavigation(content.seed.componentId, state);
   }
 
-  if (
-    content.items.some(
-      (item) =>
-        templateMayRenderNavigation(item) ||
-        (item.kind === "element" &&
-          Boolean(
-            item.edge.target &&
-              componentMayRenderNavigation(item.edge.target, state)
-          ))
-    )
-  ) {
+  const itemMayRenderNavigation = (item: RenderTemplateItem): boolean =>
+    templateMayRenderNavigation(item) ||
+    (item.kind === "element" &&
+      (Boolean(
+        item.edge.target &&
+          componentMayRenderNavigation(item.edge.target, state)
+      ) ||
+        item.children.some(itemMayRenderNavigation)));
+
+  if (content.items.some(itemMayRenderNavigation)) {
     return true;
   }
 

@@ -1,21 +1,32 @@
 import path from "node:path";
 import {
+  type Block,
   type CallExpression,
   type Expression,
+  type IfStatement,
+  isArrowFunction,
+  isBlock,
   isCallExpression,
+  isFunctionDeclaration,
+  isFunctionExpression,
   isIdentifier,
+  isIfStatement,
   isJsxElement,
   isJsxExpression,
   isJsxFragment,
   isJsxSelfClosingElement,
   isParenthesizedExpression,
   isPropertyAccessExpression,
+  isVariableDeclaration,
   isVariableStatement,
   type JsxChild,
   type JsxOpeningLikeElement,
   type Node,
+  type Statement,
+  SyntaxKind,
 } from "typescript";
 import { getJsxTagName, walkNodes } from "../ast";
+import { getResponsiveVisibility } from "../rules/responsive-visibility";
 import { TRANSPARENT_ROOT_COMPONENTS } from "./constants";
 import { addSurfacePlan } from "./surface-plan-budget";
 import {
@@ -32,8 +43,11 @@ import type {
   SurfacePlan,
 } from "./types";
 
-const CLIENT_ENTRY_FILE_PATTERN = /^main\.[cm]?[jt]sx?$/;
 const INTRINSIC_ELEMENT_PATTERN = /^[a-z]/;
+const CLIENT_ENTRY_FILE_PATTERN = /^main\.[cm]?[jt]sx?$/;
+const HTML_MODULE_ENTRY_PATTERN =
+  /<script\b(?=[^>]*\btype=["']module["'])[^>]*\bsrc=["']([^"']+)["'][^>]*>/i;
+const LEADING_SLASH_PATTERN = /^\//;
 
 const unwrapExpression = (expression: Expression): Expression => {
   let current = expression;
@@ -97,21 +111,16 @@ const isCreateRootCall = (
 const getCreateRootBindings = (record: FileRecord): Set<string> => {
   const bindings = new Set<string>();
 
-  for (const statement of record.parsed.sourceFile.statements) {
-    if (!isVariableStatement(statement)) {
-      continue;
+  walkNodes(record.parsed.sourceFile, (node) => {
+    if (
+      isVariableDeclaration(node) &&
+      isIdentifier(node.name) &&
+      node.initializer &&
+      isCreateRootCall(node.initializer, record)
+    ) {
+      bindings.add(node.name.text);
     }
-
-    for (const declaration of statement.declarationList.declarations) {
-      if (
-        isIdentifier(declaration.name) &&
-        declaration.initializer &&
-        isCreateRootCall(declaration.initializer, record)
-      ) {
-        bindings.add(declaration.name.text);
-      }
-    }
-  }
+  });
 
   return bindings;
 };
@@ -122,9 +131,13 @@ const getRenderArgument = (
   rootBindings: Set<string>
 ): Expression | null => {
   if (isIdentifier(node.expression)) {
-    return isImportedReactDomMember(record, node.expression.text, "render")
-      ? (node.arguments[0] ?? null)
-      : null;
+    if (isImportedReactDomMember(record, node.expression.text, "render")) {
+      return node.arguments[0] ?? null;
+    }
+    if (isImportedReactDomMember(record, node.expression.text, "hydrateRoot")) {
+      return node.arguments[1] ?? null;
+    }
+    return null;
   }
 
   if (!isPropertyAccessExpression(node.expression)) {
@@ -140,6 +153,14 @@ const getRenderArgument = (
     node.expression.name.text === "render" &&
     isIdentifier(receiver) &&
     isReactDomNamespace(record, receiver.text);
+
+  if (
+    node.expression.name.text === "hydrateRoot" &&
+    isIdentifier(receiver) &&
+    isReactDomNamespace(record, receiver.text)
+  ) {
+    return node.arguments[1] ?? null;
+  }
 
   return isRootRender || isLegacyRender ? (node.arguments[0] ?? null) : null;
 };
@@ -157,6 +178,9 @@ const getRenderedChildren = (children: readonly JsxChild[]): Expression[] => {
 
   return expressions;
 };
+
+const hasVisibilityAttributes = (opening: JsxOpeningLikeElement): boolean =>
+  getResponsiveVisibility(opening).bands.some((band) => band !== "visible");
 
 const getMountedSeeds = (
   expression: Expression,
@@ -190,6 +214,12 @@ const getMountedSeeds = (
   const children = isJsxElement(rendered)
     ? getRenderedChildren(rendered.children)
     : [];
+
+  if (hasVisibilityAttributes(opening)) {
+    boundaryReasons.push(
+      `Rendered client wrapper ${tagName} has attributes whose visibility could not be projected onto its children.`
+    );
+  }
 
   if (
     TRANSPARENT_ROOT_COMPONENTS.has(tagName) ||
@@ -229,12 +259,45 @@ const getMountedSeeds = (
   ];
 };
 
-const getRenderArguments = (record: FileRecord): Expression[] => {
+const getRenderArguments = (
+  record: FileRecord,
+  boundaryReasons: string[]
+): Expression[] => {
   const argumentsInOrder: { expression: Expression; start: number }[] = [];
   const rootBindings = getCreateRootBindings(record);
+  const functions = new Map<string, Block>();
+  const activeFunctions = new Set<string>();
 
-  walkNodes(record.parsed.sourceFile, (node) => {
+  for (const statement of record.parsed.sourceFile.statements) {
+    if (isFunctionDeclaration(statement) && statement.name) {
+      if (statement.body) {
+        functions.set(statement.name.text, statement.body);
+      }
+    } else if (isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          isIdentifier(declaration.name) &&
+          declaration.initializer &&
+          (isArrowFunction(declaration.initializer) ||
+            isFunctionExpression(declaration.initializer)) &&
+          isBlock(declaration.initializer.body)
+        ) {
+          functions.set(declaration.name.text, declaration.initializer.body);
+        }
+      }
+    }
+  }
+
+  const scanNode = (node: Node): void => {
+    if (
+      isFunctionDeclaration(node) ||
+      isArrowFunction(node) ||
+      isFunctionExpression(node)
+    ) {
+      return;
+    }
     if (!isCallExpression(node)) {
+      node.forEachChild(scanNode);
       return;
     }
 
@@ -244,8 +307,79 @@ const getRenderArguments = (record: FileRecord): Expression[] => {
         expression: argument,
         start: node.getStart(record.parsed.sourceFile),
       });
+    } else if (
+      isPropertyAccessExpression(node.expression) &&
+      ["render", "hydrateRoot"].includes(node.expression.name.text)
+    ) {
+      boundaryReasons.push(
+        "A reachable mount-like client call could not be safely composed."
+      );
     }
-  });
+
+    if (isIdentifier(node.expression)) {
+      const helper = functions.get(node.expression.text);
+      if (helper && !activeFunctions.has(node.expression.text)) {
+        activeFunctions.add(node.expression.text);
+        scanStatements(helper);
+        activeFunctions.delete(node.expression.text);
+      }
+    }
+
+    node.forEachChild(scanNode);
+  };
+
+  const scanIf = (statement: IfStatement): void => {
+    if (statement.expression.kind === SyntaxKind.TrueKeyword) {
+      scanStatement(statement.thenStatement);
+      return;
+    }
+    if (statement.expression.kind === SyntaxKind.FalseKeyword) {
+      if (statement.elseStatement) {
+        scanStatement(statement.elseStatement);
+      }
+      return;
+    }
+    const before = argumentsInOrder.length;
+    scanStatement(statement.thenStatement);
+    const thenArguments = argumentsInOrder.splice(before);
+    if (statement.elseStatement) {
+      scanStatement(statement.elseStatement);
+    }
+    const elseArguments = argumentsInOrder.splice(before);
+
+    if (thenArguments.length > 0 && elseArguments.length > 0) {
+      boundaryReasons.push(
+        "Mutually exclusive client mount branches could not be represented as simultaneous roots."
+      );
+      return;
+    }
+    argumentsInOrder.push(...thenArguments, ...elseArguments);
+  };
+
+  const scanStatement = (statement: Statement): void => {
+    if (isFunctionDeclaration(statement)) {
+      return;
+    }
+    if (isBlock(statement)) {
+      scanStatements(statement);
+      return;
+    }
+    if (isIfStatement(statement)) {
+      scanIf(statement);
+      return;
+    }
+    scanNode(statement);
+  };
+
+  const scanStatements = (block: Block): void => {
+    for (const statement of block.statements) {
+      scanStatement(statement);
+    }
+  };
+
+  for (const statement of record.parsed.sourceFile.statements) {
+    scanStatement(statement);
+  }
 
   return argumentsInOrder
     .sort((left, right) => left.start - right.start)
@@ -258,12 +392,33 @@ const getAppRootNode = (
 ): ComponentNodeRecord | null =>
   getRecordDefault(record, state) ?? getRecordNamed(record, "App", state);
 
-const getClientEntryPaths = (state: GraphBuildState): string[] =>
-  [
-    state.project.paths.viteEntry &&
-    CLIENT_ENTRY_FILE_PATTERN.test(path.basename(state.project.paths.viteEntry))
-      ? state.project.paths.viteEntry
-      : null,
+const getHtmlEntryPath = (state: GraphBuildState): string | null => {
+  const html = state.host.readFile(
+    path.join(state.project.rootDir, "index.html")
+  );
+  const source = html?.match(HTML_MODULE_ENTRY_PATTERN)?.[1];
+  return source
+    ? path.resolve(
+        state.project.rootDir,
+        source.replace(LEADING_SLASH_PATTERN, "")
+      )
+    : null;
+};
+
+const getClientEntryPaths = (state: GraphBuildState): string[] => {
+  const htmlEntry = getHtmlEntryPath(state);
+  const discoveredEntry = state.project.paths.viteEntry;
+  const selectedEntry =
+    htmlEntry ??
+    (discoveredEntry &&
+    CLIENT_ENTRY_FILE_PATTERN.test(path.basename(discoveredEntry))
+      ? discoveredEntry
+      : null);
+  if (selectedEntry) {
+    return [selectedEntry];
+  }
+
+  return [
     path.join(state.project.rootDir, "src", "main.tsx"),
     path.join(state.project.rootDir, "src", "main.jsx"),
     path.join(state.project.rootDir, "src", "main.ts"),
@@ -272,7 +427,8 @@ const getClientEntryPaths = (state: GraphBuildState): string[] =>
     path.join(state.project.rootDir, "main.jsx"),
     path.join(state.project.rootDir, "main.ts"),
     path.join(state.project.rootDir, "main.js"),
-  ].filter((candidate): candidate is string => Boolean(candidate));
+  ];
+};
 
 const getAppPaths = (state: GraphBuildState): string[] => [
   path.join(state.project.rootDir, "src", "App.tsx"),
@@ -299,7 +455,7 @@ const collectEntryRoots = (
     }
 
     hasEntry = true;
-    for (const argument of getRenderArguments(record)) {
+    for (const argument of getRenderArguments(record, boundaryReasons)) {
       roots.push(...getMountedSeeds(argument, record, state, boundaryReasons));
     }
   }

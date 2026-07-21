@@ -493,7 +493,7 @@ describe("navigation render surfaces", () => {
     }
   });
 
-  it("returns advisory for hydrateRoot and rootless generic exports", async () => {
+  it("passes for hydrateRoot and returns advisory for rootless generic exports", async () => {
     const hydrateFixture = await createRuleFixture({
       react: "19.2.4",
       vite: "7.0.0",
@@ -518,9 +518,7 @@ describe("navigation render surfaces", () => {
         "export function Header() { return <NavigationMenu />; }"
       );
 
-      expect((await runNavRule(hydrateFixture.rootDir)).status).toBe(
-        "advisory"
-      );
+      expect((await runNavRule(hydrateFixture.rootDir)).status).toBe("pass");
       expect((await runNavRule(rootlessFixture.rootDir)).status).toBe(
         "advisory"
       );

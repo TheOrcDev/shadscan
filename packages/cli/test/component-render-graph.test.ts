@@ -345,7 +345,7 @@ describe("component render graph", () => {
     }
   });
 
-  it("keeps export-star component resolution partial", async () => {
+  it("resolves unambiguous export-star component paths", async () => {
     const fixture = await createRuleFixture();
 
     try {
@@ -361,13 +361,8 @@ describe("component render graph", () => {
 
       const graph = await buildGraph(fixture.rootDir);
       expect(graph.edges.find((edge) => edge.tagName === "Nav")).toMatchObject({
-        resolution: "unresolved",
-        target: null,
+        resolution: "resolved",
       });
-      expect(graph.surfaces[0]?.completeness).toBe("partial");
-      expect(graph.surfaces[0]?.boundaryReasons.join(" ")).toContain(
-        "export-star"
-      );
     } finally {
       await fixture.cleanup();
     }
@@ -809,7 +804,7 @@ describe("component render graph", () => {
     }
   });
 
-  it("marks unrecognized client mounts and rootless exports partial", async () => {
+  it("recognizes hydration mounts and marks rootless exports partial", async () => {
     const hydrateFixture = await createRuleFixture({
       react: "19.2.4",
       vite: "7.0.0",
@@ -837,8 +832,9 @@ describe("component render graph", () => {
       const hydrateGraph = await buildGraph(hydrateFixture.rootDir);
       const rootlessGraph = await buildGraph(rootlessFixture.rootDir);
 
-      expect(hydrateGraph.surfaces[0]?.completeness).toBe("partial");
-      expect(hydrateGraph.surfaces[0]?.instances).toHaveLength(0);
+      expect(hydrateGraph.surfaces[0]?.completeness).toBe("complete");
+      expect(hydrateGraph.surfaces[0]?.instances).toHaveLength(1);
+      expect(hydrateGraph.surfaces[0]?.instances[0]?.tagName).toBe("nav");
       expect(rootlessGraph.surfaces[0]?.completeness).toBe("partial");
       expect(rootlessGraph.surfaces[0]?.instances).toHaveLength(0);
     } finally {

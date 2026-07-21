@@ -6,6 +6,7 @@ import {
   type ExportDeclaration,
   type Expression,
   type FunctionDeclaration,
+  forEachChild,
   getModifiers,
   getParsedCommandLineOfConfigFile,
   isArrowFunction,
@@ -28,7 +29,7 @@ import {
   SyntaxKind,
   type VariableStatement,
 } from "typescript";
-import { type ParsedSourceFile, walkNodes } from "../ast";
+import type { ParsedSourceFile } from "../ast";
 import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
 import {
@@ -47,6 +48,7 @@ import type {
   RenderGuard,
   SupportedFunction,
 } from "./types";
+import { getViteAliases } from "./vite-aliases";
 
 const getComponentId = (
   filePath: string,
@@ -286,11 +288,72 @@ const registerExportAssignment = (
   }
 };
 
+interface NestedComponent {
+  declaration: SupportedFunction;
+  localName: string;
+}
+
+interface SourceIndexAstBudget {
+  limit: number;
+  used: number;
+}
+
+const SOURCE_INDEX_AST_VISITS_PER_COMPONENT = 64;
+
+const appendChildNodes = (
+  candidate: Node,
+  pending: Node[],
+  budget: SourceIndexAstBudget
+): boolean => {
+  const children: Node[] = [];
+  const stoppedAt = forEachChild(candidate, (child) => {
+    budget.used += 1;
+    if (budget.used >= budget.limit) {
+      return child;
+    }
+
+    children.push(child);
+  });
+
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const child = children[index];
+    if (child) {
+      pending.push(child);
+    }
+  }
+
+  return Boolean(stoppedAt);
+};
+
+const getNestedComponent = (candidate: Node): NestedComponent | null => {
+  if (
+    isFunctionDeclaration(candidate) &&
+    candidate.name &&
+    !isSourceFile(candidate.parent)
+  ) {
+    return { declaration: candidate, localName: candidate.name.text };
+  }
+
+  if (
+    !(
+      isVariableDeclaration(candidate) &&
+      isIdentifier(candidate.name) &&
+      candidate.initializer
+    )
+  ) {
+    return null;
+  }
+
+  const declaration = getWrappedFunction(candidate.initializer);
+  return declaration ? { declaration, localName: candidate.name.text } : null;
+};
+
 const registerNestedComponents = (
   record: FileRecord,
   nodes: ComponentNodeRecord[],
   limits: ComponentRenderGraphLimits,
-  graphBoundaryReasons: Set<string>
+  graphBoundaryReasons: Set<string>,
+  astBudget: SourceIndexAstBudget
 ): void => {
   const registeredStarts = new Set(
     nodes
@@ -298,52 +361,64 @@ const registerNestedComponents = (
       .map((node) => node.declarationStart)
   );
 
-  walkNodes(record.parsed.sourceFile, (candidate) => {
-    if (nodes.length >= limits.maxNodes) {
-      return;
+  if (astBudget.used >= astBudget.limit) {
+    graphBoundaryReasons.add(
+      `Component source-index AST visit limit (${astBudget.limit}) was reached.`
+    );
+    return;
+  }
+
+  const pending: Node[] = [record.parsed.sourceFile];
+  astBudget.used += 1;
+
+  while (
+    pending.length > 0 &&
+    nodes.length < limits.maxNodes &&
+    astBudget.used <= astBudget.limit
+  ) {
+    const candidate = pending.pop();
+    if (!candidate) {
+      break;
     }
 
-    let declaration: SupportedFunction | null = null;
-    let localName: string | null = null;
-
-    if (
-      isFunctionDeclaration(candidate) &&
-      candidate.name &&
-      !isSourceFile(candidate.parent)
-    ) {
-      declaration = candidate;
-      localName = candidate.name.text;
-    } else if (
-      isVariableDeclaration(candidate) &&
-      isIdentifier(candidate.name) &&
-      candidate.initializer
-    ) {
-      declaration = getWrappedFunction(candidate.initializer);
-      localName = declaration ? candidate.name.text : null;
+    const enumerationHalted = appendChildNodes(candidate, pending, astBudget);
+    if (enumerationHalted) {
+      graphBoundaryReasons.add(
+        `Component source-index AST visit limit (${astBudget.limit}) was reached.`
+      );
+      break;
     }
+    const nestedComponent = getNestedComponent(candidate);
 
     if (
       !(
-        declaration &&
-        localName &&
-        !registeredStarts.has(declaration.getStart(record.parsed.sourceFile))
+        nestedComponent &&
+        !registeredStarts.has(
+          nestedComponent.declaration.getStart(record.parsed.sourceFile)
+        )
       )
     ) {
-      return;
+      continue;
     }
 
     const node = registerNode(
       record,
       nodes,
-      declaration,
-      localName,
+      nestedComponent.declaration,
+      nestedComponent.localName,
       limits,
       graphBoundaryReasons
     );
     if (node) {
       registeredStarts.add(node.declarationStart);
     }
-  });
+  }
+
+  if (pending.length > 0 && nodes.length >= limits.maxNodes) {
+    graphBoundaryReasons.add(
+      `Component graph node limit (${limits.maxNodes}) halted nested declaration indexing.`
+    );
+  }
 };
 
 const registerExportDeclaration = (
@@ -352,6 +427,16 @@ const registerExportDeclaration = (
 ): void => {
   if (!statement.exportClause) {
     record.hasExportStar = true;
+    if (
+      statement.moduleSpecifier &&
+      isStringLiteral(statement.moduleSpecifier)
+    ) {
+      addMapValue(record.exportReferences, "*", {
+        importedName: "*",
+        kind: "reexport",
+        moduleName: statement.moduleSpecifier.text,
+      });
+    }
     return;
   }
 
@@ -438,7 +523,8 @@ const registerSourceStatements = (
   record: FileRecord,
   nodes: ComponentNodeRecord[],
   limits: ComponentRenderGraphLimits,
-  graphBoundaryReasons: Set<string>
+  graphBoundaryReasons: Set<string>,
+  astBudget: SourceIndexAstBudget
 ): void => {
   for (const statement of record.parsed.sourceFile.statements) {
     if (isFunctionDeclaration(statement)) {
@@ -470,7 +556,13 @@ const registerSourceStatements = (
     }
   }
 
-  registerNestedComponents(record, nodes, limits, graphBoundaryReasons);
+  registerNestedComponents(
+    record,
+    nodes,
+    limits,
+    graphBoundaryReasons,
+    astBudget
+  );
 };
 
 const addLocalExportNames = (
@@ -505,9 +597,14 @@ const createFileRecords = (
 ): {
   fileRecords: Map<string, FileRecord>;
   nodes: ComponentNodeRecord[];
+  sourceIndexNodesVisited: number;
 } => {
   const fileRecords = new Map<string, FileRecord>();
   const nodes: ComponentNodeRecord[] = [];
+  const astBudget: SourceIndexAstBudget = {
+    limit: Math.max(1, limits.maxNodes) * SOURCE_INDEX_AST_VISITS_PER_COMPONENT,
+    used: 0,
+  };
 
   for (const parsed of [...parsedFiles].sort((left, right) =>
     compareCodeUnits(path.resolve(left.filePath), path.resolve(right.filePath))
@@ -515,12 +612,22 @@ const createFileRecords = (
     const record = createFileRecord(parsed);
     fileRecords.set(path.resolve(parsed.filePath), record);
     registerImports(record);
-    registerSourceStatements(record, nodes, limits, graphBoundaryReasons);
+    registerSourceStatements(
+      record,
+      nodes,
+      limits,
+      graphBoundaryReasons,
+      astBudget
+    );
   }
 
   addLocalExportNames(fileRecords, nodes);
 
-  return { fileRecords, nodes };
+  return {
+    fileRecords,
+    nodes,
+    sourceIndexNodesVisited: astBudget.used,
+  };
 };
 
 const getSourceCandidate = (
@@ -540,16 +647,35 @@ const getSourceCandidate = (
 
 const getCompilerOptions = (
   project: ProjectDiscovery,
-  host: ConfinedTypeScriptHost
+  host: ConfinedTypeScriptHost,
+  parsedFiles: ParsedSourceFile[],
+  graphBoundaryReasons: Set<string>
 ): CompilerOptions => {
-  if (!project.paths.tsconfig) {
-    return {};
+  const configuredOptions = project.paths.tsconfig
+    ? (getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
+        ?.options ?? {})
+    : {};
+  const viteAliasResult = getViteAliases(parsedFiles);
+  if (viteAliasResult.partial) {
+    graphBoundaryReasons.add(
+      "Vite resolve.alias configuration could not be read statically; local alias imports may be unresolved."
+    );
+  }
+  if (viteAliasResult.aliases.size === 0) {
+    return configuredOptions;
   }
 
-  return (
-    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
-      ?.options ?? {}
-  );
+  const aliasPaths: Record<string, string[]> = {};
+  for (const [alias, target] of viteAliasResult.aliases) {
+    aliasPaths[alias] = [target];
+    aliasPaths[`${alias}/*`] = [`${target}/*`];
+  }
+
+  return {
+    ...configuredOptions,
+    baseUrl: configuredOptions.baseUrl ?? project.rootDir,
+    paths: { ...aliasPaths, ...configuredOptions.paths },
+  };
 };
 
 const createGraphBuildState = (
@@ -559,31 +685,38 @@ const createGraphBuildState = (
   limits: ComponentRenderGraphLimits,
   graphBoundaryReasons: Set<string>
 ): { nodes: ComponentNodeRecord[]; state: GraphBuildState } => {
-  const { fileRecords, nodes } = createFileRecords(
+  const { fileRecords, nodes, sourceIndexNodesVisited } = createFileRecords(
     parsedFiles,
     limits,
     graphBoundaryReasons
   );
   const host = createConfinedTypeScriptHost(filesystemRoot);
   const nodeRecords = new Map(nodes.map((node) => [node.id, node]));
+  const metrics = {
+    edgeTruncationMarkers: 0,
+    navigationReachabilityEvaluations: 0,
+    sourceIndexNodesVisited,
+    surfaceCandidatesVisited: 0,
+    surfacePlansCreated: 0,
+    templateNodesVisited: 0,
+  };
 
   return {
     nodes,
     state: {
-      compilerOptions: getCompilerOptions(project, host),
+      compilerOptions: getCompilerOptions(
+        project,
+        host,
+        parsedFiles,
+        graphBoundaryReasons
+      ),
       edgeTraversalHalted: false,
       edges: [],
       fileRecords,
       graphBoundaryReasons,
       host,
       limits,
-      metrics: {
-        edgeTruncationMarkers: 0,
-        navigationReachabilityEvaluations: 0,
-        surfaceCandidatesVisited: 0,
-        surfacePlansCreated: 0,
-        templateNodesVisited: 0,
-      },
+      metrics,
       navigationReachability: new Map(),
       navigationReachabilityInitialized: false,
       nodeRecords,

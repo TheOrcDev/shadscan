@@ -2,18 +2,33 @@ import {
   type BindingName,
   type Expression,
   isArrayBindingPattern,
+  isBinaryExpression,
   isBindingElement,
+  isCallExpression,
   isIdentifier,
   isJsxAttribute,
   isJsxExpression,
   isJsxSpreadAttribute,
+  isNoSubstitutionTemplateLiteral,
   isObjectBindingPattern,
+  isParenthesizedExpression,
   isPropertyAccessExpression,
+  isStringLiteral,
   type JsxOpeningLikeElement,
+  SyntaxKind,
 } from "typescript";
 import { walkNodes } from "../ast";
 import { compareCodeUnits } from "../deterministic-order";
+import { getResponsiveVisibilityFromClassNames } from "../rules/responsive-visibility";
 import type { ChildrenBindings, SupportedFunction } from "./types";
+
+interface ClassNameForwardingInfo {
+  forwards: boolean;
+  staticClassNames: string[] | null;
+}
+
+const CLASS_NAME_HELPERS = new Set(["classNames", "classnames", "clsx", "cn"]);
+const CLASS_SEPARATOR_PATTERN = /\s+/;
 
 const getPropBindings = (
   declaration: SupportedFunction,
@@ -38,7 +53,24 @@ const getPropBindings = (
     return bindings;
   }
 
+  const explicitlyBindsProp = parameter.elements.some((element) => {
+    if (element.dotDotDotToken || !isIdentifier(element.name)) {
+      return false;
+    }
+
+    return (element.propertyName?.getText() ?? element.name.text) === propName;
+  });
+
   for (const element of parameter.elements) {
+    if (
+      element.dotDotDotToken &&
+      isIdentifier(element.name) &&
+      !explicitlyBindsProp
+    ) {
+      bindings.objectName = element.name.text;
+      continue;
+    }
+
     const propertyName = element.propertyName?.getText();
     const bindingName = isIdentifier(element.name) ? element.name.text : null;
 
@@ -98,6 +130,14 @@ const declarationBindsComponentName = (
   );
 };
 
+const declarationBindsValueName = (
+  declaration: SupportedFunction,
+  valueName: string
+): boolean =>
+  declaration.parameters.some((parameter) =>
+    bindingContainsName(parameter.name, valueName)
+  );
+
 const expressionMatchesProp = (
   expression: Expression,
   bindings: ChildrenBindings,
@@ -121,25 +161,112 @@ const expressionProjectsChildren = (
   bindings: ChildrenBindings
 ): boolean => expressionMatchesProp(expression, bindings, "children");
 
+const getHelperName = (expression: Expression): string | null => {
+  if (isIdentifier(expression)) {
+    return expression.text;
+  }
+
+  return isPropertyAccessExpression(expression) ? expression.name.text : null;
+};
+
+const getClassNameExpressionInfo = (
+  expression: Expression,
+  bindings: ChildrenBindings
+): ClassNameForwardingInfo => {
+  if (isParenthesizedExpression(expression)) {
+    return getClassNameExpressionInfo(expression.expression, bindings);
+  }
+
+  if (expressionMatchesProp(expression, bindings, "className")) {
+    return { forwards: true, staticClassNames: [] };
+  }
+
+  if (
+    isStringLiteral(expression) ||
+    isNoSubstitutionTemplateLiteral(expression)
+  ) {
+    return {
+      forwards: false,
+      staticClassNames: expression.text
+        .split(CLASS_SEPARATOR_PATTERN)
+        .filter(Boolean),
+    };
+  }
+
+  if (
+    isBinaryExpression(expression) &&
+    expression.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken
+  ) {
+    const rightInfo = getClassNameExpressionInfo(expression.right, bindings);
+    const hasOnlyVisibleEffects =
+      rightInfo.staticClassNames !== null &&
+      getResponsiveVisibilityFromClassNames(
+        rightInfo.staticClassNames
+      ).bands.every((band) => band === "visible");
+
+    return {
+      forwards: false,
+      staticClassNames: hasOnlyVisibleEffects ? [] : null,
+    };
+  }
+
+  if (
+    !(
+      isCallExpression(expression) &&
+      CLASS_NAME_HELPERS.has(getHelperName(expression.expression) ?? "")
+    )
+  ) {
+    return { forwards: false, staticClassNames: null };
+  }
+
+  let forwards = false;
+  let staticClassNames: string[] | null = [];
+
+  for (const argument of expression.arguments) {
+    const argumentInfo = getClassNameExpressionInfo(argument, bindings);
+    forwards ||= argumentInfo.forwards;
+
+    if (!(staticClassNames && argumentInfo.staticClassNames)) {
+      staticClassNames = null;
+      continue;
+    }
+
+    staticClassNames.push(...argumentInfo.staticClassNames);
+  }
+
+  return { forwards, staticClassNames };
+};
+
+const getJsxClassNameForwarding = (
+  node: JsxOpeningLikeElement,
+  bindings: ChildrenBindings
+): ClassNameForwardingInfo => {
+  for (const property of node.attributes.properties) {
+    if (
+      !(
+        isJsxAttribute(property) &&
+        ["class", "className"].includes(property.name.getText()) &&
+        property.initializer &&
+        isJsxExpression(property.initializer) &&
+        property.initializer.expression
+      )
+    ) {
+      continue;
+    }
+
+    return getClassNameExpressionInfo(
+      property.initializer.expression,
+      bindings
+    );
+  }
+
+  return { forwards: false, staticClassNames: [] };
+};
+
 const jsxNodeForwardsClassName = (
   node: JsxOpeningLikeElement,
   bindings: ChildrenBindings
-): boolean =>
-  node.attributes.properties.some(
-    (property) =>
-      isJsxAttribute(property) &&
-      ["class", "className"].includes(property.name.getText()) &&
-      property.initializer &&
-      isJsxExpression(property.initializer) &&
-      Boolean(
-        property.initializer.expression &&
-          expressionMatchesProp(
-            property.initializer.expression,
-            bindings,
-            "className"
-          )
-      )
-  );
+): boolean => getJsxClassNameForwarding(node, bindings).forwards;
 
 const bodyMayReferenceProp = (
   declaration: SupportedFunction,
@@ -198,8 +325,10 @@ const bodyMayReferenceProp = (
 export {
   bodyMayReferenceProp,
   declarationBindsComponentName,
+  declarationBindsValueName,
   expressionProjectsChildren,
   getChildrenBindings,
+  getJsxClassNameForwarding,
   getNamedSlotBindings,
   getPropBindings,
   jsxNodeForwardsClassName,
