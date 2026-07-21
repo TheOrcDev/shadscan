@@ -1,5 +1,6 @@
 import path from "node:path";
-import type { AuditRule } from "../audit";
+import type { AuditRule, AuditRuleResult } from "../audit";
+import type { ProjectDiscovery } from "../discovery";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   findFiles,
@@ -13,6 +14,89 @@ const NEXT_SOCIAL_METADATA_PATTERN =
 const HTML_SOCIAL_IMAGE_PATTERN =
   /<meta(?=[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
 
+const evaluateAppRouterSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const socialImageFiles = await findFiles(project.rootDir, [
+    "app/**/opengraph-image.*",
+    "app/**/twitter-image.*",
+    "src/app/**/opengraph-image.*",
+    "src/app/**/twitter-image.*",
+  ]);
+
+  if (socialImageFiles[0]) {
+    return pass("Next social image file found.", socialImageFiles[0]);
+  }
+
+  const appDir = project.paths.appDir;
+  const files = await getProjectSourceFiles(project);
+
+  for (const file of files) {
+    if (appDir) {
+      const relativePath = path.relative(appDir, file.path);
+      const isInsideApp =
+        relativePath !== ".." &&
+        !relativePath.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relativePath);
+
+      if (!isInsideApp) {
+        continue;
+      }
+    }
+
+    const line = getTextLineNumber(file.content, NEXT_SOCIAL_METADATA_PATTERN);
+
+    if (line !== undefined) {
+      return pass(
+        "Image-backed Open Graph or Twitter metadata found.",
+        file.path,
+        line
+      );
+    }
+  }
+
+  return fail(
+    "No App Router image-backed social preview was found.",
+    "Add an opengraph-image/twitter-image file or images in Open Graph/Twitter metadata."
+  );
+};
+
+const evaluatePagesRouterSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const pagesDir = project.paths.pagesDir;
+  const files = await getProjectSourceFiles(project);
+
+  for (const file of files) {
+    if (pagesDir) {
+      const relativePath = path.relative(pagesDir, file.path);
+      const isInsidePages =
+        relativePath !== ".." &&
+        !relativePath.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relativePath);
+
+      if (!isInsidePages) {
+        continue;
+      }
+    }
+
+    const line = getTextLineNumber(file.content, HTML_SOCIAL_IMAGE_PATTERN);
+
+    if (line !== undefined) {
+      return pass(
+        "Pages Router social preview metadata found.",
+        file.path,
+        line
+      );
+    }
+  }
+
+  return fail(
+    "No Pages Router social preview metadata was found.",
+    "Add an og:image or twitter:image meta tag through `next/head`."
+  );
+};
+
 const socialPreviewPresentRule: AuditRule = {
   adapters: ["core"],
   category: "production-polish",
@@ -21,39 +105,29 @@ const socialPreviewPresentRule: AuditRule = {
   id: "social-preview-present",
   maxScore: 2,
   run: async ({ project }) => {
-    if (project.framework.adapter === "next-app-router") {
-      const socialImageFiles = await findFiles(project.rootDir, [
-        "app/**/opengraph-image.*",
-        "app/**/twitter-image.*",
-        "src/app/**/opengraph-image.*",
-        "src/app/**/twitter-image.*",
-      ]);
+    if (project.versions.next && project.paths.appDir) {
+      const appResult = await evaluateAppRouterSocialPreview(project);
 
-      if (socialImageFiles[0]) {
-        return pass("Next social image file found.", socialImageFiles[0]);
+      if (appResult.status !== "pass" || !project.paths.pagesDir) {
+        return appResult;
       }
 
-      const files = await getProjectSourceFiles(project);
+      const pagesResult = await evaluatePagesRouterSocialPreview(project);
 
-      for (const file of files) {
-        const line = getTextLineNumber(
-          file.content,
-          NEXT_SOCIAL_METADATA_PATTERN
-        );
-
-        if (line !== undefined) {
-          return pass(
-            "Image-backed Open Graph or Twitter metadata found.",
-            file.path,
-            line
-          );
-        }
+      if (pagesResult.status !== "pass") {
+        return pagesResult;
       }
 
-      return fail(
-        "No image-backed social preview was found.",
-        "Add an opengraph-image/twitter-image file or images in Open Graph/Twitter metadata."
+      const firstEvidence = appResult.evidence?.[0];
+      return pass(
+        "Both Next router trees configure image-backed social previews.",
+        firstEvidence?.filePath,
+        firstEvidence?.line
       );
+    }
+
+    if (project.versions.next && project.paths.pagesDir) {
+      return evaluatePagesRouterSocialPreview(project);
     }
 
     const indexPath = path.join(project.rootDir, "index.html");

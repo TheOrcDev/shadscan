@@ -187,7 +187,7 @@ const hasRecoveryInRenderedTree = async ({
 };
 
 const notFoundRecoveryPresentRule: AuditRule = {
-  adapters: ["next-app-router", "next-pages-router"],
+  adapters: ["next-app-router", "next-hybrid-router", "next-pages-router"],
   category: "states",
   confidence: "high",
   description:
@@ -195,25 +195,32 @@ const notFoundRecoveryPresentRule: AuditRule = {
   id: "not-found-recovery-present",
   maxScore: 3,
   run: async ({ filesystemRoot, project }) => {
-    const routeDir =
-      project.framework.adapter === "next-pages-router"
-        ? project.paths.pagesDir
-        : project.paths.appDir;
+    const patterns: string[] = [];
 
-    if (!routeDir) {
+    if (project.paths.appDir) {
+      const relativeAppDir = path.relative(
+        project.rootDir,
+        project.paths.appDir
+      );
+      patterns.push(
+        path.join(relativeAppDir, "not-found.{js,jsx,ts,tsx}"),
+        path.join(relativeAppDir, "**/not-found.{js,jsx,ts,tsx}")
+      );
+    }
+
+    if (project.paths.pagesDir) {
+      const relativePagesDir = path.relative(
+        project.rootDir,
+        project.paths.pagesDir
+      );
+      patterns.push(path.join(relativePagesDir, "404.{js,jsx,ts,tsx}"));
+    }
+
+    if (patterns.length === 0) {
       return notApplicable("No supported Next route directory was found.");
     }
 
-    const relativeRouteDir = path.relative(project.rootDir, routeDir);
-    const notFoundFiles = await findFiles(
-      project.rootDir,
-      project.framework.adapter === "next-pages-router"
-        ? [path.join(relativeRouteDir, "404.{js,jsx,ts,tsx}")]
-        : [
-            path.join(relativeRouteDir, "not-found.{js,jsx,ts,tsx}"),
-            path.join(relativeRouteDir, "**/not-found.{js,jsx,ts,tsx}"),
-          ]
-    );
+    const notFoundFiles = await findFiles(project.rootDir, patterns);
 
     if (notFoundFiles.length === 0) {
       return notApplicable("No Next not-found UI file was found.");

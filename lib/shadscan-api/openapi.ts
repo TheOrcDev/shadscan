@@ -638,6 +638,7 @@ const OPENAPI_DOCUMENT = {
                 enum: [
                   "generic-react",
                   "next-app-router",
+                  "next-hybrid-router",
                   "next-pages-router",
                   "vite-react",
                 ],

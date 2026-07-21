@@ -12,8 +12,8 @@ shadscan [path] [options]
 - `path` selects the React project to scan and defaults to the current working
   directory.
 - Relative paths resolve from the invoking process's working directory.
-- Supported adapters are Next.js App Router, Next.js Pages Router, Vite React,
-  and generic React projects.
+- Supported adapters are Next.js App Router, Next.js Pages Router, hybrid Next.js
+  projects containing both router trees, Vite React, and generic React projects.
 - shadscan performs a read-only static source audit. It does not start the app,
   edit project files, call an AI model, or require application secrets.
 

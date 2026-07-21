@@ -399,19 +399,26 @@ const findRuntimeThroughLocalImports = (
 };
 
 const getShellPaths = (project: ProjectDiscovery): string[] => {
-  if (project.paths.appDir) {
-    return ["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
-      (fileName) => path.join(project.paths.appDir ?? "", fileName)
+  const shellPaths: string[] = [];
+
+  if (project.versions.next && project.paths.appDir) {
+    shellPaths.push(
+      ...["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
+        (fileName) => path.join(project.paths.appDir ?? "", fileName)
+      )
     );
   }
 
-  if (
-    project.framework.adapter === "next-pages-router" &&
-    project.paths.pagesDir
-  ) {
-    return ["_app.tsx", "_app.jsx", "_app.ts", "_app.js"].map((fileName) =>
-      path.join(project.paths.pagesDir ?? "", fileName)
+  if (project.versions.next && project.paths.pagesDir) {
+    shellPaths.push(
+      ...["_app.tsx", "_app.jsx", "_app.ts", "_app.js"].map((fileName) =>
+        path.join(project.paths.pagesDir ?? "", fileName)
+      )
     );
+  }
+
+  if (shellPaths.length > 0) {
+    return shellPaths;
   }
 
   if (project.paths.viteEntry) {
@@ -423,45 +430,37 @@ const getShellPaths = (project: ProjectDiscovery): string[] => {
   );
 };
 
-const readShell = async (
-  project: ProjectDiscovery
-): Promise<SourceFile | null> => {
+const readShells = async (project: ProjectDiscovery): Promise<SourceFile[]> => {
+  const shells: SourceFile[] = [];
+
   for (const shellPath of getShellPaths(project)) {
     const shell = await readProjectSourceFile(project, shellPath);
 
     if (shell) {
-      return shell;
+      shells.push(shell);
     }
   }
 
-  return null;
+  return shells;
 };
 
-const runToastRuntimeAnalysis = async (
-  project: ProjectDiscovery,
-  filesystemRoot: string
-): Promise<ToastRuntimeAnalysis> => {
-  const host = createConfinedTypeScriptHost(filesystemRoot);
-  const hasDependency = TOAST_DEPENDENCIES.some(
-    (dependency) => project.dependencies[dependency]
-  );
-  const shell = await readShell(project);
+interface ToastShellContext {
+  compilerOptions: CompilerOptions;
+  filesByPath: Map<string, ParsedProjectFile>;
+  hasDependency: boolean;
+  host: ConfinedTypeScriptHost;
+  project: ProjectDiscovery;
+}
 
-  if (!(hasDependency && shell && SCRIPT_FILE_PATTERN.test(shell.path))) {
-    return { hasDependency, mount: null, runtime: null, shell };
-  }
-
-  const sourceFiles = await getProjectSourceFiles(project);
-  const parsedFiles = sourceFiles
-    .filter((file) => SCRIPT_FILE_PATTERN.test(file.path))
-    .map(parseSourceFile);
-  const filesByPath = new Map(
-    parsedFiles.map((file) => [path.resolve(file.file.path), file])
-  );
+const analyzeToastShell = (
+  shell: SourceFile,
+  context: ToastShellContext
+): ToastRuntimeAnalysis | null => {
+  const { compilerOptions, filesByPath, hasDependency, host, project } =
+    context;
   const parsedShell =
     filesByPath.get(path.resolve(shell.path)) ?? parseSourceFile(shell);
   const renderedBindings = getRenderedBindings(parsedShell.sourceFile);
-  const compilerOptions = getCompilerOptions(project, host);
 
   for (const reference of getImportReferences(parsedShell.sourceFile)) {
     for (const binding of reference.bindings) {
@@ -523,7 +522,53 @@ const runToastRuntimeAnalysis = async (
     }
   }
 
-  return { hasDependency, mount: null, runtime: null, shell };
+  return null;
+};
+
+const runToastRuntimeAnalysis = async (
+  project: ProjectDiscovery,
+  filesystemRoot: string
+): Promise<ToastRuntimeAnalysis> => {
+  const host = createConfinedTypeScriptHost(filesystemRoot);
+  const hasDependency = TOAST_DEPENDENCIES.some(
+    (dependency) => project.dependencies[dependency]
+  );
+  const shells = await readShells(project);
+  const firstShell = shells[0] ?? null;
+
+  if (!(hasDependency && firstShell)) {
+    return { hasDependency, mount: null, runtime: null, shell: firstShell };
+  }
+
+  const sourceFiles = await getProjectSourceFiles(project);
+  const parsedFiles = sourceFiles
+    .filter((file) => SCRIPT_FILE_PATTERN.test(file.path))
+    .map(parseSourceFile);
+  const filesByPath = new Map(
+    parsedFiles.map((file) => [path.resolve(file.file.path), file])
+  );
+  const compilerOptions = getCompilerOptions(project, host);
+  const context = {
+    compilerOptions,
+    filesByPath,
+    hasDependency,
+    host,
+    project,
+  };
+
+  for (const shell of shells) {
+    if (!SCRIPT_FILE_PATTERN.test(shell.path)) {
+      continue;
+    }
+
+    const analysis = analyzeToastShell(shell, context);
+
+    if (analysis) {
+      return analysis;
+    }
+  }
+
+  return { hasDependency, mount: null, runtime: null, shell: firstShell };
 };
 
 const analyzeToastRuntime = (

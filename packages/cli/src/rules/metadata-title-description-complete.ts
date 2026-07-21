@@ -450,6 +450,51 @@ const evaluateHtmlMetadata = async (
   );
 };
 
+const evaluatePagesMetadata = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const pagesDir = project.paths.pagesDir;
+
+  if (!pagesDir) {
+    return notApplicable("No Next Pages Router directory was found.");
+  }
+
+  const resolvedPagesDir = path.resolve(pagesDir);
+  const files = (await getProjectSourceFiles(project))
+    .filter((file) => {
+      const relativePath = path.relative(resolvedPagesDir, file.path);
+      return (
+        relativePath !== ".." &&
+        !relativePath.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relativePath)
+      );
+    })
+    .sort((left, right) => compareCodeUnits(left.path, right.path));
+  const completeFile = files.find(
+    (file) =>
+      HTML_TITLE_PATTERN.test(file.content) &&
+      HTML_DESCRIPTION_PATTERN.test(file.content)
+  );
+
+  if (completeFile) {
+    return pass(
+      "Pages Router head metadata includes a non-empty title and description.",
+      completeFile.path,
+      getTextLineNumber(completeFile.content, HTML_TITLE_PATTERN)
+    );
+  }
+
+  if (files.length === 0) {
+    return notApplicable("No Next Pages Router source file was found.");
+  }
+
+  return fail(
+    "No Pages Router source provides both a non-empty title and description.",
+    "Add meaningful title and description metadata through `next/head` in the Pages Router.",
+    { filePath: files[0]?.path }
+  );
+};
+
 const metadataTitleDescriptionCompleteRule: AuditRule = {
   adapters: ["core"],
   category: "production-polish",
@@ -457,9 +502,30 @@ const metadataTitleDescriptionCompleteRule: AuditRule = {
   description: "Checks for non-empty document title and description metadata.",
   id: "metadata-title-description-complete",
   maxScore: 3,
-  run: ({ project }) => {
-    if (project.framework.adapter === "next-app-router") {
-      return evaluateNextMetadata(project);
+  run: async ({ project }) => {
+    if (project.versions.next && project.paths.appDir) {
+      const appResult = await evaluateNextMetadata(project);
+
+      if (appResult.status !== "pass" || !project.paths.pagesDir) {
+        return appResult;
+      }
+
+      const pagesResult = await evaluatePagesMetadata(project);
+
+      if (pagesResult.status !== "pass") {
+        return pagesResult;
+      }
+
+      const firstEvidence = appResult.evidence?.[0];
+      return pass(
+        "Both Next router trees provide non-empty title and description metadata.",
+        firstEvidence?.filePath,
+        firstEvidence?.line
+      );
+    }
+
+    if (project.versions.next && project.paths.pagesDir) {
+      return evaluatePagesMetadata(project);
     }
 
     return evaluateHtmlMetadata(project);

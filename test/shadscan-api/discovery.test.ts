@@ -130,7 +130,9 @@ describe("hosted API OpenAPI document", () => {
     );
     expect(
       schemas.AuditReport.properties.framework.properties.adapter.enum
-    ).toContain("next-pages-router");
+    ).toEqual(
+      expect.arrayContaining(["next-hybrid-router", "next-pages-router"])
+    );
     expect(schemas.ActionableDisposition.enum).toEqual([
       "decide",
       "fix",

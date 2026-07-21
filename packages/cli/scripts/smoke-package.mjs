@@ -145,7 +145,8 @@ try {
   });
   const report = JSON.parse(jsonResult.stdout);
   assert.equal(report.engineVersion, packageManifest.version);
-  assert.equal(report.schemaVersion, 3);
+  assert.ok(Number.isInteger(report.schemaVersion));
+  assert.ok(report.schemaVersion > 0);
   assert.ok(Array.isArray(report.agentHandoff.workItems));
   assert.equal(
     typeof report.agentHandoff.verification.shadscanCommand,
@@ -214,7 +215,7 @@ try {
     importCheckPath,
     [
       'import { AUDIT_REPORT_SCHEMA_VERSION, RULE_CATALOG, scanProject } from "@shadscan/cli";',
-      'if (AUDIT_REPORT_SCHEMA_VERSION !== 3 || RULE_CATALOG.length !== 55 || typeof scanProject !== "function") {',
+      `if (AUDIT_REPORT_SCHEMA_VERSION !== ${JSON.stringify(report.schemaVersion)} || RULE_CATALOG.length !== 55 || typeof scanProject !== "function") {`,
       '  throw new Error("The installed library exports are incomplete.");',
       "}",
       "",

@@ -38,6 +38,7 @@ import {
   fileExists,
   findFiles,
   findSourceMatch,
+  getProjectSourceFiles,
   getTextLineNumber,
   readProjectSourceFile,
 } from "./source-files";
@@ -53,8 +54,9 @@ const D_KEY_PATTERN =
   /(?:\bkey\s*(?:\.\s*to(?:Locale)?LowerCase\(\))?\s*(?:===|!==)\s*["']d["']|["']d["']\s*(?:===|!==)\s*(?:[A-Za-z_$][\w$]*\s*\.\s*)*\bkey\s*(?:\.\s*to(?:Locale)?LowerCase\(\))?|\bcode\s*(?:===|!==)\s*["']KeyD["']|["']KeyD["']\s*(?:===|!==)\s*(?:[A-Za-z_$][\w$]*\s*\.\s*)*\bcode)/;
 const NEXT_METADATA_PATTERN =
   /export\s+(const\s+metadata|async\s+function\s+generateMetadata|function\s+generateMetadata)/;
-const HTML_TITLE_PATTERN = /<title>[^<]+<\/title>/;
-const HTML_DESCRIPTION_PATTERN = /<meta\s+name=["']description["']/;
+const HTML_TITLE_PATTERN = /<title>\s*[^<\s][^<]*<\/title>/i;
+const HTML_DESCRIPTION_PATTERN =
+  /<meta(?=[^>]*name=["']description["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
 const FAVICON_LINK_PATTERN = /<link\s+rel=["'](?:icon|shortcut icon)["']/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
@@ -350,6 +352,67 @@ const getAppRoutePatterns = (
   ];
 };
 
+const findSourceMatchInDirectory = async (
+  context: AuditContext,
+  directory: string,
+  patterns: RegExp[]
+): Promise<{ filePath: string; line: number } | null> => {
+  const resolvedDirectory = path.resolve(directory);
+  const files = await getProjectSourceFiles(context.project);
+
+  for (const file of files) {
+    const relativePath = path.relative(resolvedDirectory, file.path);
+    const isInsideDirectory =
+      relativePath !== ".." &&
+      !relativePath.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relativePath);
+
+    if (
+      isInsideDirectory &&
+      patterns.every((pattern) => pattern.test(file.content))
+    ) {
+      return {
+        filePath: file.path,
+        line: getTextLineNumber(file.content, patterns[0]) ?? 1,
+      };
+    }
+  }
+
+  return null;
+};
+
+const evaluateHtmlMetadataConfiguration = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const indexHtmlPath = path.join(context.project.rootDir, "index.html");
+
+  if (await fileExists(indexHtmlPath)) {
+    const document = await readProjectSourceFile(
+      context.project,
+      indexHtmlPath
+    );
+    const hasTitle = document
+      ? HTML_TITLE_PATTERN.test(document.content)
+      : false;
+    const hasDescription = document
+      ? HTML_DESCRIPTION_PATTERN.test(document.content)
+      : false;
+
+    if (hasTitle && hasDescription) {
+      return pass(
+        "Document title and description meta tag found.",
+        indexHtmlPath,
+        getTextLineNumber(document?.content ?? "", HTML_TITLE_PATTERN)
+      );
+    }
+  }
+
+  return fail(
+    "No metadata/head basics were found.",
+    "Add a document title and description metadata for the app shell."
+  );
+};
+
 const shadcnConfigPresentRule: AuditRule = {
   adapters: ["core"],
   category: "foundation",
@@ -463,46 +526,51 @@ const metadataConfiguredRule: AuditRule = {
   id: "metadata-configured",
   maxScore: 3,
   run: async (context) => {
-    if (context.project.framework.adapter === "next-app-router") {
-      const match = await findFirstSourceMatch(context, NEXT_METADATA_PATTERN);
+    const { appDir, pagesDir } = context.project.paths;
+    let firstMatch: { filePath: string; line: number } | null = null;
 
-      if (match) {
-        return pass("Next metadata export found.", match.file.path, match.line);
-      }
+    if (context.project.versions.next && appDir) {
+      const match = await findSourceMatchInDirectory(context, appDir, [
+        NEXT_METADATA_PATTERN,
+      ]);
 
-      return fail(
-        "No Next metadata export was found.",
-        "Export `metadata` or `generateMetadata` from the root layout or relevant pages."
-      );
-    }
-
-    const indexHtmlPath = path.join(context.project.rootDir, "index.html");
-
-    if (await fileExists(indexHtmlPath)) {
-      const document = await readProjectSourceFile(
-        context.project,
-        indexHtmlPath
-      );
-      const hasTitle = document
-        ? HTML_TITLE_PATTERN.test(document.content)
-        : false;
-      const hasDescription = document
-        ? HTML_DESCRIPTION_PATTERN.test(document.content)
-        : false;
-
-      if (hasTitle && hasDescription) {
-        return pass(
-          "Document title and description meta tag found.",
-          indexHtmlPath,
-          getTextLineNumber(document?.content ?? "", HTML_TITLE_PATTERN)
+      if (!match) {
+        return fail(
+          "No Next App Router metadata export was found.",
+          "Export `metadata` or `generateMetadata` from the root layout or relevant pages."
         );
       }
+
+      firstMatch = match;
     }
 
-    return fail(
-      "No metadata/head basics were found.",
-      "Add a document title and description metadata for the app shell."
-    );
+    if (context.project.versions.next && pagesDir) {
+      const match = await findSourceMatchInDirectory(context, pagesDir, [
+        HTML_TITLE_PATTERN,
+        HTML_DESCRIPTION_PATTERN,
+      ]);
+
+      if (!match) {
+        return fail(
+          "No complete Next Pages Router head metadata was found.",
+          "Add a meaningful title and description through `next/head` in the Pages Router."
+        );
+      }
+
+      firstMatch ??= match;
+    }
+
+    if (firstMatch) {
+      return pass(
+        appDir && pagesDir
+          ? "Both Next router trees configure document metadata."
+          : "Next metadata or head configuration found.",
+        firstMatch.filePath,
+        firstMatch.line
+      );
+    }
+
+    return evaluateHtmlMetadataConfiguration(context);
   },
   severity: "warning",
   title: "metadata configured",
@@ -557,38 +625,59 @@ const faviconPresentRule: AuditRule = {
 };
 
 const notFoundRoutePresentRule: AuditRule = {
-  adapters: ["next-app-router", "next-pages-router"],
+  adapters: ["next-app-router", "next-hybrid-router", "next-pages-router"],
   category: "foundation",
   confidence: "high",
   description: "Checks for a Next not-found boundary or 404 page.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
-    const isPagesRouter =
-      context.project.framework.adapter === "next-pages-router";
-    const filePath = await hasAnyFile(
-      context.project.rootDir,
-      isPagesRouter
-        ? ["pages/404.{js,jsx,ts,tsx}", "src/pages/404.{js,jsx,ts,tsx}"]
-        : getAppRoutePatterns(context, "not-found.tsx")
-    );
+    const foundPaths: string[] = [];
 
-    if (filePath) {
+    if (context.project.versions.next && context.project.paths.appDir) {
+      const appNotFound = await hasAnyFile(
+        context.project.rootDir,
+        getAppRoutePatterns(context, "not-found.{js,jsx,ts,tsx}")
+      );
+
+      if (!appNotFound) {
+        return fail(
+          "No Next `not-found.tsx` route boundary was found.",
+          "Add `app/not-found.tsx` so App Router missing routes have a designed state."
+        );
+      }
+
+      foundPaths.push(appNotFound);
+    }
+
+    if (context.project.versions.next && context.project.paths.pagesDir) {
+      const pagesNotFound = await hasAnyFile(context.project.rootDir, [
+        "pages/404.{js,jsx,ts,tsx}",
+        "src/pages/404.{js,jsx,ts,tsx}",
+      ]);
+
+      if (!pagesNotFound) {
+        return fail(
+          "No Next Pages Router `404` page was found.",
+          "Add `pages/404.tsx` so Pages Router missing routes have a designed state."
+        );
+      }
+
+      foundPaths.push(pagesNotFound);
+    }
+
+    if (foundPaths[0]) {
       return pass(
-        isPagesRouter
-          ? "Next Pages Router 404 page found."
+        foundPaths.length > 1
+          ? "Both Next router trees provide not-found UI."
           : "Next not-found route boundary found.",
-        filePath
+        foundPaths[0]
       );
     }
 
     return fail(
-      isPagesRouter
-        ? "No Next Pages Router `404` page was found."
-        : "No Next `not-found.tsx` route boundary was found.",
-      isPagesRouter
-        ? "Add `pages/404.tsx` so missing routes have a designed state."
-        : "Add `app/not-found.tsx` so missing routes have a designed state."
+      "No supported Next route directory was found.",
+      "Add a Next App Router or Pages Router route tree before configuring not-found UI."
     );
   },
   severity: "warning",
@@ -603,24 +692,42 @@ const errorBoundaryPresentRule: AuditRule = {
   id: "error-boundary-present",
   maxScore: 3,
   run: async (context) => {
-    if (context.project.framework.adapter === "next-app-router") {
-      const filePath = await hasAnyFile(
+    const foundPaths: string[] = [];
+    const missingBoundaries: string[] = [];
+
+    if (context.project.versions.next && context.project.paths.appDir) {
+      const appError = await hasAnyFile(
         context.project.rootDir,
-        getAppRoutePatterns(context, "error.tsx")
+        getAppRoutePatterns(context, "error.{js,jsx,ts,tsx}")
       );
 
-      if (filePath) {
-        return pass("Next error route boundary found.", filePath);
+      if (appError) {
+        foundPaths.push(appError);
+      } else {
+        missingBoundaries.push("App Router `error.tsx`");
       }
-    } else if (context.project.framework.adapter === "next-pages-router") {
-      const filePath = await hasAnyFile(context.project.rootDir, [
+    }
+
+    if (context.project.versions.next && context.project.paths.pagesDir) {
+      const pagesError = await hasAnyFile(context.project.rootDir, [
         "pages/_error.{js,jsx,ts,tsx}",
         "src/pages/_error.{js,jsx,ts,tsx}",
       ]);
 
-      if (filePath) {
-        return pass("Next Pages Router error page found.", filePath);
+      if (pagesError) {
+        foundPaths.push(pagesError);
+      } else {
+        missingBoundaries.push("Pages Router `_error` page");
       }
+    }
+
+    if (foundPaths.length > 0 && missingBoundaries.length === 0) {
+      return pass(
+        foundPaths.length > 1
+          ? "Both Next router trees provide error boundaries."
+          : "Next error route boundary found.",
+        foundPaths[0]
+      );
     }
 
     const match = await findFirstSourceMatch(context, ERROR_BOUNDARY_PATTERN);
@@ -630,7 +737,9 @@ const errorBoundaryPresentRule: AuditRule = {
     }
 
     return fail(
-      "No app-level error boundary was found.",
+      missingBoundaries.length > 0
+        ? `Missing ${missingBoundaries.join(" and ")}.`
+        : "No app-level error boundary was found.",
       "Add a route or component-level error boundary with a useful recovery path.",
       "The app can fail. The UI just refuses to acknowledge it."
     );

@@ -335,7 +335,7 @@ const hasNearestLoadingFile = async (
 };
 
 const routeLoadingBoundaryPresentRule: AuditRule = {
-  adapters: ["next-app-router"],
+  adapters: ["next-app-router", "next-hybrid-router"],
   category: "states",
   confidence: "medium",
   description:

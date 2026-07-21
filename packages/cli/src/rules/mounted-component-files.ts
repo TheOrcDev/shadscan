@@ -211,19 +211,26 @@ const resolveLocalImport = (
 };
 
 const getShellCandidates = (project: ProjectDiscovery): string[] => {
-  if (project.paths.appDir) {
-    return ["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
-      (fileName) => path.join(project.paths.appDir ?? "", fileName)
+  const candidates: string[] = [];
+
+  if (project.versions.next && project.paths.appDir) {
+    candidates.push(
+      ...["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
+        (fileName) => path.join(project.paths.appDir ?? "", fileName)
+      )
     );
   }
 
-  if (
-    project.framework.adapter === "next-pages-router" &&
-    project.paths.pagesDir
-  ) {
-    return ["_app.tsx", "_app.jsx", "_app.ts", "_app.js"].map((fileName) =>
-      path.join(project.paths.pagesDir ?? "", fileName)
+  if (project.versions.next && project.paths.pagesDir) {
+    candidates.push(
+      ...["_app.tsx", "_app.jsx", "_app.ts", "_app.js"].map((fileName) =>
+        path.join(project.paths.pagesDir ?? "", fileName)
+      )
     );
+  }
+
+  if (candidates.length > 0) {
+    return candidates;
   }
 
   if (project.paths.viteEntry) {

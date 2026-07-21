@@ -141,6 +141,37 @@ describe("discoverProject", () => {
     expect(project.paths.pagesDir).toBe(path.join(rootDir, "pages"));
   });
 
+  it("detects a Next project that serves both router trees", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        next: "16.2.6",
+        react: "19.2.4",
+      },
+    });
+    await writeFixtureFile(
+      rootDir,
+      "app/page.tsx",
+      "export default function AppPage() { return null }\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "pages/legacy.tsx",
+      "export default function LegacyPage() { return null }\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("next-hybrid-router");
+    expect(project.framework.evidence).toEqual([
+      "next dependency found",
+      "app router directory found at app",
+      "pages router directory found at pages",
+    ]);
+    expect(project.paths.appDir).toBe(path.join(rootDir, "app"));
+    expect(project.paths.pagesDir).toBe(path.join(rootDir, "pages"));
+  });
+
   it("detects a Vite React shadcn app", async () => {
     const rootDir = await createFixture();
     await writePackageJson(rootDir, {

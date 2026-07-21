@@ -605,6 +605,46 @@ describe("runAudit", () => {
     expect(report.score).toBe(100);
   });
 
+  it("runs both Next adapter families for hybrid router projects", async () => {
+    const rootDir = await createFixture();
+    await writeFixtureFile(
+      rootDir,
+      "package.json",
+      JSON.stringify({
+        dependencies: { next: "16.2.6", react: "19.2.4" },
+      })
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/page.tsx",
+      "export default function AppPage() { return null }"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "pages/legacy.tsx",
+      "export default function LegacyPage() { return null }"
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: [
+        createRule({ adapters: ["next-app-router"], id: "app-rule" }),
+        createRule({ adapters: ["next-pages-router"], id: "pages-rule" }),
+        createRule({
+          adapters: ["next-hybrid-router"],
+          id: "hybrid-rule",
+        }),
+        createRule({ adapters: ["vite-react"], id: "vite-rule" }),
+      ],
+    });
+
+    expect(report.framework.adapter).toBe("next-hybrid-router");
+    expect(report.findings.map((finding) => finding.id)).toEqual([
+      "app-rule",
+      "pages-rule",
+      "hybrid-rule",
+    ]);
+  });
+
   it("filters rules by category", async () => {
     const rootDir = await createReactFixture();
 

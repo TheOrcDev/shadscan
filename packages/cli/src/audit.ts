@@ -325,6 +325,7 @@ const AuditReportSchema = z.object({
     adapter: z.enum([
       "generic-react",
       "next-app-router",
+      "next-hybrid-router",
       "next-pages-router",
       "vite-react",
     ]),
@@ -449,6 +450,15 @@ const shouldRunRule = ({
 }): boolean => {
   if (category && rule.category !== category) {
     return false;
+  }
+
+  if (project.framework.adapter === "next-hybrid-router") {
+    return (
+      rule.adapters.includes("core") ||
+      rule.adapters.includes("next-app-router") ||
+      rule.adapters.includes("next-hybrid-router") ||
+      rule.adapters.includes("next-pages-router")
+    );
   }
 
   return (

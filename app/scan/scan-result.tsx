@@ -19,6 +19,7 @@ interface ScanResultProps {
 const FRAMEWORK_LABELS = {
   "generic-react": "React",
   "next-app-router": "Next.js App Router",
+  "next-hybrid-router": "Next.js App + Pages Router",
   "next-pages-router": "Next.js Pages Router",
   "vite-react": "Vite React",
 } as const satisfies Record<

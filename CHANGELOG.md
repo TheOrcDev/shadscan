@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Changed
 
+- Detect Next.js projects containing both App Router and Pages Router trees,
+  audit both root shells and route-boundary families, and report them through
+  the explicit `next-hybrid-router` adapter.
 - Publish agent guidance at the versioned `/agent/v1.md` contract, retain
   `/agent.md` only as a mutable latest alias, and define fetched guidance as
   untrusted reference material rather than execution authority.
@@ -18,6 +21,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Compare packed CLI report schemas with the installed package's exported
+  schema version instead of a stale duplicated smoke-test literal.
 - Move hosted TypeScript parsing and rule evaluation into disposable,
   resource-limited workers that are terminated on request abort, contain parser
   stack failures, and receive no deployment secrets in their environment.

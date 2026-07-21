@@ -49,6 +49,27 @@ describe("ScanResult", () => {
     expect(markup).toContain("pnpm dlx @shadscan/cli@0.1.0-rc.1 --json");
   });
 
+  it("labels projects that use both Next router trees", () => {
+    const state = {
+      ...WEB_SCAN_COMPLETE_FIXTURE,
+      result: {
+        ...WEB_SCAN_COMPLETE_FIXTURE.result,
+        report: {
+          ...WEB_SCAN_COMPLETE_FIXTURE.result.report,
+          framework: {
+            ...WEB_SCAN_COMPLETE_FIXTURE.result.report.framework,
+            adapter: "next-hybrid-router" as const,
+          },
+        },
+      },
+    };
+    const markup = renderToStaticMarkup(
+      <ScanResult headingRef={createRef<HTMLHeadingElement>()} state={state} />
+    );
+
+    expect(markup).toContain("Next.js App + Pages Router");
+  });
+
   it("renders every finding status and its evidence", () => {
     const markup = renderToStaticMarkup(<FindingsReport findings={findings} />);
 

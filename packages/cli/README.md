@@ -2,6 +2,9 @@
 
 Audit a React shadcn app for missing UI fundamentals.
 
+Supports Next.js App Router, Pages Router, projects using both routers during a
+migration, Vite React, and generic React applications.
+
 Requires Node.js 18 or newer.
 
 Run the release candidate from npm's `next` channel:

@@ -13,7 +13,7 @@ const CLASS_THEME_PROVIDER_PATTERN =
   /<(?:ThemeProvider|NextThemesProvider)\b[^>]*\battribute=["'{]+class["'}]+/;
 
 const themeHydrationSafeRule: AuditRule = {
-  adapters: ["next-app-router"],
+  adapters: ["next-app-router", "next-hybrid-router"],
   category: "foundation",
   confidence: "high",
   description:

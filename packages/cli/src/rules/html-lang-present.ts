@@ -1,41 +1,50 @@
 import path from "node:path";
 import type { AuditRule } from "../audit";
+import type { ProjectDiscovery } from "../discovery";
 import { fail, notApplicable, pass } from "./rule-result";
 import { getTextLineNumber, readProjectSourceFile } from "./source-files";
 
 const HTML_LANG_PATTERN = /<html\b[^>]*\blang=(?:["'][^"']+["']|\{[^}]+\})/i;
 
-const getDocumentCandidates = ({
-  framework,
-  paths,
-  rootDir,
-}: {
-  framework: {
-    adapter:
-      | "generic-react"
-      | "next-app-router"
-      | "next-pages-router"
-      | "vite-react";
-  };
-  paths: { appDir: string | null; pagesDir: string | null };
-  rootDir: string;
-}): string[] => {
-  if (framework.adapter === "next-app-router" && paths.appDir) {
-    return ["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
-      (fileName) => path.join(paths.appDir ?? "", fileName)
-    );
+interface DocumentCandidateGroup {
+  label: string;
+  paths: string[];
+}
+
+const getDocumentCandidateGroups = (
+  project: ProjectDiscovery
+): DocumentCandidateGroup[] => {
+  const groups: DocumentCandidateGroup[] = [];
+
+  if (project.versions.next && project.paths.appDir) {
+    groups.push({
+      label: "App Router",
+      paths: ["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
+        (fileName) => path.join(project.paths.appDir ?? "", fileName)
+      ),
+    });
   }
 
-  if (framework.adapter === "next-pages-router" && paths.pagesDir) {
-    return [
-      "_document.tsx",
-      "_document.jsx",
-      "_document.ts",
-      "_document.js",
-    ].map((fileName) => path.join(paths.pagesDir ?? "", fileName));
+  if (project.versions.next && project.paths.pagesDir) {
+    groups.push({
+      label: "Pages Router",
+      paths: [
+        "_document.tsx",
+        "_document.jsx",
+        "_document.ts",
+        "_document.js",
+      ].map((fileName) => path.join(project.paths.pagesDir ?? "", fileName)),
+    });
   }
 
-  return [path.join(rootDir, "index.html")];
+  return groups.length > 0
+    ? groups
+    : [
+        {
+          label: "application",
+          paths: [path.join(project.rootDir, "index.html")],
+        },
+      ];
 };
 
 const htmlLangPresentRule: AuditRule = {
@@ -46,32 +55,46 @@ const htmlLangPresentRule: AuditRule = {
   id: "html-lang-present",
   maxScore: 2,
   run: async ({ project }) => {
-    const candidates = getDocumentCandidates(project);
-    let documentPath: string | null = null;
+    const groups = getDocumentCandidateGroups(project);
+    let inspectedDocuments = 0;
+    let passingPath: string | null = null;
+    let passingLine: number | undefined;
 
-    for (const candidate of candidates) {
-      const document = await readProjectSourceFile(project, candidate);
+    for (const group of groups) {
+      for (const candidate of group.paths) {
+        const document = await readProjectSourceFile(project, candidate);
 
-      if (!document) {
-        continue;
-      }
+        if (!document) {
+          continue;
+        }
 
-      documentPath = candidate;
-      const line = getTextLineNumber(document.content, HTML_LANG_PATTERN);
+        inspectedDocuments += 1;
+        const line = getTextLineNumber(document.content, HTML_LANG_PATTERN);
 
-      if (line !== undefined) {
-        return pass("Document language is declared.", candidate, line);
+        if (line === undefined) {
+          return fail(
+            `The ${group.label} document root does not declare a language.`,
+            "Add a non-empty lang attribute to the root html element.",
+            { filePath: candidate }
+          );
+        }
+
+        passingPath ??= candidate;
+        passingLine ??= line;
+        break;
       }
     }
 
-    if (!documentPath) {
+    if (inspectedDocuments === 0) {
       return notApplicable("No document shell owned by the app was found.");
     }
 
-    return fail(
-      "The root html element does not declare a language.",
-      "Add a non-empty lang attribute to the root html element.",
-      { filePath: documentPath }
+    return pass(
+      inspectedDocuments > 1
+        ? "Every owned document shell declares a language."
+        : "Document language is declared.",
+      passingPath ?? undefined,
+      passingLine
     );
   },
   severity: "error",

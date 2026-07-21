@@ -7,6 +7,7 @@ type JsonObject = Record<string, unknown>;
 
 type FrameworkAdapter =
   | "next-app-router"
+  | "next-hybrid-router"
   | "next-pages-router"
   | "vite-react"
   | "generic-react";
@@ -351,6 +352,21 @@ const detectFramework = ({
   viteEntry: string | null;
 }): FrameworkDiscovery => {
   const evidence: string[] = [];
+
+  if (dependencies.next && appDir && pagesDir) {
+    evidence.push("next dependency found");
+    evidence.push(
+      `app router directory found at ${path.relative(rootDir, appDir)}`
+    );
+    evidence.push(
+      `pages router directory found at ${path.relative(rootDir, pagesDir)}`
+    );
+
+    return {
+      adapter: "next-hybrid-router",
+      evidence,
+    };
+  }
 
   if (dependencies.next && appDir) {
     evidence.push("next dependency found");
