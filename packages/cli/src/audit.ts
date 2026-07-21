@@ -554,8 +554,11 @@ const PROJECT_GATE_SCRIPT_NAMES = [
   "test",
   "build",
 ] as const;
+const MAX_NAMESPACED_TEST_GATES = 20;
+const SAFE_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,63}$/;
 const isNamespacedTestGate = (scriptName: string): boolean =>
-  scriptName.startsWith("test:") || scriptName.endsWith(":test");
+  SAFE_SCRIPT_NAME_PATTERN.test(scriptName) &&
+  (scriptName.startsWith("test:") || scriptName.endsWith(":test"));
 const PACKAGE_EXECUTORS = {
   bun: (packageSpecifier: string) => `bunx ${packageSpecifier}`,
   npm: (packageSpecifier: string) => `npx --yes ${packageSpecifier}`,
@@ -772,7 +775,8 @@ const getProjectGateCommands = (project: ProjectDiscovery): string[] => {
   );
   const namespacedTestGates = Object.keys(project.scripts)
     .filter(isNamespacedTestGate)
-    .sort((left, right) => left.localeCompare(right));
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, MAX_NAMESPACED_TEST_GATES);
 
   return [...standardGates, ...namespacedTestGates].map(
     (scriptName) => `${runner} ${scriptName}`

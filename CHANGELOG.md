@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Restrict agent handoff verification gates to bounded, shell-safe package
+  script names so untrusted manifests cannot inject executable instructions or
+  unbounded command output.
 - Confine hosted TypeScript config loading and shadcn alias probes to the
   materialized repository while preserving aliases across selected monorepo
   subdirectories.

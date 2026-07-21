@@ -373,6 +373,45 @@ describe("runAudit", () => {
     ]);
   });
 
+  it("bounds namespaced test gates and rejects unsafe script names", async () => {
+    const rootDir = await createReactFixture();
+    const safeTestScripts = Object.fromEntries(
+      Array.from({ length: 24 }, (_, index) => [
+        `test:suite-${String(index).padStart(2, "0")}`,
+        "vitest run",
+      ])
+    );
+    await writeFixtureFile(
+      rootDir,
+      "package.json",
+      `${JSON.stringify(
+        {
+          dependencies: { react: "19.2.4" },
+          name: "audit-fixture",
+          scripts: {
+            ...safeTestScripts,
+            "test:escape; touch compromised": "vitest run",
+            [`test:${"x".repeat(65)}`]: "vitest run",
+          },
+        },
+        null,
+        2
+      )}\n`
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: [createRule({ id: "passing-rule" })],
+    });
+
+    expect(report.agentHandoff.verification.projectGates).toHaveLength(20);
+    expect(report.agentHandoff.verification.projectGates).toEqual(
+      Array.from(
+        { length: 20 },
+        (_, index) => `pnpm test:suite-${String(index).padStart(2, "0")}`
+      )
+    );
+  });
+
   it("names the executable when generating a Bun verification command", async () => {
     const rootDir = await createReactFixture("bun");
 
