@@ -113,6 +113,11 @@ the scan identity, versioned report, and the same prompt in
 rule-level consumers and adds grouped `workItems` plus version-pinned
 verification commands. Errors are always versioned JSON.
 
+For GitHub scans, the resolved commit SHA is the immutable checkout identity.
+The SHA-256 source digest identifies the submitted or downloaded compressed
+archive bytes. In snapshot mode it is not a canonical checkout or source-tree
+hash and should not be compared with a Git tree hash.
+
 ## Operational boundaries
 
 - Hosted work has a 25-second deadline within the 30-second route limit and

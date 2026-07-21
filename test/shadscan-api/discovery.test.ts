@@ -39,6 +39,9 @@ describe("hosted API agent instructions", () => {
     expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain(
       "Create a fresh sanitized snapshot"
     );
+    expect(AGENT_INSTRUCTIONS_MARKDOWN).toContain(
+      "not a canonical hash of a checkout or extracted source tree"
+    );
   });
 
   it("does not embed credentials or local workspace paths", () => {

@@ -537,12 +537,22 @@ const OPENAPI_DOCUMENT = {
         additionalProperties: false,
         required: ["digest", "kind", "revision"],
         properties: {
-          digest: { pattern: SHA256_DIGEST_PATTERN, type: ["string", "null"] },
+          digest: {
+            description:
+              "SHA-256 identity of the submitted or downloaded compressed archive bytes; not a canonical source-tree digest.",
+            pattern: SHA256_DIGEST_PATTERN,
+            type: ["string", "null"],
+          },
           kind: {
             enum: ["git", "snapshot", "working-tree"],
             type: "string",
           },
-          revision: { minLength: 1, type: ["string", "null"] },
+          revision: {
+            description:
+              "Immutable resolved commit for Git sources; null for snapshots and local working trees.",
+            minLength: 1,
+            type: ["string", "null"],
+          },
         },
       },
       AuditReport: {
@@ -690,7 +700,12 @@ const OPENAPI_DOCUMENT = {
             type: ["string", "null"],
           },
           rulesetVersion: { minLength: 1, type: "string" },
-          sourceDigest: { pattern: SHA256_DIGEST_PATTERN, type: "string" },
+          sourceDigest: {
+            description:
+              "SHA-256 identity of the submitted or downloaded compressed archive bytes.",
+            pattern: SHA256_DIGEST_PATTERN,
+            type: "string",
+          },
           status: { const: "completed", type: "string" },
         },
       },

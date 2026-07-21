@@ -53,7 +53,7 @@ return `1`. Public usage and output documentation is available at
 
 - Audit JSON uses schema version `4` and is validated by the exported
   `AuditReportSchema`.
-- Agent prompt output uses prompt version `4`.
+- Agent prompt output uses prompt version `5`.
 - Reports identify the exact bundled ruleset version that produced them.
 - `RULE_CATALOG` exposes immutable rule metadata without exposing the internal
   custom-rule runner.

@@ -10,8 +10,8 @@ stable releases published under `latest`.
 
 - Pack the npm artifact once, smoke-test that exact tarball, verify its SHA-512,
   and submit the same bytes to staged publishing.
-- Advance agent prompts to version 4 and include the selected-project context
-  in the bounded handoff payload.
+- Advance agent prompts to version 5, include selected-project context, and
+  distinguish immutable Git revisions from archive-byte snapshot digests.
 
 ### Fixed
 
