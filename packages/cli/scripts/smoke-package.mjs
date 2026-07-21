@@ -167,7 +167,7 @@ try {
   });
   assert.match(promptResult.stdout, /<shadscan-data/);
   assert.match(promptResult.stdout, /"acceptanceCriteria"/);
-  assert.match(promptResult.stdout, /"promptVersion": 2/);
+  assert.match(promptResult.stdout, /"promptVersion": 3/);
   assert.match(promptResult.stdout, /"workItems"/);
 
   const thresholdResult = await run(

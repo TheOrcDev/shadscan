@@ -13,7 +13,7 @@ const MARKDOWN_MEDIA_TYPE = "text/markdown";
 const JSON_MEDIA_TYPE = "application/json";
 
 const PUBLIC_CONTRACT_VERSIONS = {
-  prompt: 2,
+  prompt: 3,
   report: 3,
   scan: HOSTED_SCAN_SCHEMA_VERSION,
 } as const;
