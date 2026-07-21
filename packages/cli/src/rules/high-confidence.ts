@@ -13,9 +13,7 @@ import {
   isStringLiteral,
   isVariableDeclaration,
   type Node,
-  type ParseConfigFileHost,
   resolveModuleName,
-  sys,
 } from "typescript";
 import {
   findOwnedSourceScopes,
@@ -32,6 +30,10 @@ import type {
   AuditRuleResult,
 } from "../audit";
 import type { ProjectDiscovery } from "../discovery";
+import {
+  type ConfinedTypeScriptHost,
+  createConfinedTypeScriptHost,
+} from "../typescript-host";
 import {
   fileExists,
   findFiles,
@@ -56,27 +58,22 @@ const HTML_DESCRIPTION_PATTERN = /<meta\s+name=["']description["']/;
 const FAVICON_LINK_PATTERN = /<link\s+rel=["'](?:icon|shortcut icon)["']/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
-const parseConfigHost: ParseConfigFileHost = {
-  ...sys,
-  onUnRecoverableConfigFileDiagnostic: () => undefined,
-};
-
 interface ImportedHelper {
   importedName: string;
   moduleName: string;
 }
 
-const getCompilerOptions = (project: ProjectDiscovery): CompilerOptions => {
+const getCompilerOptions = (
+  project: ProjectDiscovery,
+  host: ConfinedTypeScriptHost
+): CompilerOptions => {
   if (!project.paths.tsconfig) {
     return {};
   }
 
   return (
-    getParsedCommandLineOfConfigFile(
-      project.paths.tsconfig,
-      {},
-      parseConfigHost
-    )?.options ?? {}
+    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
+      ?.options ?? {}
   );
 };
 
@@ -212,17 +209,22 @@ const resolveImportedHelperFile = (
   containingFile: ParsedSourceFile,
   moduleName: string,
   compilerOptions: CompilerOptions,
+  host: ConfinedTypeScriptHost,
   filesByPath: Map<string, ParsedSourceFile>
 ): ParsedSourceFile | null => {
   const resolvedFileName = resolveModuleName(
     moduleName,
     containingFile.filePath,
     compilerOptions,
-    sys
+    host
   ).resolvedModule?.resolvedFileName;
 
   if (
-    !(resolvedFileName && isWithinProject(project.rootDir, resolvedFileName))
+    !(
+      resolvedFileName &&
+      host.isPathAllowed(resolvedFileName) &&
+      isWithinProject(project.rootDir, resolvedFileName)
+    )
   ) {
     return null;
   }
@@ -234,6 +236,7 @@ const sourceScopeCallsVerifiedThemeToggle = (
   scope: SourceScope,
   project: ProjectDiscovery,
   compilerOptions: CompilerOptions,
+  host: ConfinedTypeScriptHost,
   filesByPath: Map<string, ParsedSourceFile>
 ): boolean => {
   for (const call of getExtractedThemeToggleCalls(scope)) {
@@ -261,6 +264,7 @@ const sourceScopeCallsVerifiedThemeToggle = (
       scope.file,
       importedHelper.moduleName,
       compilerOptions,
+      host,
       filesByPath
     );
     if (!helperFile) {
@@ -415,7 +419,8 @@ const themeHotkeyPresentRule: AuditRule = {
     const filesByPath = new Map(
       parsedFiles.map((file) => [path.resolve(file.filePath), file])
     );
-    const compilerOptions = getCompilerOptions(context.project);
+    const host = createConfinedTypeScriptHost(context.filesystemRoot);
+    const compilerOptions = getCompilerOptions(context.project, host);
 
     for (const scope of hotkeyScopes) {
       const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(scope.content);
@@ -425,6 +430,7 @@ const themeHotkeyPresentRule: AuditRule = {
           scope,
           context.project,
           compilerOptions,
+          host,
           filesByPath
         );
       const checksDKey = D_KEY_PATTERN.test(scope.content);
@@ -641,7 +647,10 @@ const toastProviderPresentRule: AuditRule = {
   id: "toast-provider-present",
   maxScore: 3,
   run: async (context) => {
-    const analysis = await analyzeToastRuntime(context.project);
+    const analysis = await analyzeToastRuntime(
+      context.project,
+      context.filesystemRoot
+    );
 
     if (analysis.mount && analysis.runtime) {
       return pass(

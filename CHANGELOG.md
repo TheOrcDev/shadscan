@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Confine every TypeScript config and module resolver used by hosted audits to
+  the materialized source, including inherited configs, directory globs, and
+  symlinked paths.
 - Download public GitHub archives without the server token, closing the
   visibility-change window, and preserve the documented GitHub timeout error
   across extraction and project-root validation.

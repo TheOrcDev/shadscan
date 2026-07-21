@@ -12,14 +12,16 @@ import {
   isNamespaceImport,
   isStringLiteral,
   type Node,
-  type ParseConfigFileHost,
   resolveModuleName,
   ScriptKind,
   ScriptTarget,
-  sys,
   type SourceFile as TypeScriptSourceFile,
 } from "typescript";
 import type { ProjectDiscovery } from "../discovery";
+import {
+  type ConfinedTypeScriptHost,
+  createConfinedTypeScriptHost,
+} from "../typescript-host";
 import {
   getProjectSourceFiles,
   readProjectSourceFile,
@@ -84,13 +86,8 @@ const MODULE_CANDIDATE_SUFFIXES = [
 ] as const;
 const analysisCache = new WeakMap<
   ProjectDiscovery,
-  Promise<ToastRuntimeAnalysis>
+  Map<string, Promise<ToastRuntimeAnalysis>>
 >();
-
-const parseConfigHost: ParseConfigFileHost = {
-  ...sys,
-  onUnRecoverableConfigFileDiagnostic: () => undefined,
-};
 
 const getScriptKind = (filePath: string): ScriptKind => {
   if (filePath.endsWith(".tsx")) {
@@ -216,27 +213,17 @@ const getRenderedBindings = (
   return renderedBindings;
 };
 
-const isWithinRoot = (rootDir: string, candidatePath: string): boolean => {
-  const relativePath = path.relative(rootDir, candidatePath);
-
-  return (
-    relativePath !== ".." &&
-    !relativePath.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relativePath)
-  );
-};
-
-const getCompilerOptions = (project: ProjectDiscovery): CompilerOptions => {
+const getCompilerOptions = (
+  project: ProjectDiscovery,
+  host: ConfinedTypeScriptHost
+): CompilerOptions => {
   if (!project.paths.tsconfig) {
     return {};
   }
 
   return (
-    getParsedCommandLineOfConfigFile(
-      project.paths.tsconfig,
-      {},
-      parseConfigHost
-    )?.options ?? {}
+    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
+      ?.options ?? {}
   );
 };
 
@@ -262,18 +249,19 @@ const resolveLocalImport = (
   containingFile: string,
   project: ProjectDiscovery,
   compilerOptions: CompilerOptions,
+  host: ConfinedTypeScriptHost,
   filesByPath: Map<string, ParsedProjectFile>
 ): ParsedProjectFile | null => {
   const resolvedFileName = resolveModuleName(
     moduleName,
     containingFile,
     compilerOptions,
-    sys
+    host
   ).resolvedModule?.resolvedFileName;
 
   if (
     resolvedFileName &&
-    isWithinRoot(project.rootDir, resolvedFileName) &&
+    host.isPathAllowed(resolvedFileName) &&
     !resolvedFileName.includes(`${path.sep}node_modules${path.sep}`)
   ) {
     const resolvedFile = filesByPath.get(path.resolve(resolvedFileName));
@@ -339,6 +327,7 @@ const findRuntimeThroughLocalImports = (
   currentFile: ParsedProjectFile,
   project: ProjectDiscovery,
   compilerOptions: CompilerOptions,
+  host: ConfinedTypeScriptHost,
   filesByPath: Map<string, ParsedProjectFile>,
   visitedFiles: Set<string>,
   depth: number
@@ -383,6 +372,7 @@ const findRuntimeThroughLocalImports = (
       currentFile.file.path,
       project,
       compilerOptions,
+      host,
       filesByPath
     );
 
@@ -394,6 +384,7 @@ const findRuntimeThroughLocalImports = (
       localFile,
       project,
       compilerOptions,
+      host,
       filesByPath,
       visitedFiles,
       depth + 1
@@ -447,8 +438,10 @@ const readShell = async (
 };
 
 const runToastRuntimeAnalysis = async (
-  project: ProjectDiscovery
+  project: ProjectDiscovery,
+  filesystemRoot: string
 ): Promise<ToastRuntimeAnalysis> => {
+  const host = createConfinedTypeScriptHost(filesystemRoot);
   const hasDependency = TOAST_DEPENDENCIES.some(
     (dependency) => project.dependencies[dependency]
   );
@@ -468,7 +461,7 @@ const runToastRuntimeAnalysis = async (
   const parsedShell =
     filesByPath.get(path.resolve(shell.path)) ?? parseSourceFile(shell);
   const renderedBindings = getRenderedBindings(parsedShell.sourceFile);
-  const compilerOptions = getCompilerOptions(project);
+  const compilerOptions = getCompilerOptions(project, host);
 
   for (const reference of getImportReferences(parsedShell.sourceFile)) {
     for (const binding of reference.bindings) {
@@ -506,6 +499,7 @@ const runToastRuntimeAnalysis = async (
         shell.path,
         project,
         compilerOptions,
+        host,
         filesByPath
       );
 
@@ -517,6 +511,7 @@ const runToastRuntimeAnalysis = async (
         localFile,
         project,
         compilerOptions,
+        host,
         filesByPath,
         new Set<string>(),
         1
@@ -532,16 +527,20 @@ const runToastRuntimeAnalysis = async (
 };
 
 const analyzeToastRuntime = (
-  project: ProjectDiscovery
+  project: ProjectDiscovery,
+  filesystemRoot: string
 ): Promise<ToastRuntimeAnalysis> => {
-  const cachedAnalysis = analysisCache.get(project);
+  const cacheKey = path.resolve(filesystemRoot);
+  const projectCache = analysisCache.get(project) ?? new Map();
+  const cachedAnalysis = projectCache.get(cacheKey);
 
   if (cachedAnalysis) {
     return cachedAnalysis;
   }
 
-  const analysis = runToastRuntimeAnalysis(project);
-  analysisCache.set(project, analysis);
+  const analysis = runToastRuntimeAnalysis(project, filesystemRoot);
+  projectCache.set(cacheKey, analysis);
+  analysisCache.set(project, projectCache);
   return analysis;
 };
 

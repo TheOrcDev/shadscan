@@ -20,9 +20,12 @@ const commandMenuPresentRule: AuditRule = {
     "Checks for an app-level command menu with input, empty state, and commands.",
   id: "command-menu-present",
   maxScore: 5,
-  run: async ({ project }) => {
+  run: async ({ filesystemRoot, project }) => {
     const files = await getProjectSourceFiles(project);
-    const mountedFiles = await getMountedComponentFilePaths(project);
+    const mountedFiles = await getMountedComponentFilePaths(
+      project,
+      filesystemRoot
+    );
 
     for (const file of files) {
       if (

@@ -25,12 +25,15 @@ const commandMenuHotkeyPresentRule: AuditRule = {
     "Checks for a Cmd/Ctrl+K command-menu shortcut that intercepts the browser default.",
   id: "command-menu-hotkey-present",
   maxScore: 4,
-  run: async ({ project }) => {
+  run: async ({ filesystemRoot, project }) => {
     const hotkeyScopes = await findOwnedSourceScopes(
       project,
       COMMAND_HOTKEY_TRIGGER_PATTERN
     );
-    const mountedFiles = await getMountedComponentFilePaths(project);
+    const mountedFiles = await getMountedComponentFilePaths(
+      project,
+      filesystemRoot
+    );
 
     for (const scope of hotkeyScopes) {
       if (!mountedFiles.has(path.resolve(scope.file.filePath))) {

@@ -1,12 +1,13 @@
-import { access } from "node:fs/promises";
 import path from "node:path";
 import {
   type CompilerOptions,
   getParsedCommandLineOfConfigFile,
-  type ParseConfigFileHost,
-  sys,
 } from "typescript";
 import type { AuditRule } from "../audit";
+import {
+  type ConfinedTypeScriptHost,
+  createConfinedTypeScriptHost,
+} from "../typescript-host";
 import { fail, notApplicable, pass } from "./rule-result";
 
 type CompilerOptionsWithPathsBase = CompilerOptions & {
@@ -30,72 +31,22 @@ const MODULE_CANDIDATE_SUFFIXES = [
   "/index.jsx",
 ] as const;
 
-const isWithinRoot = (rootDir: string, candidatePath: string): boolean => {
-  const relativePath = path.relative(rootDir, candidatePath);
-
-  return (
-    relativePath !== ".." &&
-    !relativePath.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relativePath)
-  );
-};
-
-const createParseConfigHost = (filesystemRoot: string): ParseConfigFileHost => {
-  const resolvedRoot = path.resolve(filesystemRoot);
-  const isAllowed = (candidatePath: string): boolean =>
-    isWithinRoot(resolvedRoot, path.resolve(candidatePath));
-
-  return {
-    ...sys,
-    fileExists: (filePath) => isAllowed(filePath) && sys.fileExists(filePath),
-    onUnRecoverableConfigFileDiagnostic: () => undefined,
-    readDirectory: (rootDir, extensions, excludes, includes, depth) =>
-      isAllowed(rootDir)
-        ? sys
-            .readDirectory(rootDir, extensions, excludes, includes, depth)
-            .filter(isAllowed)
-        : [],
-    readFile: (filePath) =>
-      isAllowed(filePath) ? sys.readFile(filePath) : undefined,
-  };
-};
-
-const fileExists = async (
-  filePath: string,
-  filesystemRoot: string
-): Promise<boolean> => {
-  if (!isWithinRoot(path.resolve(filesystemRoot), path.resolve(filePath))) {
-    return false;
-  }
-
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const getPathMappings = async (
+const getPathMappings = (
   rootDir: string,
   tsconfigPath: string | null,
-  filesystemRoot: string
-): Promise<{
+  host: ConfinedTypeScriptHost
+): {
   basePath: string;
   configPath: string;
   mappings: Record<string, string[]>;
-} | null> => {
+} | null => {
   const configPath = tsconfigPath ?? path.join(rootDir, "jsconfig.json");
 
-  if (!(await fileExists(configPath, filesystemRoot))) {
+  if (!host.fileExists(configPath)) {
     return null;
   }
 
-  const parsedConfig = getParsedCommandLineOfConfigFile(
-    configPath,
-    {},
-    createParseConfigHost(filesystemRoot)
-  );
+  const parsedConfig = getParsedCommandLineOfConfigFile(configPath, {}, host);
   const options = parsedConfig?.options as
     | CompilerOptionsWithPathsBase
     | undefined;
@@ -126,12 +77,12 @@ const getMappingCapture = (mapping: string, alias: string): string | null => {
   return alias.slice(prefix.length, alias.length - suffix.length || undefined);
 };
 
-const targetExists = async (
+const targetExists = (
   targetPath: string,
-  filesystemRoot: string
-): Promise<boolean> => {
+  host: ConfinedTypeScriptHost
+): boolean => {
   for (const suffix of MODULE_CANDIDATE_SUFFIXES) {
-    if (await fileExists(`${targetPath}${suffix}`, filesystemRoot)) {
+    if (host.pathExists(`${targetPath}${suffix}`)) {
       return true;
     }
   }
@@ -139,37 +90,35 @@ const targetExists = async (
   return false;
 };
 
-const mappingTargetExists = async (
+const mappingTargetExists = (
   target: string,
   basePath: string,
   capture: string,
-  filesystemRoot: string
-): Promise<boolean> => {
+  host: ConfinedTypeScriptHost
+): boolean => {
   const wildcardIndex = target.indexOf("*");
 
   if (wildcardIndex === -1) {
-    return targetExists(path.resolve(basePath, target), filesystemRoot);
+    return targetExists(path.resolve(basePath, target), host);
   }
 
   const mappedTarget = target.replace("*", capture);
-  if (
-    await targetExists(path.resolve(basePath, mappedTarget), filesystemRoot)
-  ) {
+  if (targetExists(path.resolve(basePath, mappedTarget), host)) {
     return true;
   }
 
   const targetRoot = target.slice(0, wildcardIndex);
-  return fileExists(path.resolve(basePath, targetRoot), filesystemRoot);
+  return host.pathExists(path.resolve(basePath, targetRoot));
 };
 
-const isResolvableAlias = async (
+const isResolvableAlias = (
   alias: string,
   rootDir: string,
-  filesystemRoot: string,
-  pathMappings: NonNullable<Awaited<ReturnType<typeof getPathMappings>>>
-): Promise<boolean> => {
+  host: ConfinedTypeScriptHost,
+  pathMappings: NonNullable<ReturnType<typeof getPathMappings>>
+): boolean => {
   if (alias.startsWith("./") || alias.startsWith("../")) {
-    return targetExists(path.resolve(rootDir, alias), filesystemRoot);
+    return targetExists(path.resolve(rootDir, alias), host);
   }
 
   for (const [mapping, targets] of Object.entries(pathMappings.mappings)) {
@@ -180,14 +129,7 @@ const isResolvableAlias = async (
     }
 
     for (const target of targets) {
-      if (
-        await mappingTargetExists(
-          target,
-          pathMappings.basePath,
-          capture,
-          filesystemRoot
-        )
-      ) {
+      if (mappingTargetExists(target, pathMappings.basePath, capture, host)) {
         return true;
       }
     }
@@ -204,7 +146,7 @@ const componentsAliasesResolveRule: AuditRule = {
     "Checks whether shadcn aliases can be resolved through TypeScript or JavaScript path mappings.",
   id: "components-aliases-resolve",
   maxScore: 2,
-  run: async ({ filesystemRoot, project }) => {
+  run: ({ filesystemRoot, project }) => {
     const aliases = Object.entries(project.shadcn.aliases);
 
     if (aliases.length === 0) {
@@ -213,10 +155,11 @@ const componentsAliasesResolveRule: AuditRule = {
       );
     }
 
-    const pathMappings = await getPathMappings(
+    const host = createConfinedTypeScriptHost(filesystemRoot);
+    const pathMappings = getPathMappings(
       project.rootDir,
       project.paths.tsconfig,
-      filesystemRoot
+      host
     );
 
     if (!pathMappings) {
@@ -231,12 +174,7 @@ const componentsAliasesResolveRule: AuditRule = {
 
     for (const aliasEntry of aliases) {
       if (
-        !(await isResolvableAlias(
-          aliasEntry[1],
-          project.rootDir,
-          filesystemRoot,
-          pathMappings
-        ))
+        !isResolvableAlias(aliasEntry[1], project.rootDir, host, pathMappings)
       ) {
         unresolvedAliases.push(aliasEntry);
       }

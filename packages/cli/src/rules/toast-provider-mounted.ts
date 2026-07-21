@@ -10,8 +10,8 @@ const toastProviderMountedRule: AuditRule = {
     "Checks whether toast infrastructure is mounted from the app shell.",
   id: "toast-provider-mounted",
   maxScore: 3,
-  run: async ({ project }) => {
-    const analysis = await analyzeToastRuntime(project);
+  run: async ({ filesystemRoot, project }) => {
+    const analysis = await analyzeToastRuntime(project, filesystemRoot);
 
     if (!analysis.shell) {
       return notApplicable("No supported application shell file was found.");

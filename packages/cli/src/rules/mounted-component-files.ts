@@ -9,15 +9,17 @@ import {
   isNamedImports,
   isNamespaceImport,
   isStringLiteral,
-  type ParseConfigFileHost,
   resolveModuleName,
   ScriptKind,
   ScriptTarget,
-  sys,
   type SourceFile as TypeScriptSourceFile,
 } from "typescript";
 import { walkNodes } from "../ast";
 import type { ProjectDiscovery } from "../discovery";
+import {
+  type ConfinedTypeScriptHost,
+  createConfinedTypeScriptHost,
+} from "../typescript-host";
 import { getProjectSourceFiles, type SourceFile } from "./source-files";
 
 interface ImportReference {
@@ -46,11 +48,10 @@ const MODULE_CANDIDATE_SUFFIXES = [
   "/index.jsx",
 ] as const;
 const SCRIPT_FILE_PATTERN = /\.[cm]?[jt]sx?$/;
-const parseConfigHost: ParseConfigFileHost = {
-  ...sys,
-  onUnRecoverableConfigFileDiagnostic: () => undefined,
-};
-const mountedFilesCache = new WeakMap<ProjectDiscovery, Promise<Set<string>>>();
+const mountedFilesCache = new WeakMap<
+  ProjectDiscovery,
+  Map<string, Promise<Set<string>>>
+>();
 
 const getScriptKind = (filePath: string): ScriptKind => {
   if (filePath.endsWith(".tsx")) {
@@ -75,17 +76,17 @@ const parseSourceFile = (file: SourceFile): ParsedProjectFile => ({
   ),
 });
 
-const getCompilerOptions = (project: ProjectDiscovery): CompilerOptions => {
+const getCompilerOptions = (
+  project: ProjectDiscovery,
+  host: ConfinedTypeScriptHost
+): CompilerOptions => {
   if (!project.paths.tsconfig) {
     return {};
   }
 
   return (
-    getParsedCommandLineOfConfigFile(
-      project.paths.tsconfig,
-      {},
-      parseConfigHost
-    )?.options ?? {}
+    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
+      ?.options ?? {}
   );
 };
 
@@ -148,16 +149,6 @@ const getRenderedBindings = (sourceFile: TypeScriptSourceFile): Set<string> => {
   return renderedBindings;
 };
 
-const isWithinRoot = (rootDir: string, candidatePath: string): boolean => {
-  const relativePath = path.relative(rootDir, candidatePath);
-
-  return (
-    relativePath !== ".." &&
-    !relativePath.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relativePath)
-  );
-};
-
 const getSourceCandidate = (
   candidatePath: string,
   filesByPath: Map<string, ParsedProjectFile>
@@ -180,18 +171,19 @@ const resolveLocalImport = (
   containingFile: string,
   project: ProjectDiscovery,
   compilerOptions: CompilerOptions,
+  host: ConfinedTypeScriptHost,
   filesByPath: Map<string, ParsedProjectFile>
 ): ParsedProjectFile | null => {
   const resolvedFileName = resolveModuleName(
     moduleName,
     containingFile,
     compilerOptions,
-    sys
+    host
   ).resolvedModule?.resolvedFileName;
 
   if (
     resolvedFileName &&
-    isWithinRoot(project.rootDir, resolvedFileName) &&
+    host.isPathAllowed(resolvedFileName) &&
     !resolvedFileName.includes(`${path.sep}node_modules${path.sep}`)
   ) {
     const resolvedFile = filesByPath.get(path.resolve(resolvedFileName));
@@ -244,8 +236,10 @@ const getShellCandidates = (project: ProjectDiscovery): string[] => {
 };
 
 const findMountedComponentFiles = async (
-  project: ProjectDiscovery
+  project: ProjectDiscovery,
+  filesystemRoot: string
 ): Promise<Set<string>> => {
+  const host = createConfinedTypeScriptHost(filesystemRoot);
   const sourceFiles = await getProjectSourceFiles(project);
   const parsedFiles = sourceFiles
     .filter((file) => SCRIPT_FILE_PATTERN.test(file.path))
@@ -253,7 +247,7 @@ const findMountedComponentFiles = async (
   const filesByPath = new Map(
     parsedFiles.map((file) => [path.resolve(file.file.path), file])
   );
-  const compilerOptions = getCompilerOptions(project);
+  const compilerOptions = getCompilerOptions(project, host);
   const pendingFiles = getShellCandidates(project)
     .map((candidate) => filesByPath.get(path.resolve(candidate)))
     .filter((file): file is ParsedProjectFile => Boolean(file));
@@ -289,6 +283,7 @@ const findMountedComponentFiles = async (
         currentFile.file.path,
         project,
         compilerOptions,
+        host,
         filesByPath
       );
 
@@ -302,16 +297,20 @@ const findMountedComponentFiles = async (
 };
 
 const getMountedComponentFilePaths = (
-  project: ProjectDiscovery
+  project: ProjectDiscovery,
+  filesystemRoot: string
 ): Promise<Set<string>> => {
-  const cachedFiles = mountedFilesCache.get(project);
+  const cacheKey = path.resolve(filesystemRoot);
+  const projectCache = mountedFilesCache.get(project) ?? new Map();
+  const cachedFiles = projectCache.get(cacheKey);
 
   if (cachedFiles) {
     return cachedFiles;
   }
 
-  const mountedFiles = findMountedComponentFiles(project);
-  mountedFilesCache.set(project, mountedFiles);
+  const mountedFiles = findMountedComponentFiles(project, filesystemRoot);
+  projectCache.set(cacheKey, mountedFiles);
+  mountedFilesCache.set(project, projectCache);
   return mountedFiles;
 };
 

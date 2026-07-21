@@ -11,14 +11,16 @@ import {
   isNamedImports,
   isStringLiteral,
   type Node,
-  type ParseConfigFileHost,
   resolveModuleName,
   ScriptKind,
   ScriptTarget,
-  sys,
 } from "typescript";
 import type { AuditRule } from "../audit";
 import type { ProjectDiscovery } from "../discovery";
+import {
+  type ConfinedTypeScriptHost,
+  createConfinedTypeScriptHost,
+} from "../typescript-host";
 import { fail, notApplicable, pass } from "./rule-result";
 import { findFiles, getTextLineNumber } from "./source-files";
 
@@ -26,22 +28,18 @@ const RECOVERY_CONTROL_PATTERN =
   /<(?:a|Link)\b[^>]*href=|<(?:button|Button)\b[^>]*onClick\s*=\s*\{[^}]*(?:back|push|replace)|<(?:form|Search|SearchInput)(?:\s|>)/i;
 const NOT_FOUND_COMPONENT_PATTERN = /export\s+default/;
 const MAX_RENDERED_COMPONENT_FILES = 32;
-const parseConfigHost: ParseConfigFileHost = {
-  ...sys,
-  onUnRecoverableConfigFileDiagnostic: () => undefined,
-};
 
-const getCompilerOptions = (project: ProjectDiscovery): CompilerOptions => {
+const getCompilerOptions = (
+  project: ProjectDiscovery,
+  host: ConfinedTypeScriptHost
+): CompilerOptions => {
   if (!project.paths.tsconfig) {
     return {};
   }
 
   return (
-    getParsedCommandLineOfConfigFile(
-      project.paths.tsconfig,
-      {},
-      parseConfigHost
-    )?.options ?? {}
+    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
+      ?.options ?? {}
   );
 };
 
@@ -113,16 +111,17 @@ const resolveProjectModule = (
   moduleSpecifier: string,
   containingFile: string,
   projectRoot: string,
-  compilerOptions: CompilerOptions
+  compilerOptions: CompilerOptions,
+  host: ConfinedTypeScriptHost
 ): string | null => {
   const resolvedFile = resolveModuleName(
     moduleSpecifier,
     containingFile,
     compilerOptions,
-    sys
+    host
   ).resolvedModule?.resolvedFileName;
 
-  if (!resolvedFile) {
+  if (!(resolvedFile && host.isPathAllowed(resolvedFile))) {
     return null;
   }
 
@@ -139,11 +138,13 @@ const resolveProjectModule = (
 const hasRecoveryInRenderedTree = async ({
   compilerOptions,
   filePath,
+  host,
   projectRoot,
   visited,
 }: {
   compilerOptions: CompilerOptions;
   filePath: string;
+  host: ConfinedTypeScriptHost;
   projectRoot: string;
   visited: Set<string>;
 }): Promise<boolean> => {
@@ -164,7 +165,8 @@ const hasRecoveryInRenderedTree = async ({
       moduleSpecifier,
       filePath,
       projectRoot,
-      compilerOptions
+      compilerOptions,
+      host
     );
 
     if (
@@ -172,6 +174,7 @@ const hasRecoveryInRenderedTree = async ({
       (await hasRecoveryInRenderedTree({
         compilerOptions,
         filePath: resolvedFile,
+        host,
         projectRoot,
         visited,
       }))
@@ -191,7 +194,7 @@ const notFoundRecoveryPresentRule: AuditRule = {
     "Checks Next not-found UI and rendered local components for a navigation or search recovery path.",
   id: "not-found-recovery-present",
   maxScore: 3,
-  run: async ({ project }) => {
+  run: async ({ filesystemRoot, project }) => {
     const routeDir =
       project.framework.adapter === "next-pages-router"
         ? project.paths.pagesDir
@@ -216,7 +219,8 @@ const notFoundRecoveryPresentRule: AuditRule = {
       return notApplicable("No Next not-found UI file was found.");
     }
 
-    const compilerOptions = getCompilerOptions(project);
+    const host = createConfinedTypeScriptHost(filesystemRoot);
+    const compilerOptions = getCompilerOptions(project, host);
 
     for (const filePath of notFoundFiles) {
       const content = await readFile(filePath, "utf8");
@@ -225,6 +229,7 @@ const notFoundRecoveryPresentRule: AuditRule = {
         await hasRecoveryInRenderedTree({
           compilerOptions,
           filePath,
+          host,
           projectRoot: project.rootDir,
           visited: new Set<string>(),
         })
