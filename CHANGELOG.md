@@ -8,6 +8,9 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Download public GitHub archives without the server token, closing the
+  visibility-change window, and preserve the documented GitHub timeout error
+  across extraction and project-root validation.
 - Reject API key IDs that resolve only through JavaScript object prototypes,
   preserving the stable unauthorized response for malformed credentials.
 - Restrict agent handoff verification gates to bounded, shell-safe package

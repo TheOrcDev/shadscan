@@ -73,6 +73,26 @@ const throwGitHubRequestError = (
   );
 };
 
+const rethrowGitHubSourceError = (
+  error: unknown,
+  sourceSignal: AbortSignal
+): never => {
+  if (error instanceof HostedScanError) {
+    throw error;
+  }
+
+  const errorName = error instanceof Error ? error.name : "";
+  if (
+    sourceSignal.aborted ||
+    errorName === "AbortError" ||
+    errorName === "TimeoutError"
+  ) {
+    return throwGitHubRequestError(error, sourceSignal);
+  }
+
+  throw error;
+};
+
 const fetchGitHub = async (
   url: string,
   init: RequestInit,
@@ -289,7 +309,7 @@ const downloadGitHubArchive = async (
 ): Promise<Buffer> => {
   const initialResponse = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/tarball/${commitSha}`,
-    { headers: getGitHubHeaders(), redirect: "manual" },
+    { headers: getGitHubHeaders(false), redirect: "manual" },
     fetchImplementation,
     sourceSignal
   );
@@ -368,32 +388,34 @@ const materializeGitHubSource = async (
   const sourceSignal = deadlineSignal
     ? AbortSignal.any([deadlineSignal, sourceTimeoutSignal])
     : sourceTimeoutSignal;
-  sourceSignal.throwIfAborted();
-  await assertPublicGitHubRepository(
-    repository,
-    fetchImplementation,
-    sourceSignal
-  );
-  const commitSha = await resolveGitHubRevision(
-    repository,
-    revision,
-    fetchImplementation,
-    sourceSignal
-  );
-  const archiveBuffer = await downloadGitHubArchive(
-    repository,
-    commitSha,
-    fetchImplementation,
-    sourceSignal
-  );
-  sourceSignal.throwIfAborted();
-  const sourceDigest = `sha256:${createHash("sha256")
-    .update(archiveBuffer)
-    .digest("hex")}`;
-  const cleanupDirectory = await createMaterializationDirectory();
-  const extractionRoot = path.join(cleanupDirectory, "source");
+  let cleanupDirectory: string | undefined;
 
   try {
+    sourceSignal.throwIfAborted();
+    await assertPublicGitHubRepository(
+      repository,
+      fetchImplementation,
+      sourceSignal
+    );
+    const commitSha = await resolveGitHubRevision(
+      repository,
+      revision,
+      fetchImplementation,
+      sourceSignal
+    );
+    const archiveBuffer = await downloadGitHubArchive(
+      repository,
+      commitSha,
+      fetchImplementation,
+      sourceSignal
+    );
+    sourceSignal.throwIfAborted();
+    const sourceDigest = `sha256:${createHash("sha256")
+      .update(archiveBuffer)
+      .digest("hex")}`;
+    cleanupDirectory = await createMaterializationDirectory();
+    const extractionRoot = path.join(cleanupDirectory, "source");
+
     await extractTarGzip(archiveBuffer, extractionRoot, {
       forbiddenPathBehavior: "skip",
       signal: sourceSignal,
@@ -413,8 +435,10 @@ const materializeGitHubSource = async (
       sourceRoot: extractionRoot,
     };
   } catch (error) {
-    await cleanupMaterializationDirectory(cleanupDirectory);
-    throw error;
+    if (cleanupDirectory) {
+      await cleanupMaterializationDirectory(cleanupDirectory);
+    }
+    return rethrowGitHubSourceError(error, sourceSignal);
   }
 };
 

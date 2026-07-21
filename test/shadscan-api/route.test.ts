@@ -13,7 +13,10 @@ import type {
   HostedScanResponse,
 } from "../../lib/shadscan-api/contracts";
 import { HOSTED_SCAN_DEADLINE_MS } from "../../lib/shadscan-api/deadline";
-import { GITHUB_SOURCE_TIMEOUT_MS } from "../../lib/shadscan-api/github-source";
+import {
+  GITHUB_SOURCE_TIMEOUT_MS,
+  materializeGitHubSource,
+} from "../../lib/shadscan-api/github-source";
 import {
   JSON_MEDIA_TYPE,
   MARKDOWN_MEDIA_TYPE,
@@ -525,6 +528,32 @@ describe("POST /v1/scans", () => {
     });
   });
 
+  it("normalizes a source timeout outside GitHub response handling", async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException("Timed out", "TimeoutError"));
+    const fetchMock = vi.fn();
+
+    await expect(
+      materializeGitHubSource(
+        {
+          source: {
+            kind: "github",
+            repository: "acme/widget",
+            revision: "main",
+            subdirectory: ".",
+          },
+        },
+        fetchMock,
+        controller.signal
+      )
+    ).rejects.toMatchObject({
+      code: "GITHUB_TIMEOUT",
+      retryable: true,
+      status: 504,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("classifies empty GitHub metadata as a retryable upstream failure", async () => {
     const fetchMock = vi.fn(() => new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -704,6 +733,7 @@ describe("POST /v1/scans", () => {
           url ===
           `https://api.github.com/repos/acme/widget/tarball/${IMMUTABLE_COMMIT_SHA}`
         ) {
+          expect(new Headers(init?.headers).has("authorization")).toBe(false);
           return new Response(null, {
             headers: { location: archiveUrl },
             status: 302,
