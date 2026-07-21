@@ -40,6 +40,7 @@ const createProject = (): ProjectDiscovery => ({
     configPath: path.join(PROJECT_ROOT, "components.json"),
     style: "default",
   },
+  sourceCoverage: "complete",
   versions: {
     next: null,
     react: "19.2.4",

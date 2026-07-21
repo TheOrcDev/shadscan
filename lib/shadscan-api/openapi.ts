@@ -551,6 +551,7 @@ const OPENAPI_DOCUMENT = {
         required: [
           "agentHandoff",
           "categories",
+          "coverage",
           "durationMs",
           "engineVersion",
           "findings",
@@ -573,6 +574,17 @@ const OPENAPI_DOCUMENT = {
           categories: {
             items: { $ref: "#/components/schemas/AuditCategoryScore" },
             type: "array",
+          },
+          coverage: {
+            type: "object",
+            additionalProperties: false,
+            required: ["source"],
+            properties: {
+              source: {
+                enum: ["complete", "partial"],
+                type: "string",
+              },
+            },
           },
           durationMs: { minimum: 0, type: "number" },
           engineVersion: { minLength: 1, type: "string" },

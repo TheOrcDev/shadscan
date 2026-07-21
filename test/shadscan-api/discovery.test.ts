@@ -80,6 +80,10 @@ describe("hosted API OpenAPI document", () => {
     expect(schemas.AuditReport.properties.schemaVersion.const).toBe(
       PUBLIC_CONTRACT_VERSIONS.report
     );
+    expect(schemas.AuditReport.required).toContain("coverage");
+    expect(
+      schemas.AuditReport.properties.coverage.properties.source.enum
+    ).toEqual(["complete", "partial"]);
     expect(
       schemas.HostedScanResponse.properties.handoff.properties.promptVersion
         .const

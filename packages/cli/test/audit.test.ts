@@ -140,6 +140,7 @@ describe("runAudit", () => {
       "forms",
       "production-polish",
     ]);
+    expect(report.coverage.source).toBe("complete");
     expect(report.score).toBe(100);
     expect(report.grade).toBe("A");
     expect(report.framework.adapter).toBe("generic-react");
@@ -689,6 +690,7 @@ describe("createAuditReport", () => {
         confidence: "low",
         style: null,
       },
+      sourceCoverage: "complete",
       versions: {
         next: null,
         react: null,

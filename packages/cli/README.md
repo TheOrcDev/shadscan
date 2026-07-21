@@ -16,7 +16,8 @@ Useful flags:
 - `--format human|json|prompt` selects one clean output format.
 - `--prompt` prints only a paste-ready prompt for an AI coding agent.
 - `--json` remains an alias for `--format json`.
-- `--fail-under <score>` exits non-zero when the score is below the threshold.
+- `--fail-under <score>` exits non-zero when the score is below the threshold,
+  unassessed, or based on partial source coverage.
 - `--category <category>` runs one category.
 - `--no-roast` keeps human output neutral.
 - `--roast` includes roast copy in JSON or CI output.
@@ -50,9 +51,9 @@ return `1`. Public usage and output documentation is available at
 
 ## Contracts
 
-- Audit JSON uses schema version `3` and is validated by the exported
+- Audit JSON uses schema version `4` and is validated by the exported
   `AuditReportSchema`.
-- Agent prompt output uses prompt version `3`.
+- Agent prompt output uses prompt version `4`.
 - Reports identify the exact bundled ruleset version that produced them.
 - `RULE_CATALOG` exposes immutable rule metadata without exposing the internal
   custom-rule runner.

@@ -88,6 +88,9 @@ const createReport = (): AuditReport => ({
       weight: 20,
     },
   ],
+  coverage: {
+    source: "complete",
+  },
   durationMs: 4,
   engineVersion: "0.0.1",
   findings: [

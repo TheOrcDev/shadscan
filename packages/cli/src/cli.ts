@@ -56,8 +56,10 @@ const parseCategory = (value: string): AuditCategory => {
 
 const scoreFailsThreshold = (
   score: number | null,
-  threshold: number
-): boolean => score === null || score < threshold;
+  threshold: number,
+  sourceCoverage: "complete" | "partial" = "complete"
+): boolean =>
+  sourceCoverage === "partial" || score === null || score < threshold;
 
 const resolveProjectPath = async (
   projectPath: string,
@@ -109,7 +111,7 @@ const createProgram = (): Command => {
     )
     .option(
       "--fail-under <score>",
-      "Exit non-zero when the score is below this number or is unassessed.",
+      "Exit non-zero when the score is below this number, unassessed, or based on partial source coverage.",
       parseScore
     )
     .option(
@@ -149,7 +151,11 @@ const createProgram = (): Command => {
 
         if (
           options.failUnder !== undefined &&
-          scoreFailsThreshold(report.score, options.failUnder)
+          scoreFailsThreshold(
+            report.score,
+            options.failUnder,
+            report.coverage.source
+          )
         ) {
           process.exitCode = 1;
         }

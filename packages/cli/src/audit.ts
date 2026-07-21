@@ -19,7 +19,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 3 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 4 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -181,6 +181,9 @@ interface AgentHandoff {
 interface AuditReport {
   agentHandoff: AgentHandoff;
   categories: AuditCategoryScore[];
+  coverage: {
+    source: ProjectDiscovery["sourceCoverage"];
+  };
   durationMs: number;
   engineVersion: string;
   findings: AuditFinding[];
@@ -312,6 +315,9 @@ const AuditReportSchema = z.object({
       weight: z.number(),
     })
   ),
+  coverage: z.object({
+    source: z.enum(["complete", "partial"]),
+  }),
   durationMs: z.number(),
   engineVersion: z.string().min(1),
   findings: z.array(AuditFindingSchema),
@@ -1124,6 +1130,7 @@ const createAgentHandoff = ({
       `Adapter: ${project.framework.adapter}`,
       `Package manager: ${project.packageManager}`,
       `Selected project directory: ${project.selectedProjectPath} (relative to the package-manager root)`,
+      `Source coverage: ${project.sourceCoverage}`,
       `shadcn confidence: ${project.shadcn.confidence}; config: ${configPath}`,
       `Warnings: ${warnings}`,
     ],
@@ -1172,6 +1179,9 @@ const createAuditReport = ({
       score,
     }),
     categories,
+    coverage: {
+      source: project.sourceCoverage,
+    },
     durationMs,
     engineVersion: ENGINE_VERSION,
     findings: normalizedFindings,

@@ -23,6 +23,7 @@ interface SafeFileSearch {
 }
 
 const SOURCE_PATTERNS = [
+  "*.{js,jsx,ts,tsx}",
   "app/**/*.{js,jsx,ts,tsx}",
   "pages/**/*.{js,jsx,ts,tsx}",
   "src/**/*.{js,jsx,ts,tsx}",
@@ -63,6 +64,8 @@ const sourceFileCache = new WeakMap<ProjectDiscovery, Promise<SourceFile[]>>();
 const styleFileCache = new WeakMap<ProjectDiscovery, Promise<SourceFile[]>>();
 
 const appendWarning = (project: ProjectDiscovery, warning: string): void => {
+  project.sourceCoverage = "partial";
+
   if (!project.warnings.includes(warning)) {
     project.warnings.push(warning);
   }

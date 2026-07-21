@@ -165,6 +165,9 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
           weight: 10,
         },
       ],
+      coverage: {
+        source: "complete",
+      },
       durationMs: 1420,
       engineVersion: "0.1.0-rc.1",
       findings: [
@@ -246,7 +249,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
       packageManager: "pnpm",
       packageName: "widget",
       rulesetVersion: "2026.07.25",
-      schemaVersion: 3,
+      schemaVersion: 4,
       scope: {
         categories: [
           "foundation",

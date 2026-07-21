@@ -109,6 +109,22 @@ describe("CLI contract", () => {
     expect(scoreFailsThreshold(89, 90)).toBe(true);
   });
 
+  it("fails score gates when source coverage is partial", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write("App.tsx", "x".repeat(2 * 1024 * 1024 + 1));
+      const report = JSON.parse(
+        await captureOutput(["--json", "--fail-under", "0"], fixture.rootDir)
+      ) as { coverage: { source: string } };
+
+      expect(report.coverage.source).toBe("partial");
+      expect(process.exitCode).toBe(1);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("rejects conflicting output selectors", async () => {
     const program = createProgram().exitOverride();
     program.configureOutput({

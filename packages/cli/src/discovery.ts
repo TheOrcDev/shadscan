@@ -14,6 +14,7 @@ type FrameworkAdapter =
 type Confidence = "high" | "medium" | "low";
 type PackageManager = "bun" | "npm" | "pnpm" | "unknown" | "yarn";
 type ProjectDiscoveryErrorCode = "PROJECT_NOT_FOUND" | "UNSUPPORTED_PROJECT";
+type SourceCoverage = "complete" | "partial";
 
 interface DiscoverProjectOptions {
   filesystemRoot?: string;
@@ -58,6 +59,7 @@ interface ProjectDiscovery {
   scripts: Record<string, string>;
   selectedProjectPath: string;
   shadcn: ShadcnDiscovery;
+  sourceCoverage: SourceCoverage;
   versions: ProjectVersions;
   warnings: string[];
 }
@@ -482,6 +484,7 @@ const discoverProject = async (
       style:
         typeof shadcnConfig?.style === "string" ? shadcnConfig.style : null,
     },
+    sourceCoverage: "complete",
     versions: {
       next: dependencies.next ?? null,
       react: dependencies.react ?? null,
@@ -497,5 +500,6 @@ export type {
   FrameworkAdapter,
   ProjectDiscovery,
   ProjectDiscoveryErrorCode,
+  SourceCoverage,
 };
 export { discoverProject, ProjectDiscoveryError };

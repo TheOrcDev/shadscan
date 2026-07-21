@@ -15,6 +15,8 @@ stable releases published under `latest`.
 
 ### Fixed
 
+- Scan eligible React files at the project root, expose source coverage in the
+  report contract, and prevent `--fail-under` from certifying partial scans.
 - Use locale-independent code-unit ordering throughout reports and prompts so
   deterministic output remains byte-stable across runtime locales.
 - Keep product decisions and confirmed fixes in separate agent work items so a

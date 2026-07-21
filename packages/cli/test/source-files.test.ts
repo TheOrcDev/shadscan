@@ -87,6 +87,34 @@ describe("project source index", () => {
     );
   });
 
+  it("indexes React source files at the project root", async () => {
+    const fixture = await createRuleFixture();
+    cleanupPaths.push(fixture.rootDir);
+    await fixture.write(
+      "App.tsx",
+      "export const App = () => <main>Root app</main>;\n"
+    );
+
+    const project = await discoverProject(fixture.rootDir);
+    const files = await getProjectSourceFiles(project);
+
+    expect(files.map((file) => path.basename(file.path))).toContain("App.tsx");
+  });
+
+  it("marks source coverage partial when an eligible file is skipped", async () => {
+    const fixture = await createRuleFixture();
+    cleanupPaths.push(fixture.rootDir);
+    await fixture.write("App.tsx", "x".repeat(2 * 1024 * 1024 + 1));
+
+    const project = await discoverProject(fixture.rootDir);
+
+    expect(await getProjectSourceFiles(project)).toEqual([]);
+    expect(project.sourceCoverage).toBe("partial");
+    expect(project.warnings).toContain(
+      "Skipped 1 source file(s) larger than 2 MiB."
+    );
+  });
+
   it("does not follow files or directories linked outside the project", async () => {
     const fixture = await createRuleFixture();
     const outsideRoot = await mkdtemp(path.join(tmpdir(), "shadscan-outside-"));
