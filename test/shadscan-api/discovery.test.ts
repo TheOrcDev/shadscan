@@ -87,6 +87,9 @@ describe("hosted API OpenAPI document", () => {
     expect(schemas.HostedScanResponse.properties.schemaVersion.const).toBe(
       PUBLIC_CONTRACT_VERSIONS.scan
     );
+    expect(
+      schemas.AuditReport.properties.framework.properties.adapter.enum
+    ).toContain("next-pages-router");
     expect(schemas.ActionableDisposition.enum).toEqual([
       "decide",
       "fix",

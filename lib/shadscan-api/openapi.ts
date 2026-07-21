@@ -586,7 +586,12 @@ const OPENAPI_DOCUMENT = {
             required: ["adapter", "evidence"],
             properties: {
               adapter: {
-                enum: ["generic-react", "next-app-router", "vite-react"],
+                enum: [
+                  "generic-react",
+                  "next-app-router",
+                  "next-pages-router",
+                  "vite-react",
+                ],
                 type: "string",
               },
               evidence: { items: { type: "string" }, type: "array" },
