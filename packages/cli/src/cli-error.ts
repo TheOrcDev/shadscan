@@ -1,10 +1,17 @@
+import { CommanderError } from "commander";
 import {
   ProjectDiscoveryError,
   type ProjectDiscoveryErrorCode,
 } from "./discovery";
 
+const COMMANDER_ERROR_PREFIX_PATTERN = /^error:\s*/i;
+
 interface CliFailure {
-  code: "AUDIT_FAILED" | "INVALID_PROJECT_METADATA" | ProjectDiscoveryErrorCode;
+  code:
+    | "AUDIT_FAILED"
+    | "INVALID_ARGUMENTS"
+    | "INVALID_PROJECT_METADATA"
+    | ProjectDiscoveryErrorCode;
   message: string;
 }
 
@@ -13,6 +20,13 @@ const normalizeCliFailure = (error: unknown): CliFailure => {
     return {
       code: error.code,
       message: error.message,
+    };
+  }
+
+  if (error instanceof CommanderError) {
+    return {
+      code: "INVALID_ARGUMENTS",
+      message: error.message.replace(COMMANDER_ERROR_PREFIX_PATTERN, ""),
     };
   }
 

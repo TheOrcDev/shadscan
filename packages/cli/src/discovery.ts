@@ -105,7 +105,9 @@ const findProjectRoot = async (cwd: string): Promise<string> => {
     const parentDir = path.dirname(currentDir);
 
     if (parentDir === currentDir) {
-      throw new ProjectDiscoveryError(`No package.json found from ${cwd}.`);
+      throw new ProjectDiscoveryError(
+        "No package.json was found in this directory or its parents."
+      );
     }
 
     currentDir = parentDir;

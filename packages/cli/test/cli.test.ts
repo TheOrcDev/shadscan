@@ -1,8 +1,14 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CommanderError } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import packageJson from "../package.json";
-import { createProgram, scoreFailsThreshold } from "../src/cli";
+import {
+  createProgram,
+  resolveProjectPath,
+  runCli,
+  scoreFailsThreshold,
+} from "../src/cli";
 import { normalizeCliFailure } from "../src/cli-error";
 import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
@@ -114,6 +120,44 @@ describe("CLI contract", () => {
     ).rejects.toMatchObject({ code: "commander.conflictingOption" });
   });
 
+  it("routes JSON-selected parser failures through the JSON error contract", async () => {
+    const writeErr = vi.spyOn(process.stderr, "write");
+
+    let failure: unknown;
+    try {
+      await runCli(["node", "shadscan", "--json", "--prompt"]);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(writeErr).not.toHaveBeenCalled();
+    expect(normalizeCliFailure(failure)).toEqual({
+      code: "INVALID_ARGUMENTS",
+      message: "option '--json' cannot be used with option '--prompt'",
+    });
+  });
+
+  it("rejects nonexistent and non-directory explicit paths", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await expect(
+        resolveProjectPath("missing-project", fixture.rootDir)
+      ).rejects.toMatchObject({
+        code: "PROJECT_NOT_FOUND",
+        message: "The project path does not exist or is not a directory.",
+      });
+      await expect(
+        resolveProjectPath("package.json", fixture.rootDir)
+      ).rejects.toMatchObject({
+        code: "PROJECT_NOT_FOUND",
+        message: "The project path does not exist or is not a directory.",
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("recognizes JSON formatting for runtime failures", () => {
     expect(wantsJsonOutput(["node", "shadscan", "--json"])).toBe(true);
     expect(wantsJsonOutput(["node", "shadscan", "--format", "json"])).toBe(
@@ -130,6 +174,18 @@ describe("CLI contract", () => {
     ).toEqual({
       code: "PROJECT_NOT_FOUND",
       message: "No package.json found.",
+    });
+    expect(
+      normalizeCliFailure(
+        new CommanderError(
+          1,
+          "commander.conflictingOption",
+          "error: conflicting output options"
+        )
+      )
+    ).toEqual({
+      code: "INVALID_ARGUMENTS",
+      message: "conflicting output options",
     });
     expect(
       normalizeCliFailure(

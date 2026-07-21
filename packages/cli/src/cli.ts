@@ -1,11 +1,19 @@
+import { stat } from "node:fs/promises";
 import path from "node:path";
-import { Command, InvalidArgumentError, Option } from "commander";
+import {
+  Command,
+  CommanderError,
+  InvalidArgumentError,
+  Option,
+} from "commander";
 import packageJson from "../package.json";
 import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
+import { ProjectDiscoveryError } from "./discovery";
 import {
   type OutputFormat,
   parseOutputFormat,
   resolveOutputFormat,
+  wantsJsonOutput,
 } from "./output-format";
 import { renderAgentPrompt } from "./render-agent-prompt";
 import { renderHumanReport, stripRoasts } from "./render-human";
@@ -50,6 +58,26 @@ const scoreFailsThreshold = (
   score: number | null,
   threshold: number
 ): boolean => score === null || score < threshold;
+
+const resolveProjectPath = async (
+  projectPath: string,
+  cwd: string = process.cwd()
+): Promise<string> => {
+  const resolvedPath = path.resolve(cwd, projectPath);
+
+  try {
+    const projectStats = await stat(resolvedPath);
+    if (projectStats.isDirectory()) {
+      return resolvedPath;
+    }
+  } catch {
+    // The stable public error below intentionally omits the scanner's path.
+  }
+
+  throw new ProjectDiscoveryError(
+    "The project path does not exist or is not a directory."
+  );
+};
 
 const createProgram = (): Command => {
   const program = new Command();
@@ -102,7 +130,7 @@ const createProgram = (): Command => {
             ? options.roast !== false
             : outputFormat === "human" && !process.env.CI);
         const report = await scanProject(
-          path.resolve(process.cwd(), projectPath),
+          await resolveProjectPath(projectPath),
           {
             category: options.category,
           }
@@ -132,7 +160,22 @@ const createProgram = (): Command => {
 };
 
 const runCli = async (argv: string[] = process.argv): Promise<void> => {
-  await createProgram().parseAsync(argv);
+  const program = createProgram();
+
+  if (wantsJsonOutput(argv)) {
+    program.exitOverride();
+    program.configureOutput({ writeErr: () => undefined });
+  }
+
+  try {
+    await program.parseAsync(argv);
+  } catch (error) {
+    if (error instanceof CommanderError && error.exitCode === 0) {
+      return;
+    }
+
+    throw error;
+  }
 };
 
-export { createProgram, runCli, scoreFailsThreshold };
+export { createProgram, resolveProjectPath, runCli, scoreFailsThreshold };
