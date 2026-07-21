@@ -279,6 +279,47 @@ describe("high confidence rules", () => {
     expect(themeHotkeyFinding?.evidence[0]?.line).toBe(15);
   });
 
+  it("recognizes equivalent D-key comparison syntax", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir);
+    await writeComponentsJson(rootDir);
+    const keyChecks = [
+      'if (event.key.toLowerCase() === "d") setTheme("dark");',
+      'if (event.key !== "d") return; setTheme("dark");',
+      'if (event.code === "KeyD") setTheme("dark");',
+      'if ("KeyD" !== event.code) return; setTheme("dark");',
+      'if ("d" === event.key.toLocaleLowerCase()) setTheme("dark");',
+    ];
+
+    for (const keyCheck of keyChecks) {
+      await writeFixtureFile(
+        rootDir,
+        "components/theme-provider.tsx",
+        `
+          import { useEffect } from "react";
+          import { useTheme } from "next-themes";
+          export function ThemeHotkey() {
+            const { setTheme } = useTheme();
+            useEffect(() => {
+              function onKeyDown(event: KeyboardEvent) {
+                if (event.target instanceof HTMLElement && (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.tagName === "SELECT" || event.target.isContentEditable)) return;
+                ${keyCheck}
+              }
+              window.addEventListener("keydown", onKeyDown);
+            }, [setTheme]);
+            return null;
+          }
+        `
+      );
+
+      const report = await runAudit(rootDir, { rules: highConfidenceRules });
+      const status = report.findings.find(
+        (finding) => finding.id === "theme-hotkey-present"
+      )?.status;
+      expect({ keyCheck, status }).toEqual({ keyCheck, status: "pass" });
+    }
+  });
+
   it("recognizes a theme hotkey that calls an extracted toggle helper", async () => {
     const rootDir = await createFixture();
     await writeNextPackage(rootDir);

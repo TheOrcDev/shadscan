@@ -48,7 +48,7 @@ const DIRECT_THEME_TOGGLE_PATTERN =
   /(?:setTheme\s*\(|classList\.toggle\(["']dark["'])/;
 const EXTRACTED_THEME_TOGGLE_NAME_PATTERN = /^toggle\w*Theme\w*$/i;
 const D_KEY_PATTERN =
-  /key\.toLowerCase\(\)\s*!==\s*["']d["']|key\s*===\s*["']d["']/;
+  /(?:\bkey\s*(?:\.\s*to(?:Locale)?LowerCase\(\))?\s*(?:===|!==)\s*["']d["']|["']d["']\s*(?:===|!==)\s*(?:[A-Za-z_$][\w$]*\s*\.\s*)*\bkey\s*(?:\.\s*to(?:Locale)?LowerCase\(\))?|\bcode\s*(?:===|!==)\s*["']KeyD["']|["']KeyD["']\s*(?:===|!==)\s*(?:[A-Za-z_$][\w$]*\s*\.\s*)*\bcode)/;
 const NEXT_METADATA_PATTERN =
   /export\s+(const\s+metadata|async\s+function\s+generateMetadata|function\s+generateMetadata)/;
 const HTML_TITLE_PATTERN = /<title>[^<]+<\/title>/;
