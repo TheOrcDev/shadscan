@@ -551,25 +551,38 @@ const faviconPresentRule: AuditRule = {
 };
 
 const notFoundRoutePresentRule: AuditRule = {
-  adapters: ["next-app-router"],
+  adapters: ["next-app-router", "next-pages-router"],
   category: "foundation",
   confidence: "high",
-  description: "Checks for a Next App Router not-found boundary.",
+  description: "Checks for a Next not-found boundary or 404 page.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
+    const isPagesRouter =
+      context.project.framework.adapter === "next-pages-router";
     const filePath = await hasAnyFile(
       context.project.rootDir,
-      getAppRoutePatterns(context, "not-found.tsx")
+      isPagesRouter
+        ? ["pages/404.{js,jsx,ts,tsx}", "src/pages/404.{js,jsx,ts,tsx}"]
+        : getAppRoutePatterns(context, "not-found.tsx")
     );
 
     if (filePath) {
-      return pass("Next not-found route boundary found.", filePath);
+      return pass(
+        isPagesRouter
+          ? "Next Pages Router 404 page found."
+          : "Next not-found route boundary found.",
+        filePath
+      );
     }
 
     return fail(
-      "No Next `not-found.tsx` route boundary was found.",
-      "Add `app/not-found.tsx` so missing routes have a designed state."
+      isPagesRouter
+        ? "No Next Pages Router `404` page was found."
+        : "No Next `not-found.tsx` route boundary was found.",
+      isPagesRouter
+        ? "Add `pages/404.tsx` so missing routes have a designed state."
+        : "Add `app/not-found.tsx` so missing routes have a designed state."
     );
   },
   severity: "warning",
@@ -592,6 +605,15 @@ const errorBoundaryPresentRule: AuditRule = {
 
       if (filePath) {
         return pass("Next error route boundary found.", filePath);
+      }
+    } else if (context.project.framework.adapter === "next-pages-router") {
+      const filePath = await hasAnyFile(context.project.rootDir, [
+        "pages/_error.{js,jsx,ts,tsx}",
+        "src/pages/_error.{js,jsx,ts,tsx}",
+      ]);
+
+      if (filePath) {
+        return pass("Next Pages Router error page found.", filePath);
       }
     }
 

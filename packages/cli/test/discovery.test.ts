@@ -119,6 +119,28 @@ describe("discoverProject", () => {
     expect(project.paths.srcDir).toBe(path.join(rootDir, "src"));
   });
 
+  it("detects a Next Pages Router project", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        next: "16.2.6",
+        react: "19.2.4",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "pages/index.tsx",
+      "export default function Page() { return null }\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("next-pages-router");
+    expect(project.paths.appDir).toBeNull();
+    expect(project.paths.pagesDir).toBe(path.join(rootDir, "pages"));
+  });
+
   it("detects a Vite React shadcn app", async () => {
     const rootDir = await createFixture();
     await writePackageJson(rootDir, {

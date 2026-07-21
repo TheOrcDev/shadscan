@@ -537,6 +537,7 @@ describe("createAuditReport", () => {
       paths: {
         appDir: null,
         packageJson: "/tmp/package.json",
+        pagesDir: null,
         srcDir: null,
         tailwindCss: null,
         tsconfig: null,

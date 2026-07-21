@@ -15,7 +15,7 @@ Rules only run for matching adapters. A rule can also return `not-applicable` wh
 | `theme-provider-configured` | Checks for a mounted theme provider or theme class management. | high | 5 raw points when applicable | `core` |
 | `metadata-configured` | Checks for framework-appropriate metadata or head basics. | high | 3 raw points when applicable | `core` |
 | `favicon-present` | Checks for a favicon or app icon. | high | 2 raw points when applicable | `core` |
-| `not-found-route-present` | Checks for a Next App Router not-found boundary. | high | 3 raw points when applicable | `next-app-router` |
+| `not-found-route-present` | Checks for a Next not-found boundary or 404 page. | high | 3 raw points when applicable | `next-app-router`<br>`next-pages-router` |
 | `error-boundary-present` | Checks for an app-level error boundary. | high | 3 raw points when applicable | `core` |
 | `components-aliases-resolve` | Checks whether shadcn aliases can be resolved through TypeScript or JavaScript path mappings. | high | 2 raw points when applicable | `core` |
 | `theme-provider-mounted-in-shell` | Checks whether a theme provider is rendered by the application shell. | high | 3 raw points when applicable | `core` |
@@ -42,7 +42,7 @@ Rules only run for matching adapters. A rule can also return `not-applicable` wh
 | `suspense-fallback-useful` | Checks every Suspense boundary for a non-empty fallback. | high | 3 raw points when applicable | `core` |
 | `empty-state-present` | Checks recognizable data-backed collections for an explicit empty state. | medium | 4 raw points when applicable | `core` |
 | `error-state-retry-present` | Checks detected error UI for a wired retry control. | high | 4 raw points when applicable | `core` |
-| `not-found-recovery-present` | Checks Next not-found UI and rendered local components for a navigation or search recovery path. | high | 3 raw points when applicable | `next-app-router` |
+| `not-found-recovery-present` | Checks Next not-found UI and rendered local components for a navigation or search recovery path. | high | 3 raw points when applicable | `next-app-router`<br>`next-pages-router` |
 | `async-action-pending-state` | Checks asynchronous actions for visible pending feedback and duplicate-submit prevention. | medium | 4 raw points when applicable | `core` |
 | `toast-provider-mounted` | Checks whether toast infrastructure is mounted from the app shell. | high | 3 raw points when applicable | `core` |
 
@@ -89,5 +89,5 @@ Rules only run for matching adapters. A rule can also return `not-applicable` wh
 | `social-preview-present` | Checks for an image-backed social sharing preview. | high | 2 raw points when applicable | `core` |
 | `no-starter-copy` | Checks for recognizable framework starter-template copy. | high | 2 raw points when applicable | `core` |
 | `responsive-shell-present` | Looks for responsive breakpoint behavior in the application's top-level shell. | low | Advisory | `core` |
-| `public-app-seo-files-present` | Looks for robots and sitemap files in web apps that appear publicly indexable. | low | Advisory | `next-app-router`<br>`vite-react` |
+| `public-app-seo-files-present` | Looks for robots and sitemap files in web apps that appear publicly indexable. | low | Advisory | `next-app-router`<br>`next-pages-router`<br>`vite-react` |
 | `mobile-overflow-absent` | Marks uncontained fixed or viewport widths in layout-bearing contexts for rendered horizontal-overflow verification. | low | Advisory | `core` |

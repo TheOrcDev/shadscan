@@ -38,6 +38,26 @@ describe("expanded accessibility rules", () => {
     }
   });
 
+  it("reads the document language from a Pages Router document", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "pages/_document.tsx",
+        'export default function Document() { return <Html lang="en"><body><Main /></body></Html>; }'
+      );
+
+      expect((await runRule(fixture.rootDir, htmlLangPresentRule)).status).toBe(
+        "pass"
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("requires alternative text on native and Next images", async () => {
     const fixture = await createRuleFixture();
 

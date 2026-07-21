@@ -436,6 +436,26 @@ describe("state rules", () => {
     }
   });
 
+  it("checks recovery links in a Pages Router 404 page", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "pages/404.tsx",
+        'export default function NotFound() { return <><h1>Not found</h1><a href="/">Go home</a></>; }'
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, notFoundRecoveryPresentRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("requires async actions to communicate and guard pending state", async () => {
     const fixture = await createRuleFixture();
 

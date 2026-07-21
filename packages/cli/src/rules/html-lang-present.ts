@@ -3,21 +3,36 @@ import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
 import { getTextLineNumber, readProjectSourceFile } from "./source-files";
 
-const HTML_LANG_PATTERN = /<html\b[^>]*\blang=(?:["'][^"']+["']|\{[^}]+\})/;
+const HTML_LANG_PATTERN = /<html\b[^>]*\blang=(?:["'][^"']+["']|\{[^}]+\})/i;
 
 const getDocumentCandidates = ({
   framework,
   paths,
   rootDir,
 }: {
-  framework: { adapter: "generic-react" | "next-app-router" | "vite-react" };
-  paths: { appDir: string | null };
+  framework: {
+    adapter:
+      | "generic-react"
+      | "next-app-router"
+      | "next-pages-router"
+      | "vite-react";
+  };
+  paths: { appDir: string | null; pagesDir: string | null };
   rootDir: string;
 }): string[] => {
   if (framework.adapter === "next-app-router" && paths.appDir) {
     return ["layout.tsx", "layout.jsx", "layout.ts", "layout.js"].map(
       (fileName) => path.join(paths.appDir ?? "", fileName)
     );
+  }
+
+  if (framework.adapter === "next-pages-router" && paths.pagesDir) {
+    return [
+      "_document.tsx",
+      "_document.jsx",
+      "_document.ts",
+      "_document.js",
+    ].map((fileName) => path.join(paths.pagesDir ?? "", fileName));
   }
 
   return [path.join(rootDir, "index.html")];

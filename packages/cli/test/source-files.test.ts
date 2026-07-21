@@ -63,6 +63,30 @@ describe("project source index", () => {
     expect(files.map((file) => path.basename(file.path))).toEqual(["real.tsx"]);
   });
 
+  it("indexes root Pages Router files and deeply nested source", async () => {
+    const fixture = await createRuleFixture();
+    cleanupPaths.push(fixture.rootDir);
+    await fixture.write(
+      "pages/index.tsx",
+      "export default function Page() { return <main />; }\n"
+    );
+    await fixture.write(
+      "components/one/two/three/four/five/six/seven/eight/nine/deep.tsx",
+      "export const Deep = () => <button>Deep</button>;\n"
+    );
+
+    const project = await discoverProject(fixture.rootDir);
+    const files = await getProjectSourceFiles(project);
+    const relativePaths = files.map((file) =>
+      path.relative(fixture.rootDir, file.path)
+    );
+
+    expect(relativePaths).toContain("pages/index.tsx");
+    expect(relativePaths).toContain(
+      "components/one/two/three/four/five/six/seven/eight/nine/deep.tsx"
+    );
+  });
+
   it("does not follow files or directories linked outside the project", async () => {
     const fixture = await createRuleFixture();
     const outsideRoot = await mkdtemp(path.join(tmpdir(), "shadscan-outside-"));

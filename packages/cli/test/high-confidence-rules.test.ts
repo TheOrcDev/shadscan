@@ -373,6 +373,48 @@ describe("high confidence rules", () => {
     expect(report.score).toBeLessThan(100);
   });
 
+  it("recognizes Pages Router boundaries and shell-mounted providers", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir, { includeToastDependency: true });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "pages/_app.tsx",
+      `
+        import { Toaster } from "sonner";
+        import { ThemeProvider } from "@/components/theme-provider";
+        export default function App({ Component, pageProps }) {
+          return <ThemeProvider><Component {...pageProps} /><Toaster /></ThemeProvider>;
+        }
+      `
+    );
+    await writeFixtureFile(
+      rootDir,
+      "pages/404.tsx",
+      'export default function NotFound() { return <a href="/">Go home</a>; }'
+    );
+    await writeFixtureFile(
+      rootDir,
+      "pages/_error.tsx",
+      "export default function ErrorPage() { return <p>Something went wrong</p>; }"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/theme-provider.tsx",
+      'import { ThemeProvider as NextThemesProvider } from "next-themes"; export function ThemeProvider({ children }) { return <NextThemesProvider attribute="class">{children}</NextThemesProvider>; }'
+    );
+
+    const report = await runAudit(rootDir, { rules: highConfidenceRules });
+    const statusFor = (id: string): string | undefined =>
+      report.findings.find((finding) => finding.id === id)?.status;
+
+    expect(report.framework.adapter).toBe("next-pages-router");
+    expect(statusFor("theme-provider-configured")).toBe("pass");
+    expect(statusFor("not-found-route-present")).toBe("pass");
+    expect(statusFor("error-boundary-present")).toBe("pass");
+    expect(statusFor("toast-provider-present")).toBe("pass");
+  });
+
   it("rejects placeholder toaster components without runtime provenance", async () => {
     const rootDir = await createFixture();
     await writeNextPackage(rootDir, { includeToastDependency: true });

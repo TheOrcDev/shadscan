@@ -50,7 +50,7 @@ return `1`. The complete command contract is maintained at
 
 - Audit JSON uses schema version `3` and is validated by the exported
   `AuditReportSchema`.
-- Agent prompt output uses prompt version `2`.
+- Agent prompt output uses prompt version `3`.
 - Reports identify the exact bundled ruleset version that produced them.
 - `RULE_CATALOG` exposes immutable rule metadata without exposing the internal
   custom-rule runner.

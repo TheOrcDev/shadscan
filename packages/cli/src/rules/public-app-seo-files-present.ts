@@ -16,7 +16,7 @@ const SITEMAP_PATTERNS = [
 ];
 
 const publicAppSeoFilesPresentRule: AuditRule = {
-  adapters: ["next-app-router", "vite-react"],
+  adapters: ["next-app-router", "next-pages-router", "vite-react"],
   category: "production-polish",
   confidence: "low",
   description:

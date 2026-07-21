@@ -166,6 +166,27 @@ describe("foundation rules", () => {
     }
   });
 
+  it("recognizes a theme provider mounted in Pages Router _app", async () => {
+    const fixture = await createRuleFixture({
+      next: "16.2.6",
+      "next-themes": "0.4.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "pages/_app.tsx",
+        'import { ThemeProvider } from "@/components/theme-provider"; export default function App({ Component, pageProps }) { return <ThemeProvider><Component {...pageProps} /></ThemeProvider>; }'
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, themeProviderMountedInShellRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("checks Next theme hydration safeguards", async () => {
     const fixture = await createRuleFixture({
       next: "16.2.6",

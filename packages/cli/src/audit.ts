@@ -312,7 +312,12 @@ const AuditReportSchema = z.object({
   engineVersion: z.string().min(1),
   findings: z.array(AuditFindingSchema),
   framework: z.object({
-    adapter: z.enum(["generic-react", "next-app-router", "vite-react"]),
+    adapter: z.enum([
+      "generic-react",
+      "next-app-router",
+      "next-pages-router",
+      "vite-react",
+    ]),
     evidence: z.array(z.string()),
   }),
   grade: z.enum(["A", "B", "C", "D", "F"]).nullable(),

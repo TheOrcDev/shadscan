@@ -5,7 +5,11 @@ import { glob } from "tinyglobby";
 
 type JsonObject = Record<string, unknown>;
 
-type FrameworkAdapter = "next-app-router" | "vite-react" | "generic-react";
+type FrameworkAdapter =
+  | "next-app-router"
+  | "next-pages-router"
+  | "vite-react"
+  | "generic-react";
 
 type Confidence = "high" | "medium" | "low";
 type ProjectDiscoveryErrorCode = "PROJECT_NOT_FOUND" | "UNSUPPORTED_PROJECT";
@@ -25,6 +29,7 @@ interface ShadcnDiscovery {
 interface ProjectPaths {
   appDir: string | null;
   packageJson: string;
+  pagesDir: string | null;
   srcDir: string | null;
   tailwindCss: string | null;
   tsconfig: string | null;
@@ -185,6 +190,21 @@ const detectAppDir = async (rootDir: string): Promise<string | null> => {
   return null;
 };
 
+const detectPagesDir = async (rootDir: string): Promise<string | null> => {
+  const pagesDirs = [
+    path.join(rootDir, "pages"),
+    path.join(rootDir, "src", "pages"),
+  ];
+
+  for (const pagesDir of pagesDirs) {
+    if (await fileExists(pagesDir)) {
+      return pagesDir;
+    }
+  }
+
+  return null;
+};
+
 const detectViteEntry = async (rootDir: string): Promise<string | null> => {
   const entryCandidates = [
     path.join(rootDir, "src", "main.tsx"),
@@ -228,11 +248,13 @@ const detectTailwindCss = async (
 const detectFramework = ({
   appDir,
   dependencies,
+  pagesDir,
   rootDir,
   viteEntry,
 }: {
   appDir: string | null;
   dependencies: Record<string, string>;
+  pagesDir: string | null;
   rootDir: string;
   viteEntry: string | null;
 }): FrameworkDiscovery => {
@@ -246,6 +268,18 @@ const detectFramework = ({
 
     return {
       adapter: "next-app-router",
+      evidence,
+    };
+  }
+
+  if (dependencies.next && pagesDir) {
+    evidence.push("next dependency found");
+    evidence.push(
+      `pages router directory found at ${path.relative(rootDir, pagesDir)}`
+    );
+
+    return {
+      adapter: "next-pages-router",
       evidence,
     };
   }
@@ -306,10 +340,12 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
   }
 
   const appDir = await detectAppDir(rootDir);
+  const pagesDir = await detectPagesDir(rootDir);
   const viteEntry = await detectViteEntry(rootDir);
   const framework = detectFramework({
     appDir,
     dependencies,
+    pagesDir,
     rootDir,
     viteEntry,
   });
@@ -327,6 +363,7 @@ const discoverProject = async (cwd: string): Promise<ProjectDiscovery> => {
     paths: {
       appDir,
       packageJson: packageJsonPath,
+      pagesDir,
       srcDir: (await fileExists(srcDir)) ? srcDir : null,
       tailwindCss,
       tsconfig: (await fileExists(tsconfig)) ? tsconfig : null,

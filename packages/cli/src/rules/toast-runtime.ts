@@ -414,6 +414,15 @@ const getShellPaths = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (
+    project.framework.adapter === "next-pages-router" &&
+    project.paths.pagesDir
+  ) {
+    return ["_app.tsx", "_app.jsx", "_app.ts", "_app.js"].map((fileName) =>
+      path.join(project.paths.pagesDir ?? "", fileName)
+    );
+  }
+
   if (project.paths.viteEntry) {
     return [project.paths.viteEntry];
   }

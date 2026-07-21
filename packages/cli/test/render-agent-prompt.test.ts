@@ -21,6 +21,7 @@ const createProject = (): ProjectDiscovery => ({
   paths: {
     appDir: null,
     packageJson: path.join(PROJECT_ROOT, "package.json"),
+    pagesDir: null,
     srcDir: path.join(PROJECT_ROOT, "src"),
     tailwindCss: null,
     tsconfig: null,

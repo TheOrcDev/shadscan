@@ -23,6 +23,7 @@ interface SafeFileSearch {
 
 const SOURCE_PATTERNS = [
   "app/**/*.{js,jsx,ts,tsx}",
+  "pages/**/*.{js,jsx,ts,tsx}",
   "src/**/*.{js,jsx,ts,tsx}",
   "components/**/*.{js,jsx,ts,tsx}",
   "lib/**/*.{js,jsx,ts,tsx}",
@@ -115,7 +116,7 @@ const resolveSafeFile = async (
 const findSafeFiles = async (
   rootDir: string,
   patterns: string[],
-  deep = 8
+  deep?: number
 ): Promise<SafeFileSearch> => {
   const candidates = await glob(patterns, {
     absolute: true,
@@ -302,7 +303,7 @@ const findSourceMatch = async (
 const findFiles = async (
   rootDir: string,
   patterns: string[],
-  deep = 8
+  deep?: number
 ): Promise<string[]> => {
   const search = await findSafeFiles(rootDir, patterns, deep);
   return search.files.map((file) => file.path);
