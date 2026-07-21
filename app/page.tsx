@@ -1,4 +1,5 @@
-import { CodeBlockCommand } from "@/components/code-block-command";
+import { GetStarted } from "@/components/get-started";
+import { Hero } from "@/components/hero";
 import { ShadscanMark } from "@/components/shadscan-mark";
 import { SiteStructuredData } from "@/components/site-structured-data";
 
@@ -6,21 +7,26 @@ export default function Page() {
   return (
     <>
       <SiteStructuredData />
-      <main className="grid flex-1 place-items-center bg-background px-4">
-        <div className="flex w-full max-w-2xl flex-col items-center gap-6">
-          <ShadscanMark
-            accessibleTitle="shadscan"
-            className="size-16 text-foreground"
-          />
-          <div className="w-full">
-            <CodeBlockCommand
-              bun="bunx @shadscan/cli@next"
-              npm="npx @shadscan/cli@next"
-              pnpm="pnpm dlx @shadscan/cli@next"
-              yarn="yarn dlx --package @shadscan/cli@next shadscan"
+      <main className="flex-1 bg-background">
+        <Hero
+          buttons={{
+            primary: { text: "Scan a repository", url: "/scan" },
+            secondary: { text: "Read the docs", url: "/docs" },
+          }}
+          description="shadscan statically analyzes your React shadcn components for accessibility, state, and composition regressions — the same result on every run, built for your terminal and your CI."
+          heading="Deterministic UI audits for shadcn apps"
+          logo={
+            <ShadscanMark
+              accessibleTitle="shadscan"
+              className="size-16 text-foreground"
             />
-          </div>
-        </div>
+          }
+          media={
+            <div className="mx-auto w-full max-w-xl">
+              <GetStarted />
+            </div>
+          }
+        />
       </main>
     </>
   );
