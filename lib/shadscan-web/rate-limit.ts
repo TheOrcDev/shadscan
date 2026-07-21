@@ -3,6 +3,10 @@ import {
   consumeDatabaseRateLimits,
   hashRateLimitIdentity,
 } from "../rate-limit/database";
+import {
+  consumeMemoryRateLimits,
+  type MemoryRateLimitStore,
+} from "../rate-limit/memory";
 import { WebScanServiceError } from "./errors";
 
 const DEVELOPMENT_RATE_LIMIT_SALT = "shadscan-web-development-rate-limit-salt";
@@ -44,17 +48,7 @@ interface WebRateLimitDecision {
   resetAt: number;
 }
 
-interface MemoryWindowState {
-  count: number;
-  startedAt: number;
-}
-
-interface EvaluatedMemoryRule {
-  decision: WebRateLimitDecision;
-  state: MemoryWindowState;
-}
-
-const memoryWindows = new Map<string, MemoryWindowState>();
+const memoryWindows: MemoryRateLimitStore = new Map();
 
 const getClientRateLimitKey = (
   clientAddress: string,
@@ -76,20 +70,6 @@ const getClientRateLimitKey = (
   return createHmac("sha256", resolvedSalt)
     .update(normalizedAddress, "utf8")
     .digest("hex");
-};
-
-const getMemoryWindow = (
-  key: string,
-  windowMs: number,
-  now: number
-): MemoryWindowState => {
-  const existing = memoryWindows.get(key);
-  if (!existing || now - existing.startedAt >= windowMs) {
-    const next = { count: 0, startedAt: now };
-    memoryWindows.set(key, next);
-    return next;
-  }
-  return existing;
 };
 
 const throwWebRateLimitError = (
@@ -128,36 +108,29 @@ const checkMemoryWebRateLimit = (
     salt,
     environment
   );
-  const evaluatedRules: EvaluatedMemoryRule[] = [];
-
-  for (const name of Object.keys(WEB_RATE_LIMITS) as WebRateLimitName[]) {
-    const rule = WEB_RATE_LIMITS[name];
-    const identity = getLimitIdentity(name, clientKey, input.repositoryKey);
-    const state = getMemoryWindow(`${name}:${identity}`, rule.windowMs, now);
-    evaluatedRules.push({
-      decision: {
+  const names = Object.keys(WEB_RATE_LIMITS) as WebRateLimitName[];
+  const decisions = consumeMemoryRateLimits(
+    memoryWindows,
+    names.map((name) => {
+      const rule = WEB_RATE_LIMITS[name];
+      const identity = getLimitIdentity(name, clientKey, input.repositoryKey);
+      return {
+        key: `${rule.bucket}:${identity}`,
         limit: rule.limit,
         name,
-        remaining: Math.max(0, rule.limit - state.count - 1),
-        resetAt: state.startedAt + rule.windowMs,
-      },
-      state,
-    });
-  }
-
-  const failedDecision = evaluatedRules
-    .filter(({ state, decision }) => state.count >= decision.limit)
-    .map(({ decision }) => decision)
+        windowMs: rule.windowMs,
+      };
+    }),
+    now
+  );
+  const failedDecision = decisions
+    .filter((decision) => !decision.allowed)
     .sort((left, right) => right.resetAt - left.resetAt)[0];
   if (failedDecision) {
     return throwWebRateLimitError(failedDecision, now);
   }
 
-  for (const evaluatedRule of evaluatedRules) {
-    evaluatedRule.state.count += 1;
-  }
-
-  return evaluatedRules.map(({ decision }) => decision);
+  return decisions;
 };
 
 const checkDatabaseWebRateLimit = async (

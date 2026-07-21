@@ -63,6 +63,10 @@ For local development, configure `SHADSCAN_API_KEY_HASHES`, leave
 pnpm dev
 ```
 
+The development limiter mirrors production's epoch-aligned sliding windows and
+atomic multi-rule consumption; only persistence and cross-process coordination
+differ.
+
 ## Scan a public GitHub repository
 
 The repository must be public. The server resolves the supplied branch, tag, or

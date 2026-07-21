@@ -670,7 +670,7 @@ describe("POST /v1/scans", () => {
     expect(limitedResponse.status).toBe(429);
     expect(limitedResponse.headers.get("ratelimit-limit")).toBe("10");
     expect(limitedResponse.headers.get("ratelimit-remaining")).toBe("0");
-    expect(limitedResponse.headers.get("retry-after")).toBe("60");
+    expect(limitedResponse.headers.get("retry-after")).toBe("61");
     expect(limitedResult.error).toMatchObject({
       code: "RATE_LIMITED",
       retryable: true,

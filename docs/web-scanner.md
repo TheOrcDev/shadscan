@@ -30,9 +30,10 @@ salt changes every client rate-limit identity.
 
 Production fails closed when the salt or database connection is missing or when
 Postgres is unavailable. Development uses an in-memory limiter and a fixed
-development salt unless database mode is explicitly enabled. The public limits are
-10 scans per client per 10 minutes, 20 per client per day, and 10 per
-repository per day.
+development salt unless database mode is explicitly enabled. Its sliding-window
+calculations and atomic multi-rule consumption match the database limiter, while
+state remains process-local and ephemeral. The public limits are 10 scans per
+client per 10 minutes, 20 per client per day, and 10 per repository per day.
 
 The Drizzle migrations create a bounded sliding-window counter table, its
 atomic consumption function, and a no-login permission role. Keep the owner

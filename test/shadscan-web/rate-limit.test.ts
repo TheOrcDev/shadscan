@@ -161,6 +161,29 @@ describe("web scan rate limits", () => {
         )
       ).toHaveLength(3);
     }
+
+    expect(() =>
+      checkMemoryWebRateLimit(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryKey: "acme/boundary",
+        },
+        600_000,
+        TEST_SALT,
+        "test"
+      )
+    ).toThrowError(expect.objectContaining({ code: "RATE_LIMITED" }));
+    expect(() =>
+      checkMemoryWebRateLimit(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryKey: "acme/after-boundary",
+        },
+        600_001,
+        TEST_SALT,
+        "test"
+      )
+    ).not.toThrow();
   });
 
   it("limits repeated repository scans across distinct clients", () => {

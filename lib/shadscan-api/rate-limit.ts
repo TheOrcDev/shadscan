@@ -3,6 +3,10 @@ import {
   DatabaseRateLimitError,
   hashRateLimitIdentity,
 } from "../rate-limit/database";
+import {
+  consumeMemoryRateLimits,
+  type MemoryRateLimitStore,
+} from "../rate-limit/memory";
 import { HostedScanError } from "./errors";
 
 const MINUTE_LIMIT = 10;
@@ -16,42 +20,7 @@ interface RateLimitDecision {
   resetAt: number;
 }
 
-interface FixedWindowState {
-  count: number;
-  startedAt: number;
-}
-
-interface MemoryKeyState {
-  daily: FixedWindowState;
-  minute: FixedWindowState;
-}
-
-const memoryStates = new Map<string, MemoryKeyState>();
-
-const createWindowState = (now: number): FixedWindowState => ({
-  count: 0,
-  startedAt: now,
-});
-
-const advanceWindow = (
-  state: FixedWindowState,
-  windowMs: number,
-  now: number
-): FixedWindowState =>
-  now - state.startedAt >= windowMs ? createWindowState(now) : state;
-
-const getMemoryState = (keyId: string, now: number): MemoryKeyState => {
-  const existing = memoryStates.get(keyId) ?? {
-    daily: createWindowState(now),
-    minute: createWindowState(now),
-  };
-  const nextState = {
-    daily: advanceWindow(existing.daily, DAY_MS, now),
-    minute: advanceWindow(existing.minute, MINUTE_MS, now),
-  };
-  memoryStates.set(keyId, nextState);
-  return nextState;
-};
+const memoryStates: MemoryRateLimitStore = new Map();
 
 const getRateLimitHeaders = (
   decision: RateLimitDecision,
@@ -88,28 +57,40 @@ const checkMemoryRateLimit = (
   keyId: string,
   now = Date.now()
 ): RateLimitDecision => {
-  const state = getMemoryState(keyId, now);
-  const minuteDecision = {
-    limit: MINUTE_LIMIT,
-    remaining: Math.max(0, MINUTE_LIMIT - state.minute.count - 1),
-    resetAt: state.minute.startedAt + MINUTE_MS,
-  };
-  const dailyDecision = {
-    limit: DAILY_LIMIT,
-    remaining: Math.max(0, DAILY_LIMIT - state.daily.count - 1),
-    resetAt: state.daily.startedAt + DAY_MS,
-  };
-  const failedDecision = [
-    ...(state.minute.count >= MINUTE_LIMIT ? [minuteDecision] : []),
-    ...(state.daily.count >= DAILY_LIMIT ? [dailyDecision] : []),
-  ].sort((left, right) => right.resetAt - left.resetAt)[0];
+  const [minuteDecision, dailyDecision] = consumeMemoryRateLimits(
+    memoryStates,
+    [
+      {
+        key: `api-key-minute:${keyId}`,
+        limit: MINUTE_LIMIT,
+        name: "minute",
+        windowMs: MINUTE_MS,
+      },
+      {
+        key: `api-key-daily:${keyId}`,
+        limit: DAILY_LIMIT,
+        name: "daily",
+        windowMs: DAY_MS,
+      },
+    ],
+    now
+  );
+  if (!(minuteDecision && dailyDecision)) {
+    throw new Error("The in-memory API rate limiter is misconfigured.");
+  }
+
+  const failedDecision = [minuteDecision, dailyDecision]
+    .filter((decision) => !decision.allowed)
+    .sort((left, right) => right.resetAt - left.resetAt)[0];
   if (failedDecision) {
     throwRateLimitError(failedDecision, now);
   }
 
-  state.minute.count += 1;
-  state.daily.count += 1;
-  return minuteDecision;
+  return {
+    limit: minuteDecision.limit,
+    remaining: minuteDecision.remaining,
+    resetAt: minuteDecision.resetAt,
+  };
 };
 
 const checkDatabaseRateLimit = async (

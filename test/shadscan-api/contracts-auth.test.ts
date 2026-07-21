@@ -317,9 +317,10 @@ describe("hosted API production limiting", () => {
       );
     }
 
-    expect(() =>
-      checkMemoryRateLimit("beta", startedAt + 60_001)
-    ).not.toThrow();
+    expect(() => checkMemoryRateLimit("beta", 60_000)).toThrowError(
+      expect.objectContaining({ code: "RATE_LIMITED" })
+    );
+    expect(() => checkMemoryRateLimit("beta", 60_001)).not.toThrow();
     resetMemoryRateLimits();
   });
 
