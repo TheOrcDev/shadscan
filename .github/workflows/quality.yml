@@ -32,6 +32,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build CLI
+        run: pnpm cli:build
       - name: Check formatting and lint
         run: pnpm check
       - name: Check generated rule catalog
@@ -41,21 +43,23 @@ jobs:
       - name: Typecheck CLI
         run: pnpm --filter ./packages/cli typecheck
       - name: Typecheck site and API
-        run: pnpm typecheck
+        run: pnpm ci:typecheck
       - name: Test CLI
         run: pnpm cli:test
       - name: Test hosted API
-        run: pnpm test:api
+        run: pnpm ci:test-api
       - name: Test web scanner
-        run: pnpm test:web
+        run: pnpm ci:test-web
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Test web scanner in Chromium
-        run: pnpm test:e2e
+        run: pnpm ci:test-e2e
       - name: Enforce the dogfood score
-        run: pnpm audit:self
+        run: pnpm ci:audit-self
       - name: Build production site
-        run: pnpm build
+        run: pnpm ci:build-site
+      - name: Verify production traces
+        run: pnpm verify:trace
 
   packed-cli:
     name: Packed CLI (${{ matrix.os }}, Node ${{ matrix.node }})
@@ -85,5 +89,7 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter @shadscan/cli...
+      - name: Build CLI
+        run: pnpm cli:build
       - name: Smoke test packed CLI
-        run: pnpm cli:smoke
+        run: pnpm cli:smoke:built

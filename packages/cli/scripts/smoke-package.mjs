@@ -17,11 +17,19 @@ const packageDirectory = path.resolve(scriptDirectory, "..");
 const packageManifest = JSON.parse(
   await readFile(path.join(packageDirectory, "package.json"), "utf8")
 );
+const temporaryRoot = await mkdtemp(
+  path.join(tmpdir(), "shadscan packed smoke ")
+);
+const npmCacheDirectory = path.join(temporaryRoot, "npm cache");
 
 const run = async (command, args, { cwd, expectedExitCode = 0 } = {}) => {
   const result = await execa(command, args, {
     cwd,
-    env: { CI: "1", NO_COLOR: "1" },
+    env: {
+      CI: "1",
+      NO_COLOR: "1",
+      npm_config_cache: npmCacheDirectory,
+    },
     reject: false,
   });
 
@@ -40,10 +48,6 @@ const run = async (command, args, { cwd, expectedExitCode = 0 } = {}) => {
   return result;
 };
 
-const temporaryRoot = await mkdtemp(
-  path.join(tmpdir(), "shadscan packed smoke ")
-);
-
 try {
   const packDirectory = path.join(temporaryRoot, "packed artifact");
   const consumerDirectory = path.join(temporaryRoot, "consumer project");
@@ -52,9 +56,11 @@ try {
     mkdir(path.join(consumerDirectory, "src"), { recursive: true }),
   ]);
 
-  await run("npm", ["pack", "--pack-destination", packDirectory], {
-    cwd: packageDirectory,
-  });
+  await run(
+    "npm",
+    ["pack", "--ignore-scripts", "--pack-destination", packDirectory],
+    { cwd: packageDirectory }
+  );
 
   const tarballs = (await readdir(packDirectory)).filter((fileName) =>
     fileName.endsWith(".tgz")

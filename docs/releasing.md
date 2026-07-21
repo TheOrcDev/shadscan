@@ -56,6 +56,11 @@ an unlicensed package, a mismatched stable/prerelease version, install-time
 scripts, workspace dependencies, incomplete package files, and malformed
 registry metadata.
 
+The CI workflows build the CLI once, then use the internal `ci:*` script
+variants for every dependent gate. Keep the ordinary commands above for local release work;
+their lifecycle hooks deliberately rebuild the CLI so stale output cannot be
+verified or published by accident.
+
 ## First Release Candidate
 
 The first publish creates `@shadscan/cli` inside the existing `@shadscan` scope
