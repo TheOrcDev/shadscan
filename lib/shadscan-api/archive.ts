@@ -29,6 +29,7 @@ interface ArchiveLimits {
 interface ExtractArchiveOptions {
   forbiddenPathBehavior: "reject" | "skip";
   limits?: Partial<ArchiveLimits>;
+  signal?: AbortSignal;
   stripComponents?: number;
 }
 
@@ -49,12 +50,14 @@ const hasErrorCode = (error: unknown): error is Error & { code: string } =>
 const collectEntry = async (
   stream: NodeJS.ReadableStream,
   expectedBytes: number,
-  maxFileBytes: number
+  maxFileBytes: number,
+  signal?: AbortSignal
 ): Promise<Buffer> => {
   const chunks: Buffer[] = [];
   let totalBytes = 0;
 
   for await (const rawChunk of stream) {
+    signal?.throwIfAborted();
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
     totalBytes += chunk.byteLength;
     if (totalBytes > maxFileBytes) {
@@ -76,8 +79,12 @@ const collectEntry = async (
   return Buffer.concat(chunks, totalBytes);
 };
 
-const drainEntry = async (stream: NodeJS.ReadableStream): Promise<void> => {
+const drainEntry = async (
+  stream: NodeJS.ReadableStream,
+  signal?: AbortSignal
+): Promise<void> => {
   for await (const _chunk of stream) {
+    signal?.throwIfAborted();
     // The archive is already bounded after decompression. Drain skipped entries
     // so tar-stream can continue parsing the next header.
   }
@@ -189,15 +196,18 @@ const planArchiveEntry = (
 const applyArchiveEntryPlan = async (
   plan: ArchiveEntryPlan,
   stream: NodeJS.ReadableStream,
-  limits: ArchiveLimits
+  limits: ArchiveLimits,
+  signal?: AbortSignal
 ): Promise<void> => {
+  signal?.throwIfAborted();
   if (plan.kind === "skip") {
-    await drainEntry(stream);
+    await drainEntry(stream, signal);
     return;
   }
 
   if (plan.kind === "directory") {
-    await drainEntry(stream);
+    await drainEntry(stream, signal);
+    signal?.throwIfAborted();
     await mkdir(plan.destinationPath, { recursive: true });
     return;
   }
@@ -205,8 +215,10 @@ const applyArchiveEntryPlan = async (
   const contents = await collectEntry(
     stream,
     plan.fileSize,
-    limits.maxFileBytes
+    limits.maxFileBytes,
+    signal
   );
+  signal?.throwIfAborted();
   await mkdir(path.dirname(plan.destinationPath), { recursive: true });
   await writeFile(plan.destinationPath, contents, { flag: "wx", mode: 0o600 });
 };
@@ -218,6 +230,7 @@ const extractTarBuffer = async (
     Pick<ExtractArchiveOptions, "forbiddenPathBehavior" | "stripComponents">
   > & {
     limits: ArchiveLimits;
+    signal?: AbortSignal;
   }
 ): Promise<void> => {
   const archive = extract();
@@ -232,13 +245,25 @@ const extractTarBuffer = async (
     archive.once("finish", resolve);
     archive.once("error", reject);
   });
+  const abortExtraction = (): void => {
+    const reason = options.signal?.reason;
+    archive.destroy(reason instanceof Error ? reason : new Error("Aborted"));
+  };
+  options.signal?.throwIfAborted();
+  options.signal?.addEventListener("abort", abortExtraction, { once: true });
 
   archive.on(
     "entry",
     (header: Headers, stream: NodeJS.ReadableStream, next: () => void) => {
       const handleEntry = async (): Promise<void> => {
+        options.signal?.throwIfAborted();
         const plan = planArchiveEntry(header, destinationRoot, state, options);
-        await applyArchiveEntryPlan(plan, stream, options.limits);
+        await applyArchiveEntryPlan(
+          plan,
+          stream,
+          options.limits,
+          options.signal
+        );
       };
 
       handleEntry()
@@ -256,6 +281,7 @@ const extractTarBuffer = async (
   try {
     await completion;
   } catch (error) {
+    options.signal?.throwIfAborted();
     if (entryFailure !== undefined) {
       throw entryFailure;
     }
@@ -268,6 +294,8 @@ const extractTarBuffer = async (
         status: 422,
       }
     );
+  } finally {
+    options.signal?.removeEventListener("abort", abortExtraction);
   }
 };
 
@@ -277,6 +305,7 @@ const extractTarGzip = async (
   options: ExtractArchiveOptions
 ): Promise<void> => {
   const limits = { ...DEFAULT_ARCHIVE_LIMITS, ...options.limits };
+  options.signal?.throwIfAborted();
   if (archiveBuffer.byteLength > limits.maxCompressedBytes) {
     throw new HostedScanError(
       "The archive exceeds the compressed size limit.",
@@ -314,6 +343,7 @@ const extractTarGzip = async (
     );
   }
 
+  options.signal?.throwIfAborted();
   if (tarBuffer.byteLength > limits.maxExpandedBytes) {
     throw new HostedScanError("The archive exceeds the expanded size limit.", {
       code: "ARCHIVE_EXPANDED_TOO_LARGE",
@@ -321,10 +351,12 @@ const extractTarGzip = async (
     });
   }
 
+  options.signal?.throwIfAborted();
   await mkdir(destinationRoot, { recursive: true });
   await extractTarBuffer(tarBuffer, destinationRoot, {
     forbiddenPathBehavior: options.forbiddenPathBehavior,
     limits,
+    signal: options.signal,
     stripComponents: options.stripComponents ?? 0,
   });
 };

@@ -51,6 +51,10 @@ const throwGitHubRequestError = (
   error: unknown,
   sourceSignal: AbortSignal
 ): never => {
+  if (sourceSignal.aborted && sourceSignal.reason instanceof HostedScanError) {
+    throw sourceSignal.reason;
+  }
+
   const errorName = error instanceof Error ? error.name : "";
   const isTimeout =
     sourceSignal.aborted ||
@@ -91,7 +95,10 @@ const readGitHubResponseBytes = async (
   sourceSignal: AbortSignal
 ): Promise<Buffer> => {
   try {
-    return await readResponseBytes(response, options);
+    return await readResponseBytes(response, {
+      ...options,
+      signal: sourceSignal,
+    });
   } catch (error) {
     if (error instanceof HostedScanError) {
       throw error;
@@ -312,10 +319,12 @@ const downloadGitHubArchive = async (
 };
 
 const parseGitHubScanRequest = async (
-  request: Request
+  request: Request,
+  signal?: AbortSignal
 ): Promise<GitHubScanRequest> => {
   const requestBuffer = await readRequestBytes(request, {
     maxBytes: MAX_GITHUB_REQUEST_BYTES,
+    signal,
     tooLargeCode: "REQUEST_TOO_LARGE",
     tooLargeMessage: "The JSON scan request exceeds the size limit.",
   });
@@ -345,10 +354,15 @@ const parseGitHubScanRequest = async (
 
 const materializeGitHubSource = async (
   requestData: GitHubScanRequest,
-  fetchImplementation: FetchImplementation = fetch
+  fetchImplementation: FetchImplementation = fetch,
+  deadlineSignal?: AbortSignal
 ): Promise<MaterializedScanSource> => {
   const { repository, revision, subdirectory } = requestData.source;
-  const sourceSignal = AbortSignal.timeout(GITHUB_SOURCE_TIMEOUT_MS);
+  const sourceTimeoutSignal = AbortSignal.timeout(GITHUB_SOURCE_TIMEOUT_MS);
+  const sourceSignal = deadlineSignal
+    ? AbortSignal.any([deadlineSignal, sourceTimeoutSignal])
+    : sourceTimeoutSignal;
+  sourceSignal.throwIfAborted();
   await assertPublicGitHubRepository(
     repository,
     fetchImplementation,
@@ -366,6 +380,7 @@ const materializeGitHubSource = async (
     fetchImplementation,
     sourceSignal
   );
+  sourceSignal.throwIfAborted();
   const sourceDigest = `sha256:${createHash("sha256")
     .update(archiveBuffer)
     .digest("hex")}`;
@@ -375,9 +390,12 @@ const materializeGitHubSource = async (
   try {
     await extractTarGzip(archiveBuffer, extractionRoot, {
       forbiddenPathBehavior: "skip",
+      signal: sourceSignal,
       stripComponents: 1,
     });
+    sourceSignal.throwIfAborted();
     const projectRoot = await resolveProjectRoot(extractionRoot, subdirectory);
+    sourceSignal.throwIfAborted();
 
     return {
       category: requestData.category,

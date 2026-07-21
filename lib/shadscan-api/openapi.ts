@@ -245,7 +245,7 @@ const OPENAPI_DOCUMENT = {
             "Authentication or distributed rate limiting is not configured or is temporarily unavailable."
           ),
           "504": createErrorResponse(
-            "GitHub did not respond before the source-fetch timeout."
+            "The source fetch or scan exceeded the hosted execution deadline."
           ),
         },
       },

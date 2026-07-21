@@ -12,6 +12,7 @@ import type {
   HostedScanErrorBody,
   HostedScanResponse,
 } from "../../lib/shadscan-api/contracts";
+import { HOSTED_SCAN_DEADLINE_MS } from "../../lib/shadscan-api/deadline";
 import { GITHUB_SOURCE_TIMEOUT_MS } from "../../lib/shadscan-api/github-source";
 import {
   JSON_MEDIA_TYPE,
@@ -30,6 +31,10 @@ vi.mock(
 vi.mock(
   "@/lib/shadscan-api/errors",
   () => import("../../lib/shadscan-api/errors")
+);
+vi.mock(
+  "@/lib/shadscan-api/deadline",
+  () => import("../../lib/shadscan-api/deadline")
 );
 vi.mock(
   "@/lib/shadscan-api/github-source",
@@ -175,7 +180,8 @@ afterEach(() => {
 
 describe("POST /v1/scans", () => {
   it("reserves route time for extraction and scanning after GitHub fetches", () => {
-    expect(GITHUB_SOURCE_TIMEOUT_MS).toBeLessThan(maxDuration * 1000);
+    expect(GITHUB_SOURCE_TIMEOUT_MS).toBeLessThan(HOSTED_SCAN_DEADLINE_MS);
+    expect(HOSTED_SCAN_DEADLINE_MS).toBeLessThan(maxDuration * 1000);
   });
 
   it("returns a completed JSON scan for an authenticated snapshot", async () => {

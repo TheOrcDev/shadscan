@@ -63,6 +63,17 @@ const getRetryAfterSeconds = (error: HostedScanError): number | undefined => {
 };
 
 const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
+  if (error.code === "SCAN_TIMEOUT") {
+    return new WebScanServiceError(
+      "The scan took too long to finish. Try again or run shadscan locally.",
+      {
+        cause: error,
+        code: "SCAN_TIMEOUT",
+        retryable: true,
+      }
+    );
+  }
+
   if (error.code === "GITHUB_SOURCE_NOT_FOUND") {
     return new WebScanServiceError(
       "The repository could not be found. Check that it exists and is public.",

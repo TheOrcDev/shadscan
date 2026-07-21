@@ -49,7 +49,8 @@ const parseSnapshotQuery = (request: Request) => {
 };
 
 const materializeSnapshotSource = async (
-  request: Request
+  request: Request,
+  signal?: AbortSignal
 ): Promise<MaterializedScanSource> => {
   if (getRequestMediaType(request) !== SNAPSHOT_MEDIA_TYPE) {
     throw new HostedScanError(
@@ -66,6 +67,7 @@ const materializeSnapshotSource = async (
     emptyCode: "EMPTY_SNAPSHOT",
     emptyMessage: "A gzip tar snapshot is required.",
     maxBytes: MAX_SNAPSHOT_BYTES,
+    signal,
     tooLargeCode: "SNAPSHOT_TOO_LARGE",
     tooLargeMessage: "The snapshot exceeds the 4 MiB compressed size limit.",
   });
@@ -79,11 +81,14 @@ const materializeSnapshotSource = async (
     await extractTarGzip(archiveBuffer, extractionRoot, {
       forbiddenPathBehavior: "reject",
       limits: { maxCompressedBytes: MAX_SNAPSHOT_BYTES },
+      signal,
     });
+    signal?.throwIfAborted();
     const projectRoot = await resolveProjectRoot(
       extractionRoot,
       query.subdirectory
     );
+    signal?.throwIfAborted();
 
     return {
       category: query.category,

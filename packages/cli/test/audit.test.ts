@@ -88,6 +88,19 @@ afterEach(async () => {
 });
 
 describe("runAudit", () => {
+  it("stops before project discovery when its signal is aborted", async () => {
+    const controller = new AbortController();
+    const deadlineError = new Error("Hosted deadline reached");
+    controller.abort(deadlineError);
+
+    await expect(
+      runAudit("/project/that/does/not/exist", {
+        rules: [],
+        signal: controller.signal,
+      })
+    ).rejects.toBe(deadlineError);
+  });
+
   it("validates the JSON report contract", async () => {
     const rootDir = await createReactFixture();
     await writeFixtureFile(

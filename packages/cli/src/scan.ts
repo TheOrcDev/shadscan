@@ -4,6 +4,7 @@ import { defaultRules } from "./rules/default-rules";
 
 interface ScanOptions {
   category?: AuditCategory;
+  signal?: AbortSignal;
   source?: ScanSource;
 }
 
@@ -17,6 +18,7 @@ const scanProject = async (
     category: options.category,
     rules: defaultRules,
     rulesetVersion: BUNDLED_RULESET_VERSION,
+    signal: options.signal,
     source: options.source,
   });
 

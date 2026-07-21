@@ -113,7 +113,9 @@ verification commands. Errors are always versioned JSON.
 
 ## Operational boundaries
 
-- Requests time out after 30 seconds.
+- Hosted work has a 25-second deadline within the 30-second route limit and
+  returns a retryable `SCAN_TIMEOUT` error with status 504.
+- GitHub source work has a 12-second timeout inside that end-to-end budget.
 - GitHub archive downloads are capped at 16 MiB compressed.
 - Extracted archives are capped at 32 MiB, 2,500 entries, and 2 MiB per file.
 - Snapshot bytes are hashed and GitHub scans record the resolved commit SHA.

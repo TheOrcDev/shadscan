@@ -17,18 +17,23 @@ import { HOSTED_SCAN_SCHEMA_VERSION } from "./protocol";
 const createScanId = (): string => `scan_${randomUUID().replaceAll("-", "")}`;
 
 const runHostedScan = async (
-  source: MaterializedScanSource
+  source: MaterializedScanSource,
+  signal?: AbortSignal
 ): Promise<HostedScanResponse> => {
   try {
+    signal?.throwIfAborted();
     const report = await scanProject(source.projectRoot, {
       category: source.category,
+      signal,
       source: {
         digest: source.sourceDigest,
         kind: source.sourceKind,
         revision: source.resolvedRevision,
       },
     });
+    signal?.throwIfAborted();
     const promptMarkdown = renderAgentPrompt(report);
+    signal?.throwIfAborted();
 
     return HostedScanResponseSchema.parse({
       handoff: {

@@ -4,6 +4,7 @@ interface ReadBytesOptions {
   emptyCode?: string;
   emptyMessage?: string;
   maxBytes: number;
+  signal?: AbortSignal;
   tooLargeCode: string;
   tooLargeMessage: string;
 }
@@ -34,12 +35,19 @@ const readStreamBytes = async (
   }
 
   const reader = body.getReader();
+  const cancelOnAbort = (): void => {
+    reader.cancel(options.signal?.reason).catch(() => undefined);
+  };
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
 
+  options.signal?.throwIfAborted();
+  options.signal?.addEventListener("abort", cancelOnAbort, { once: true });
   try {
     while (true) {
+      options.signal?.throwIfAborted();
       const result = await reader.read();
+      options.signal?.throwIfAborted();
       if (result.done) {
         break;
       }
@@ -55,7 +63,11 @@ const readStreamBytes = async (
 
       chunks.push(result.value);
     }
+  } catch (error) {
+    options.signal?.throwIfAborted();
+    throw error;
   } finally {
+    options.signal?.removeEventListener("abort", cancelOnAbort);
     reader.releaseLock();
   }
 

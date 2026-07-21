@@ -141,4 +141,37 @@ describe("executeWebRepositoryScan", () => {
       })
     );
   });
+
+  it("aborts and maps scans that exceed the hosted deadline", async () => {
+    let operationSignal: AbortSignal | undefined;
+    const materializeSource = vi.fn(
+      (
+        _request: unknown,
+        _fetchImplementation: unknown,
+        signal?: AbortSignal
+      ) => {
+        operationSignal = signal;
+        return new Promise<never>(() => undefined);
+      }
+    );
+
+    await expect(
+      executeWebRepositoryScan(
+        {
+          clientAddress: "203.0.113.4",
+          repositoryInput: "acme/slow-widget",
+        },
+        {
+          deadlineMs: 5,
+          enforceRateLimit: () => Promise.resolve(),
+          materializeSource,
+        }
+      )
+    ).rejects.toMatchObject({
+      code: "SCAN_TIMEOUT",
+      message: expect.stringContaining("too long"),
+      retryable: true,
+    });
+    expect(operationSignal?.aborted).toBe(true);
+  });
 });

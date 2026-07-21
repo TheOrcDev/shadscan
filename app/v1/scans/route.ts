@@ -1,5 +1,6 @@
 import { authenticateApiRequest } from "@/lib/shadscan-api/auth";
 import type { HostedScanResponse } from "@/lib/shadscan-api/contracts";
+import { runWithHostedScanDeadline } from "@/lib/shadscan-api/deadline";
 import {
   asHostedScanError,
   HostedScanError,
@@ -185,15 +186,18 @@ const getResponseFormat = (request: Request): ResponseFormat => {
   );
 };
 
-const materializeRequestSource = async (request: Request) => {
+const materializeRequestSource = async (
+  request: Request,
+  signal: AbortSignal
+) => {
   const mediaType = getMediaType(request.headers.get("content-type"));
   if (mediaType === JSON_MEDIA_TYPE) {
-    const requestData = await parseGitHubScanRequest(request);
-    return materializeGitHubSource(requestData);
+    const requestData = await parseGitHubScanRequest(request, signal);
+    return materializeGitHubSource(requestData, fetch, signal);
   }
 
   if (mediaType === SNAPSHOT_MEDIA_TYPE) {
-    return materializeSnapshotSource(request);
+    return materializeSnapshotSource(request, signal);
   }
 
   throw new HostedScanError(
@@ -249,12 +253,17 @@ const createErrorResponse = (error: unknown): Response => {
 
 export const POST = async (request: Request): Promise<Response> => {
   try {
-    const authentication = authenticateApiRequest(request);
-    const rateLimit = await enforceRateLimit(authentication.keyId);
-    const format = getResponseFormat(request);
-    const source = await materializeRequestSource(request);
-    const result = await runHostedScan(source);
-    return createSuccessResponse(result, format, rateLimit);
+    return await runWithHostedScanDeadline(async (signal) => {
+      const authentication = authenticateApiRequest(request);
+      const rateLimit = await enforceRateLimit(authentication.keyId);
+      signal.throwIfAborted();
+      const format = getResponseFormat(request);
+      const source = await materializeRequestSource(request, signal);
+      signal.throwIfAborted();
+      const result = await runHostedScan(source, signal);
+      signal.throwIfAborted();
+      return createSuccessResponse(result, format, rateLimit);
+    });
   } catch (error) {
     return createErrorResponse(error);
   }

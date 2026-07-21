@@ -52,7 +52,9 @@ normal traffic.
 ## Runtime Boundaries
 
 - `/scan` runs in the Node.js runtime with a 30-second execution limit.
-- GitHub source work has a 12-second timeout inside that route budget.
+- The full server action has a 25-second deadline so it can return a stable
+  `SCAN_TIMEOUT` error before the platform terminates it.
+- GitHub source work has a 12-second timeout inside that end-to-end budget.
 - GitHub archives are limited to 16 MiB compressed and 32 MiB extracted.
 - Extraction permits at most 2,500 entries and 2 MiB per file.
 - Temporary source is removed after success and failure.

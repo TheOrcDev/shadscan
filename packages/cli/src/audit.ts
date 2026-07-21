@@ -204,6 +204,7 @@ interface RunAuditOptions {
   category?: AuditCategory;
   rules: AuditRule[];
   rulesetVersion?: string;
+  signal?: AbortSignal;
   source?: ScanSource;
 }
 
@@ -1153,16 +1154,20 @@ const runAudit = async (
   options: RunAuditOptions
 ): Promise<AuditReport> => {
   const startedAt = performance.now();
+  options.signal?.throwIfAborted();
   const project = await discoverProject(cwd);
+  options.signal?.throwIfAborted();
   const context: AuditContext = { project };
   const findings: AuditFinding[] = [];
 
   for (const rule of options.rules) {
+    options.signal?.throwIfAborted();
     if (!shouldRunRule({ category: options.category, project, rule })) {
       continue;
     }
 
     findings.push(normalizeFinding(rule, await rule.run(context)));
+    options.signal?.throwIfAborted();
   }
 
   return createAuditReport({
