@@ -1,6 +1,7 @@
 import { CodeBlockCommand } from "@/components/code-block-command";
 import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
+import { AGENT_AUDIT_PROMPT } from "@/lib/agent-prompt";
 import { createPageMetadata } from "@/lib/site-metadata";
 
 const CLI_PACKAGE = "@shadscan/cli@next";
@@ -171,6 +172,21 @@ export default function DocsPage() {
           <p>
             The optional <code>path</code> defaults to the current directory.
             Pass a relative or absolute path to scan another project.
+          </p>
+          <h3>Run with an AI agent (recommended)</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand
+              prompt={AGENT_AUDIT_PROMPT}
+              {...getCliCommands()}
+            />
+          </div>
+          <p>
+            The recommended way to start is to hand the audit to your AI coding
+            agent. Copy the <code>prompt</code> tab and paste it in — it runs
+            Shadscan, then, without editing any code, summarizes the findings by
+            severity and proposes a prioritized remediation plan for you to
+            approve before anything changes. Switch tabs for the raw one-shot
+            command.
           </p>
           <h3>Scan another directory</h3>
           <div className="not-typeset mt-4">
