@@ -43,7 +43,7 @@ for (const legalPage of LEGAL_PAGES) {
       legalPage.lastUpdated
     );
     await expect(
-      page.getByRole("link", { name: "orc@orcdev.com" }).last()
+      page.getByRole("link", { name: "orc@orcdev.com" })
     ).toHaveAttribute("href", "mailto:orc@orcdev.com");
 
     const legalNavigation = page.getByRole("navigation", { name: "Legal" });
