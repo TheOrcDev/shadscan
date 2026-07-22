@@ -23,6 +23,9 @@ interface HeroProps {
   media?: ReactNode;
 }
 
+const externalLinkProps = (url: string) =>
+  url.startsWith("http") ? { rel: "noreferrer", target: "_blank" } : {};
+
 const Hero = ({
   logo,
   heading,
@@ -49,7 +52,10 @@ const Hero = ({
               <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
                 {buttons?.primary && (
                   <Button asChild className="w-full sm:w-auto" size="lg">
-                    <a href={buttons.primary.url}>
+                    <a
+                      href={buttons.primary.url}
+                      {...externalLinkProps(buttons.primary.url)}
+                    >
                       {buttons.primary.text}
                       <ArrowRightIcon data-icon="inline-end" />
                     </a>
@@ -62,7 +68,12 @@ const Hero = ({
                     size="lg"
                     variant="outline"
                   >
-                    <a href={buttons.secondary.url}>{buttons.secondary.text}</a>
+                    <a
+                      href={buttons.secondary.url}
+                      {...externalLinkProps(buttons.secondary.url)}
+                    >
+                      {buttons.secondary.text}
+                    </a>
                   </Button>
                 )}
               </div>
