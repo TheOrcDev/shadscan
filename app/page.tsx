@@ -35,7 +35,7 @@ export default async function Page() {
           logo={
             <Badge
               asChild
-              className="h-5 border border-border bg-secondary px-2 text-secondary-foreground hover:bg-secondary/80"
+              className="h-5 border border-border bg-secondary px-2.5 text-secondary-foreground hover:bg-secondary/80 has-data-[icon=inline-end]:pr-2.5"
               variant="secondary"
             >
               <Link href="/changelog">
