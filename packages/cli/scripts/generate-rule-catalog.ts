@@ -22,21 +22,6 @@ const CATEGORY_TITLES = {
   states: "States",
 } as const satisfies Record<AuditCategory, string>;
 
-const CATEGORY_DESCRIPTIONS = {
-  accessibility:
-    "Semantics, labels, focus behavior, keyboard access, and assistive-technology support.",
-  forms:
-    "Labels, validation, autocomplete, and data-entry details that prevent avoidable mistakes.",
-  foundation:
-    "Project configuration and framework basics that make the rest of the interface dependable.",
-  interaction:
-    "Keyboard-first navigation and shortcuts that make important actions quick to reach.",
-  "production-polish":
-    "Responsive behavior, release hygiene, and the details that separate a demo from a finished app.",
-  states:
-    "Loading, empty, error, and feedback states that keep the interface understandable.",
-} as const satisfies Record<AuditCategory, string>;
-
 const escapeTableCell = (value: string): string =>
   value.replaceAll("|", "\\|").replaceAll("\n", " ");
 
@@ -84,7 +69,6 @@ const renderCatalog = (): string =>
 
 const renderSiteCatalog = (): string => {
   const categories = AUDIT_CATEGORIES.map((id) => ({
-    description: CATEGORY_DESCRIPTIONS[id],
     id,
     title: CATEGORY_TITLES[id],
   }));

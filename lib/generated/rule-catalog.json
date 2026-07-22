@@ -1,32 +1,26 @@
 {
   "categories": [
     {
-      "description": "Project configuration and framework basics that make the rest of the interface dependable.",
       "id": "foundation",
       "title": "Foundation"
     },
     {
-      "description": "Keyboard-first navigation and shortcuts that make important actions quick to reach.",
       "id": "interaction",
       "title": "Interaction"
     },
     {
-      "description": "Loading, empty, error, and feedback states that keep the interface understandable.",
       "id": "states",
       "title": "States"
     },
     {
-      "description": "Semantics, labels, focus behavior, keyboard access, and assistive-technology support.",
       "id": "accessibility",
       "title": "Accessibility"
     },
     {
-      "description": "Labels, validation, autocomplete, and data-entry details that prevent avoidable mistakes.",
       "id": "forms",
       "title": "Forms and Data Entry"
     },
     {
-      "description": "Responsive behavior, release hygiene, and the details that separate a demo from a finished app.",
       "id": "production-polish",
       "title": "Production Polish"
     }

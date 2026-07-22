@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
-  { href: "/rules", label: "Rules" },
   { href: "/scan", label: "Scan" },
   { href: "/sponsors", label: "Sponsors" },
 ] as const;
@@ -51,7 +50,6 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
                   className={cn(
                     buttonVariants({ size: "sm", variant: "ghost" }),
                     "px-2 sm:px-4",
-                    link.href === "/sponsors" && "hidden sm:inline-flex",
                     isActive && "bg-muted text-foreground"
                   )}
                   href={link.href}
