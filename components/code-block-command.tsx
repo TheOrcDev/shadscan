@@ -67,6 +67,14 @@ export function CodeBlockCommand({
     [tabs]
   );
 
+  // The selected tab is persisted globally, but not every instance offers every
+  // tab (e.g. only the landing page has a `prompt` tab). Fall back to the first
+  // available tab so a stored value this instance lacks never leaves the block
+  // with no active tab.
+  const activeTab = tabsFiltered.some(([key]) => key === packageManager)
+    ? packageManager
+    : ((tabsFiltered[0]?.[0] as PackageManager | undefined) ?? packageManager);
+
   return (
     <div className="relative overflow-hidden rounded-none bg-code">
       <Tabs
@@ -74,7 +82,7 @@ export function CodeBlockCommand({
         onValueChange={(value) => {
           setPackageManager(value as PackageManager);
         }}
-        value={packageManager}
+        value={activeTab}
       >
         <ScrollArea.Root className="w-full pr-10 shadow-[inset_0_-1px_0_0] shadow-border">
           <TabsList
@@ -86,8 +94,8 @@ export function CodeBlockCommand({
             render={<ScrollArea.Viewport />}
           >
             <IconSwap>
-              <IconSwapItem className="mr-2" key={packageManager}>
-                {getIconForPackageManager(packageManager)}
+              <IconSwapItem className="mr-2" key={activeTab}>
+                {getIconForPackageManager(activeTab)}
               </IconSwapItem>
             </IconSwap>
 
@@ -112,7 +120,7 @@ export function CodeBlockCommand({
               data-pm={key}
             >
               <code
-                className="font-mono text-muted-foreground text-sm/none group-data-[pm=prompt]/tabs-content-pre:whitespace-normal"
+                className="font-mono text-muted-foreground text-sm/none group-data-[pm=prompt]/tabs-content-pre:whitespace-pre-wrap"
                 data-language="bash"
                 data-slot="code-block"
               >
@@ -136,7 +144,7 @@ export function CodeBlockCommand({
           });
         }}
         size="icon-sm"
-        text={tabs[packageManager] || ""}
+        text={tabs[activeTab] || ""}
         variant="ghost"
       />
     </div>
