@@ -91,7 +91,7 @@ pnpm dlx @shadscan/cli@next --prompt
 pnpm dlx @shadscan/cli@next --apply --agent codex
 
 # Fail CI when the complete assessed score is below the floor
-pnpm dlx @shadscan/cli@0.1.0-rc.1 --fail-under 80 --no-interactive --no-roast
+pnpm dlx @shadscan/cli@0.1.0-rc.4 --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli@next --category accessibility

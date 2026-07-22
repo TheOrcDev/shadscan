@@ -6,11 +6,38 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.4 - 2026-07-22
+
 ### Added
 
-- Add a high-confidence shadcn Button rule that requires position-correct
+- Advance the bundled ruleset to `2026.07.33` (56 rules) and add a
+  high-confidence shadcn Button rule that requires position-correct
   `data-icon="inline-start"` or `data-icon="inline-end"` attributes on inline
   icons and spinners while excluding icon-only controls.
+- Add bounded project discovery and selection for monorepos so the web scanner
+  can audit one root or nested app instead of acquiring unrelated source.
+- Add optional immutable-result caching and durable queued execution for larger
+  eligible web scans, with token-protected polling and no source persistence.
+- Add a guided manual and AI-agent entry point to the product site.
+
+### Changed
+
+- Stream GitHub archives through bounded source profiles, retain only
+  scan-relevant inputs, and support sparse acquisition for small selected
+  manifests.
+- Redesign the repository and npm READMEs around CLI workflows, deterministic
+  guarantees, CI usage, and agent handoff.
+- Make the versioned agent-audit prompt the recommended documentation path.
+
+### Fixed
+
+- Bundle the hosted scanner worker into production traces for Vercel.
+- Resolve GitHub branch and tag revisions to immutable raw commit SHAs before
+  archive acquisition while preserving stable errors.
+- Ignore irrelevant assets when applying retained-source limits and report the
+  exact failed counter, configured threshold, observed value, and affected path.
+- Keep package-manager selection local to each documentation code block so
+  changing one example no longer changes every example on the page.
 
 ## 0.1.0-rc.3 - 2026-07-21
 
