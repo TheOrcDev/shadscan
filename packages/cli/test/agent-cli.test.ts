@@ -149,7 +149,7 @@ const createReport = (projectRoot: string): AuditReport =>
     durationMs: 10,
     findings: [createFinding(projectRoot)],
     project: createProject(projectRoot),
-    rulesetVersion: "2026.07.32",
+    rulesetVersion: "2026.07.33",
   });
 
 const getPromptFilePath = (bootstrapPrompt: string): string => {

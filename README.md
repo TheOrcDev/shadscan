@@ -16,7 +16,7 @@
   <a href="https://www.shadscan.com">Website</a> ·
   <a href="https://www.shadscan.com/scan">Scan a repository</a> ·
   <a href="https://www.shadscan.com/docs">Docs</a> ·
-  <a href="docs/rules.md">55 rules</a> ·
+  <a href="docs/rules.md">56 rules</a> ·
   <a href="https://www.shadscan.com/sponsors">Sponsor</a>
 </p>
 
@@ -120,7 +120,7 @@ provider and approval model.
 
 ## What It Checks
 
-The bundled ruleset contains 55 deterministic checks across six weighted
+The bundled ruleset contains 56 deterministic checks across six weighted
 categories.
 
 | Category | Examples |
@@ -130,7 +130,7 @@ categories.
 | States | loading and Suspense fallbacks, empty states, retryable errors, pending actions, mounted toasts |
 | Accessibility | names and labels, semantic controls, alt text, landmarks, live regions, keyboard and focus behavior |
 | Forms and Data Entry | validation, rendered field errors, error associations, legends, button types, autocomplete |
-| Production Polish | complete metadata, social previews, starter copy, responsive shells, SEO files, mobile overflow |
+| Production Polish | complete metadata, social previews, Button icon spacing, responsive shells, SEO files, mobile overflow |
 
 See the generated [rule catalog](docs/rules.md) for every rule ID, confidence
 level, score behavior, and supported adapter.

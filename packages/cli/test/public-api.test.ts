@@ -7,7 +7,7 @@ describe("public library API", () => {
     expect(publicApi.scanProject).toBeTypeOf("function");
     expect(publicApi.renderAgentPrompt).toBeTypeOf("function");
     expect(publicApi.AuditReportSchema).toBeDefined();
-    expect(publicApi.RULE_CATALOG).toHaveLength(55);
+    expect(publicApi.RULE_CATALOG).toHaveLength(56);
     expect(
       new Set(publicApi.RULE_CATALOG.map((rule) => rule.id))
     ).toHaveProperty("size", publicApi.RULE_CATALOG.length);

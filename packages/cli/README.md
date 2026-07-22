@@ -139,7 +139,7 @@ configure Git, or add a Husky or native pre-commit hook.
 
 ## What It Checks
 
-The bundled ruleset contains 55 deterministic checks across six weighted
+The bundled ruleset contains 56 deterministic checks across six weighted
 categories.
 
 | Category | Examples |
@@ -149,7 +149,7 @@ categories.
 | States | loading and Suspense fallbacks, empty states, retryable errors, pending actions, mounted toasts |
 | Accessibility | names and labels, semantic controls, alt text, landmarks, live regions, keyboard and focus behavior |
 | Forms and Data Entry | validation, rendered field errors, error associations, legends, button types, autocomplete |
-| Production Polish | complete metadata, social previews, starter copy, responsive shells, SEO files, mobile overflow |
+| Production Polish | complete metadata, social previews, Button icon spacing, responsive shells, SEO files, mobile overflow |
 
 Raw rule points are normalized within each category to produce the 100-point
 score. High- and medium-confidence failures can reduce it. Low-confidence

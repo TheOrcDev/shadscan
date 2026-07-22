@@ -6,6 +6,12 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- Add a high-confidence shadcn Button rule that requires position-correct
+  `data-icon="inline-start"` or `data-icon="inline-end"` attributes on inline
+  icons and spinners while excluding icon-only controls.
+
 ## 0.1.0-rc.3 - 2026-07-21
 
 ### Added
