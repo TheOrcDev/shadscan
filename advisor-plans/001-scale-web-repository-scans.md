@@ -20,6 +20,9 @@
 - **Depends on**: none
 - **Category**: correctness, performance, architecture, security, UX
 - **Planned at**: commit `4c22d65`, 2026-07-22
+- **Completed at**: commit `3b314f5`, 2026-07-22
+- **Rollout state**: implementation complete; cache and async remain disabled
+  by default pending reviewed production migration and canary activation
 
 ## Outcome
 
@@ -545,6 +548,11 @@ or job data before the old synchronous path can serve traffic.
 selected monorepo app, one cache hit, one exact hard-limit failure, and one
 queued scan in the production preview environment.
 
+The repository implementation, flags, rollback procedure, and deterministic
+coverage are complete. Production migration, preview validation, and staged
+activation are deployment operations and are intentionally not performed by
+this plan's automatic execution.
+
 ## Test Plan Summary
 
 - Model archive tests on `test/shadscan-api/archive.test.ts`.
@@ -561,26 +569,26 @@ queued scan in the production preview environment.
 
 ## Done Criteria
 
-- [ ] A repository containing a 3 MiB irrelevant image scans successfully.
-- [ ] A repository with more than 2,500 irrelevant entries scans its selected
+- [x] A repository containing a 3 MiB irrelevant image scans successfully.
+- [x] A repository with more than 2,500 irrelevant entries scans its selected
       app without materializing those entries.
-- [ ] Presence-only favicon/social-preview assets preserve report parity.
-- [ ] Every source rejection identifies kind, limit, observed value, and unit.
-- [ ] Invalid environment budgets fail validation and cannot exceed compiled
+- [x] Presence-only favicon/social-preview assets preserve report parity.
+- [x] Every source rejection identifies kind, limit, observed value, and unit.
+- [x] Invalid environment budgets fail validation and cannot exceed compiled
       ceilings.
-- [ ] Users can select a nested project and only that project's relevant source
+- [x] Users can select a nested project and only that project's relevant source
       is retained.
-- [ ] The same commit/path/category/version tuple produces a cache hit and a
+- [x] The same commit/path/category/version tuple produces a cache hit and a
       fresh scan ID; a changed tuple misses.
-- [ ] A repository made private after caching cannot receive its cached report.
-- [ ] Only projects within the CLI's source budget can enter async processing.
-- [ ] Async duplicate delivery is idempotent and source archives are never
+- [x] A repository made private after caching cannot receive its cached report.
+- [x] Only projects within the CLI's source budget can enter async processing.
+- [x] Async duplicate delivery is idempotent and source archives are never
       stored in Neon or queue messages.
-- [ ] Privacy/docs match actual cache and job retention.
-- [ ] `pnpm ci:test-api`, `pnpm ci:test-web`, `pnpm ci:test-e2e`,
+- [x] Privacy/docs match actual cache and job retention.
+- [x] `pnpm ci:test-api`, `pnpm ci:test-web`, `pnpm ci:test-e2e`,
       `pnpm db:check`, `pnpm typecheck`, `pnpm check`, `pnpm build`, and
       `pnpm audit:self` all pass.
-- [ ] No unrelated files, rule scoring, or private-repository support changed.
+- [x] No unrelated files, rule scoring, or private-repository support changed.
 
 ## STOP Conditions
 

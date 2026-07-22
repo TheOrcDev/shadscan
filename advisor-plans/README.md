@@ -8,13 +8,12 @@ otherwise.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Scale public web repository scans | P1 | XL | - | TODO |
+| 001 | Scale public web repository scans | P1 | XL | - | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
 ## Dependency Notes
 
-- Plan 001 is intentionally split into seven independently committable slices.
-- Do not begin the asynchronous slice until selective acquisition and caching
-  are deployed and measured. A queue must not hide avoidable source-loading
-  work.
+- Plan 001 was delivered in seven independently committable slices. The async
+  adapter ships disabled and should remain off until selective acquisition and
+  cache metrics justify a measured canary threshold.
