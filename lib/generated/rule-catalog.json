@@ -552,6 +552,42 @@
       "adapters": [
         "core"
       ],
+      "category": "interaction",
+      "confidence": "medium",
+      "description": "Checks that Select, DropdownMenu, and Command items are composed inside their matching group parts.",
+      "id": "items-belong-to-groups",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "items are composed inside their groups"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "medium",
+      "description": "Checks that InputGroup is composed from its own input, textarea, and addon parts rather than raw controls.",
+      "id": "input-group-composition",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "InputGroup uses its own parts"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "medium",
+      "description": "Checks that Alert is composed from its anatomy: at most one icon, a required AlertTitle, and parts exported by the project's alert module.",
+      "id": "alert-anatomy",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "Alert matches its anatomy"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
       "category": "production-polish",
       "confidence": "low",
       "description": "Looks for responsive breakpoint behavior in the application's top-level shell.",
@@ -708,5 +744,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.33"
+  "rulesetVersion": "2026.07.34"
 }

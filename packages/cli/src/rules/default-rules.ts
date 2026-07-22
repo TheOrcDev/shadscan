@@ -1,4 +1,5 @@
 import { accessibilityRules } from "./accessibility";
+import { alertAnatomyRule } from "./alert-anatomy";
 import { animationsRespectReducedMotionRule } from "./animations-respect-reduced-motion";
 import { asyncActionPendingStateRule } from "./async-action-pending-state";
 import { buttonIconsHaveDataIconRule } from "./button-icons-have-data-icon";
@@ -21,7 +22,9 @@ import { highConfidenceRules } from "./high-confidence";
 import { htmlLangPresentRule } from "./html-lang-present";
 import { iframesHaveTitleRule } from "./iframes-have-title";
 import { imagesHaveAltRule } from "./images-have-alt";
+import { inputGroupCompositionRule } from "./input-group-composition";
 import { invalidFieldsAssociatedWithErrorsRule } from "./invalid-fields-associated-with-errors";
+import { itemsBelongToGroupsRule } from "./items-belong-to-groups";
 import { keyboardNavigationWorksRule } from "./keyboard-navigation-works";
 import { linksHaveAccessibleNamesRule } from "./links-have-accessible-names";
 import { metadataTitleDescriptionCompleteRule } from "./metadata-title-description-complete";
@@ -82,6 +85,9 @@ const defaultRules = [
   personalDataAutocompletePresentRule,
   headingStructureSaneRule,
   buttonIconsHaveDataIconRule,
+  itemsBelongToGroupsRule,
+  inputGroupCompositionRule,
+  alertAnatomyRule,
   responsiveShellPresentRule,
   destructiveActionsConfirmedRule,
   animationsRespectReducedMotionRule,
