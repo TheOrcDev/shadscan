@@ -102,6 +102,43 @@ needs to be explicit. Pin an exact package version in CI; use the moving `next`
 tag for local evaluation. Run `pnpm dlx @shadscan/cli@next --help` for every
 option.
 
+## GitHub Action
+
+The repository doubles as a composite GitHub Action that runs the CLI, writes
+the score to the job summary, enforces an optional score floor, and can create
+or update a tracked issue containing the findings and a paste-ready AI-agent
+remediation handoff.
+
+```yaml
+name: shadscan
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write # only needed with create-issue
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: TheOrcDev/shadscan@main
+        with:
+          path: .
+          version: 0.1.0-rc.4 # pin an exact CLI version in CI
+          fail-under: "80"
+          create-issue: "true"
+```
+
+Inputs: `path`, `version`, `category`, `fail-under`, `create-issue`,
+`issue-label`, and `github-token`. Outputs: `score`, `grade`, and
+`report-path` (the machine-readable JSON report). With `create-issue`, the
+action keeps a single open issue per label up to date instead of filing a new
+issue on every run, and the issue body embeds the same `--prompt` handoff you
+would generate locally — ready to paste into a coding agent.
+
 ## Agent Handoff
 
 `--prompt` turns the same deterministic report into a neutral, paste-ready plan

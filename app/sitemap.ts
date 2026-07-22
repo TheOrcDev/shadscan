@@ -17,6 +17,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     {
       changeFrequency: "weekly",
+      priority: 0.8,
+      url: new URL("/rules", siteUrl).href,
+    },
+    {
+      changeFrequency: "weekly",
       priority: 0.7,
       url: new URL("/changelog", siteUrl).href,
     },

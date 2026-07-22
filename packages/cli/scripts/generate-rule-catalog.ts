@@ -1,12 +1,16 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AuditCategory } from "../src/audit";
 import { AUDIT_CATEGORIES } from "../src/audit";
 import { RULE_CATALOG, type RuleCatalogEntry } from "../src/rule-catalog";
 import { BUNDLED_RULESET_VERSION } from "../src/scan";
 
-const OUTPUT_PATH = fileURLToPath(
+const DOCS_OUTPUT_PATH = fileURLToPath(
   new URL("../../../docs/rules.md", import.meta.url)
+);
+const SITE_OUTPUT_PATH = fileURLToPath(
+  new URL("../../../lib/generated/rule-catalog.json", import.meta.url)
 );
 
 const CATEGORY_TITLES = {
@@ -16,6 +20,21 @@ const CATEGORY_TITLES = {
   interaction: "Interaction",
   "production-polish": "Production Polish",
   states: "States",
+} as const satisfies Record<AuditCategory, string>;
+
+const CATEGORY_DESCRIPTIONS = {
+  accessibility:
+    "Semantics, labels, focus behavior, keyboard access, and assistive-technology support.",
+  forms:
+    "Labels, validation, autocomplete, and data-entry details that prevent avoidable mistakes.",
+  foundation:
+    "Project configuration and framework basics that make the rest of the interface dependable.",
+  interaction:
+    "Keyboard-first navigation and shortcuts that make important actions quick to reach.",
+  "production-polish":
+    "Responsive behavior, release hygiene, and the details that separate a demo from a finished app.",
+  states:
+    "Loading, empty, error, and feedback states that keep the interface understandable.",
 } as const satisfies Record<AuditCategory, string>;
 
 const escapeTableCell = (value: string): string =>
@@ -63,15 +82,43 @@ const renderCatalog = (): string =>
     ...AUDIT_CATEGORIES.map(renderCategory),
   ].join("\n");
 
+const renderSiteCatalog = (): string => {
+  const categories = AUDIT_CATEGORIES.map((id) => ({
+    description: CATEGORY_DESCRIPTIONS[id],
+    id,
+    title: CATEGORY_TITLES[id],
+  }));
+
+  return `${JSON.stringify(
+    {
+      categories,
+      rules: RULE_CATALOG,
+      rulesetVersion: BUNDLED_RULESET_VERSION,
+    },
+    null,
+    2
+  )}\n`;
+};
+
 const main = async (): Promise<void> => {
-  const expected = renderCatalog();
+  const expectedDocs = renderCatalog();
+  const expectedSiteCatalog = renderSiteCatalog();
 
   if (process.argv.includes("--check")) {
-    const current = await readFile(OUTPUT_PATH, "utf8").catch(() => "");
+    const [currentDocs, currentSiteCatalog] = await Promise.all([
+      readFile(DOCS_OUTPUT_PATH, "utf8").catch(() => ""),
+      readFile(SITE_OUTPUT_PATH, "utf8").catch(() => ""),
+    ]);
+    const staleOutputs = [
+      currentDocs === expectedDocs ? null : "docs/rules.md",
+      currentSiteCatalog === expectedSiteCatalog
+        ? null
+        : "lib/generated/rule-catalog.json",
+    ].filter((output): output is string => output !== null);
 
-    if (current !== expected) {
+    if (staleOutputs.length > 0) {
       process.stderr.write(
-        "docs/rules.md is stale. Run `pnpm docs:rules` and commit the result.\n"
+        `${staleOutputs.join(", ")} ${staleOutputs.length === 1 ? "is" : "are"} stale. Run \`pnpm docs:rules\` and commit the result.\n`
       );
       process.exitCode = 1;
     }
@@ -79,9 +126,13 @@ const main = async (): Promise<void> => {
     return;
   }
 
-  await writeFile(OUTPUT_PATH, expected);
+  await mkdir(dirname(SITE_OUTPUT_PATH), { recursive: true });
+  await Promise.all([
+    writeFile(DOCS_OUTPUT_PATH, expectedDocs),
+    writeFile(SITE_OUTPUT_PATH, expectedSiteCatalog),
+  ]);
   process.stdout.write(
-    `Wrote ${RULE_CATALOG.length} rules to docs/rules.md.\n`
+    `Wrote ${RULE_CATALOG.length} rules to docs/rules.md and lib/generated/rule-catalog.json.\n`
   );
 };
 

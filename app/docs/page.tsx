@@ -11,6 +11,27 @@ const CLI_PACKAGE = "@shadscan/cli@next";
 const AGENT_PROMPT =
   "Use $shadscan-pre-commit for this task. Establish the current score before editing, run Shadscan immediately before every commit, and do not commit if the audit is unassessed or below the task floor.";
 
+const GITHUB_ACTION_WORKFLOW = `name: shadscan
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write # only needed with create-issue
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: TheOrcDev/shadscan@main
+        with:
+          path: .
+          version: 0.1.0-rc.4 # pin an exact CLI version
+          fail-under: "80"
+          create-issue: "true"`;
+
 const PROJECT_RULE = `## Shadscan
 
 Before creating any commit, use $shadscan-pre-commit. Establish the current score when work begins, run Shadscan immediately before each commit, and do not commit if the score is unassessed or below the task floor.`;
@@ -347,6 +368,39 @@ export default function DocsPage() {
           <div className="not-typeset mt-4">
             <CodeBlockCommand {...getCliCommands("--category accessibility")} />
           </div>
+        </section>
+
+        <section id="github-action">
+          <h2>Audit every push with the GitHub Action</h2>
+          <p>
+            The shadscan repository doubles as a composite GitHub Action. It
+            runs the CLI against your project, writes the score and category
+            table to the job summary, optionally fails the job below a score
+            floor, and can keep a single tracked issue up to date with the
+            findings and a paste-ready agent handoff.
+          </p>
+          <DocsCodeBlock
+            code={GITHUB_ACTION_WORKFLOW}
+            label=".github/workflows/shadscan.yml"
+            language="text"
+          />
+          <p>
+            Inputs: <code>path</code>, <code>version</code>,{" "}
+            <code>category</code>, <code>fail-under</code>,{" "}
+            <code>create-issue</code>, <code>issue-label</code>, and{" "}
+            <code>github-token</code>. Outputs: <code>score</code>,{" "}
+            <code>grade</code>, and <code>report-path</code> for downstream
+            steps. Pin an exact CLI <code>version</code> in CI — the moving{" "}
+            <code>next</code> tag is not a reproducible build input.
+          </p>
+          <p>
+            With <code>create-issue</code> enabled, the action needs the{" "}
+            <code>issues: write</code> permission. Instead of filing a new issue
+            on every run, it updates one open issue per label, and the issue
+            body embeds the same <code>--prompt</code> handoff you would
+            generate locally — assign the issue to your coding agent and the
+            remediation plan is already inside it.
+          </p>
         </section>
 
         <section id="pre-commit">

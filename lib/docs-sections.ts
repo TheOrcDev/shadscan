@@ -6,6 +6,7 @@ const DOCS_SECTIONS = [
   { href: "#agent-prompt", label: "Agent prompt" },
   { href: "#apply", label: "Apply with an agent" },
   { href: "#automation", label: "JSON and CI" },
+  { href: "#github-action", label: "GitHub Action" },
   { href: "#pre-commit", label: "Pre-commit gate" },
   { href: "#agent-skill", label: "Agent skill" },
   { href: "#project-rule", label: "Project rule" },

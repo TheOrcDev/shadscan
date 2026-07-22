@@ -6,6 +6,7 @@ import {
   ClipboardText,
   ClockCounterClockwise,
   GithubLogo,
+  ListChecks,
   MagnifyingGlass,
   Sparkle,
 } from "@phosphor-icons/react";
@@ -161,6 +162,15 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
                   {section.label}
                 </CommandItem>
               ))}
+              <CommandItem
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/rules");
+                }}
+              >
+                <ListChecks weight="bold" />
+                Rules
+              </CommandItem>
               <CommandItem
                 onSelect={() => {
                   setOpen(false);

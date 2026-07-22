@@ -53,7 +53,7 @@
   "scripts": {
     "predev": "pnpm cli:build",
     "dev": "next dev",
-    "prebuild": "pnpm cli:build",
+    "prebuild": "pnpm cli:build && pnpm docs:check",
     "build": "next build",
     "ci:build-site": "next build",
     "start": "next start",

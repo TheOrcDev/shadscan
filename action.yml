@@ -1,0 +1,212 @@
+name: shadscan
+description: >-
+  Deterministic UI audits for shadcn apps. Runs the shadscan CLI against a
+  project, publishes the score to the job summary, optionally fails the job
+  below a score floor, and can create or update a GitHub issue containing the
+  findings and a paste-ready AI-agent remediation handoff.
+author: OrcDev
+branding:
+  icon: search
+  color: gray-dark
+
+inputs:
+  path:
+    description: Project directory to scan, relative to the workspace.
+    required: false
+    default: "."
+  version:
+    description: >-
+      @shadscan/cli version or dist-tag to run. Pin an exact version for
+      reproducible CI.
+    required: false
+    default: next
+  category:
+    description: >-
+      Run only one audit category (foundation, interaction, states,
+      accessibility, forms, or production-polish).
+    required: false
+    default: ""
+  fail-under:
+    description: >-
+      Fail the job when the complete assessed score is below this integer
+      (0-100). Leave empty to never fail on score.
+    required: false
+    default: ""
+  create-issue:
+    description: >-
+      Create or update a GitHub issue with the audit result and an agent
+      handoff. Requires the issues write permission.
+    required: false
+    default: "false"
+  issue-label:
+    description: Label that identifies the tracked audit issue.
+    required: false
+    default: shadscan
+  github-token:
+    description: Token used to create or update the issue.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  score:
+    description: The complete assessed score (0-100), or null when unassessed.
+    value: ${{ steps.audit.outputs.score }}
+  grade:
+    description: The letter grade for the assessed score.
+    value: ${{ steps.audit.outputs.grade }}
+  report-path:
+    description: Path to the machine-readable JSON report.
+    value: ${{ steps.audit.outputs.report-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: audit
+      name: Run shadscan
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_CATEGORY: ${{ inputs.category }}
+      run: |
+        set -euo pipefail
+        export REPORT="${RUNNER_TEMP}/shadscan-report.json"
+        ARGS=("$INPUT_PATH" --json --no-interactive)
+        if [ -n "$INPUT_CATEGORY" ]; then
+          ARGS+=(--category "$INPUT_CATEGORY")
+        fi
+        npx --yes "@shadscan/cli@${INPUT_VERSION}" "${ARGS[@]}" > "$REPORT"
+        node -e '
+          const fs = require("node:fs");
+          const report = JSON.parse(fs.readFileSync(process.env.REPORT, "utf8"));
+          const score = report.score === null ? "null" : String(report.score);
+          const grade = report.grade ?? "unassessed";
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `score=${score}\ngrade=${grade}\nreport-path=${process.env.REPORT}\n`
+          );
+          const rows = (report.categories ?? [])
+            .filter((category) => category.applicable)
+            .map(
+              (category) =>
+                `| ${category.title} | ${Math.round(category.score * 10) / 10} / ${category.maxScore} |`
+            )
+            .join("\n");
+          const failing = (report.findings ?? []).filter(
+            (finding) => finding.impactsScore && finding.score < finding.maxScore
+          );
+          const failingList = failing
+            .map((finding) => `- **${finding.id}**: ${finding.description}`)
+            .join("\n");
+          fs.appendFileSync(
+            process.env.GITHUB_STEP_SUMMARY,
+            [
+              `## shadscan: ${score}/${report.maxScore ?? 100} (${grade})`,
+              "",
+              "| Category | Score |",
+              "| --- | --- |",
+              rows,
+              "",
+              failing.length
+                ? `### Score-impacting findings\n\n${failingList}`
+                : "No score-impacting findings.",
+              "",
+            ].join("\n")
+          );
+        '
+
+    - id: issue
+      name: Create or update the audit issue
+      if: ${{ inputs.create-issue == 'true' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_CATEGORY: ${{ inputs.category }}
+        INPUT_ISSUE_LABEL: ${{ inputs.issue-label }}
+        SCORE: ${{ steps.audit.outputs.score }}
+        GRADE: ${{ steps.audit.outputs.grade }}
+        REPORT: ${{ steps.audit.outputs.report-path }}
+      run: |
+        set -euo pipefail
+        export HANDOFF="${RUNNER_TEMP}/shadscan-handoff.md"
+        export BODY="${RUNNER_TEMP}/shadscan-issue.md"
+        ARGS=("$INPUT_PATH" --prompt --no-interactive)
+        if [ -n "$INPUT_CATEGORY" ]; then
+          ARGS+=(--category "$INPUT_CATEGORY")
+        fi
+        npx --yes "@shadscan/cli@${INPUT_VERSION}" "${ARGS[@]}" > "$HANDOFF"
+        node -e '
+          const fs = require("node:fs");
+          const handoff = fs.readFileSync(process.env.HANDOFF, "utf8");
+          const maxHandoffLength = 55_000;
+          const truncated =
+            handoff.length > maxHandoffLength
+              ? `${handoff.slice(0, maxHandoffLength)}\n\n_Handoff truncated; run \`npx --yes @shadscan/cli@${process.env.INPUT_VERSION} --prompt\` locally for the complete plan._`
+              : handoff;
+          const body = [
+            `Deterministic UI audit of \`${process.env.INPUT_PATH}\` at ${process.env.GITHUB_SHA}.`,
+            "",
+            `**Score: ${process.env.SCORE}/100 (${process.env.GRADE})**`,
+            "",
+            "Paste the handoff below into your AI coding agent, or run",
+            `\`npx --yes @shadscan/cli@${process.env.INPUT_VERSION} --apply\` locally to launch one directly.`,
+            "",
+            "<details>",
+            "<summary>Agent remediation handoff</summary>",
+            "",
+            "````markdown",
+            truncated,
+            "````",
+            "",
+            "</details>",
+            "",
+            `_Updated by the shadscan action on run ${process.env.GITHUB_RUN_ID}._`,
+          ].join("\n");
+          fs.writeFileSync(process.env.BODY, body);
+        '
+        TITLE="shadscan audit: ${SCORE}/100 (${GRADE})"
+        gh label create "$INPUT_ISSUE_LABEL" \
+          --repo "$GITHUB_REPOSITORY" \
+          --description "shadscan UI audit" \
+          --color 0E8A16 2>/dev/null || true
+        EXISTING=$(gh issue list \
+          --repo "$GITHUB_REPOSITORY" \
+          --label "$INPUT_ISSUE_LABEL" \
+          --state open \
+          --limit 1 \
+          --json number \
+          --jq '.[0].number' || true)
+        if [ -n "$EXISTING" ]; then
+          gh issue edit "$EXISTING" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" \
+            --body-file "$BODY"
+          echo "Updated issue #${EXISTING}."
+        else
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" \
+            --label "$INPUT_ISSUE_LABEL" \
+            --body-file "$BODY"
+        fi
+
+    - id: gate
+      name: Enforce the score floor
+      if: ${{ inputs.fail-under != '' }}
+      shell: bash
+      env:
+        SCORE: ${{ steps.audit.outputs.score }}
+        FAIL_UNDER: ${{ inputs.fail-under }}
+      run: |
+        set -euo pipefail
+        if [ "$SCORE" = "null" ]; then
+          echo "::error::shadscan could not assess a complete score."
+          exit 1
+        fi
+        if [ "$SCORE" -lt "$FAIL_UNDER" ]; then
+          echo "::error::shadscan score ${SCORE} is below the required ${FAIL_UNDER}."
+          exit 1
+        fi
+        echo "Score ${SCORE} meets the required ${FAIL_UNDER}."

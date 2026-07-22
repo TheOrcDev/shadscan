@@ -30,6 +30,14 @@ const PAGE_METADATA = [
     socialTitle: "Shadscan CLI documentation | shadscan",
   },
   {
+    browserTitle: "Shadscan rule catalog | shadscan",
+    description:
+      "Explore every deterministic Shadscan rule across accessibility, interaction, UI states, forms, foundation, and production polish.",
+    imagePath: "/opengraph-image",
+    path: "/rules",
+    socialTitle: "Shadscan rule catalog | shadscan",
+  },
+  {
     browserTitle: "Sponsor shadscan | shadscan",
     description:
       "Support deterministic, open-source UI auditing for React and shadcn applications.",

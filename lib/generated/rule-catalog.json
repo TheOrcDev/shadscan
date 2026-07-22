@@ -1,0 +1,718 @@
+{
+  "categories": [
+    {
+      "description": "Project configuration and framework basics that make the rest of the interface dependable.",
+      "id": "foundation",
+      "title": "Foundation"
+    },
+    {
+      "description": "Keyboard-first navigation and shortcuts that make important actions quick to reach.",
+      "id": "interaction",
+      "title": "Interaction"
+    },
+    {
+      "description": "Loading, empty, error, and feedback states that keep the interface understandable.",
+      "id": "states",
+      "title": "States"
+    },
+    {
+      "description": "Semantics, labels, focus behavior, keyboard access, and assistive-technology support.",
+      "id": "accessibility",
+      "title": "Accessibility"
+    },
+    {
+      "description": "Labels, validation, autocomplete, and data-entry details that prevent avoidable mistakes.",
+      "id": "forms",
+      "title": "Forms and Data Entry"
+    },
+    {
+      "description": "Responsive behavior, release hygiene, and the details that separate a demo from a finished app.",
+      "id": "production-polish",
+      "title": "Production Polish"
+    }
+  ],
+  "rules": [
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks whether the app has a parseable shadcn components.json.",
+      "id": "shadcn-config-present",
+      "maxScore": 4,
+      "severity": "warning",
+      "title": "shadcn config present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks for a mounted theme provider or theme class management.",
+      "id": "theme-provider-configured",
+      "maxScore": 5,
+      "severity": "warning",
+      "title": "theme provider configured"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "high",
+      "description": "Checks for a dark-mode keyboard shortcut that avoids typing targets.",
+      "id": "theme-hotkey-present",
+      "maxScore": 5,
+      "severity": "warning",
+      "title": "dark-mode shortcut present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks for framework-appropriate metadata or head basics.",
+      "id": "metadata-configured",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "metadata configured"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks for a favicon or app icon.",
+      "id": "favicon-present",
+      "maxScore": 2,
+      "severity": "info",
+      "title": "favicon present"
+    },
+    {
+      "adapters": [
+        "next-app-router",
+        "next-hybrid-router",
+        "next-pages-router"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks for a Next not-found boundary or 404 page.",
+      "id": "not-found-route-present",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "not-found route present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks for an app-level error boundary.",
+      "id": "error-boundary-present",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "error boundary present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "states",
+      "confidence": "high",
+      "description": "Checks for a mounted toast provider or toaster.",
+      "id": "toast-provider-present",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "toast setup present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks whether shadcn aliases can be resolved through TypeScript or JavaScript path mappings.",
+      "id": "components-aliases-resolve",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "shadcn aliases resolve"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks whether a theme provider is rendered by the application shell.",
+      "id": "theme-provider-mounted-in-shell",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "theme provider mounted in app shell"
+    },
+    {
+      "adapters": [
+        "next-app-router",
+        "next-hybrid-router"
+      ],
+      "category": "foundation",
+      "confidence": "high",
+      "description": "Checks next-themes hydration safeguards in a Next App Router shell.",
+      "id": "theme-hydration-safe",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "theme hydration is configured safely"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks whether the document root declares a language.",
+      "id": "html-lang-present",
+      "maxScore": 2,
+      "severity": "error",
+      "title": "document language is declared"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "high",
+      "description": "Checks for non-empty document title and description metadata.",
+      "id": "metadata-title-description-complete",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "metadata title and description are complete"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "high",
+      "description": "Checks for an image-backed social sharing preview.",
+      "id": "social-preview-present",
+      "maxScore": 2,
+      "severity": "info",
+      "title": "social preview is configured"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "high",
+      "description": "Checks for recognizable framework starter-template copy.",
+      "id": "no-starter-copy",
+      "maxScore": 2,
+      "severity": "info",
+      "title": "starter copy has been removed"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "high",
+      "description": "Checks for an app-level command menu with input, empty state, and commands.",
+      "id": "command-menu-present",
+      "maxScore": 5,
+      "severity": "warning",
+      "title": "command menu is present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "high",
+      "description": "Checks for a Cmd/Ctrl+K command-menu shortcut that intercepts the browser default.",
+      "id": "command-menu-hotkey-present",
+      "maxScore": 4,
+      "severity": "warning",
+      "title": "command menu has a Cmd/Ctrl+K shortcut"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "medium",
+      "description": "Checks global keyboard listeners for cleanup and typing-target guards.",
+      "id": "global-hotkeys-are-safe",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "global keyboard shortcuts are safe"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "medium",
+      "description": "Checks apps with navigation for a responsive mobile trigger and panel.",
+      "id": "mobile-nav-present",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "mobile navigation is present"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "medium",
+      "description": "Checks explicit focus-outline removal for a visible replacement style.",
+      "id": "focus-visible-not-suppressed",
+      "maxScore": 3,
+      "severity": "error",
+      "title": "focus indicators are not suppressed"
+    },
+    {
+      "adapters": [
+        "next-app-router",
+        "next-hybrid-router"
+      ],
+      "category": "states",
+      "confidence": "medium",
+      "description": "Checks runtime-dynamic Next pages for a route loading file or inline Suspense fallback.",
+      "id": "route-loading-boundary-present",
+      "maxScore": 4,
+      "severity": "warning",
+      "title": "runtime-dynamic routes have loading boundaries"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "states",
+      "confidence": "high",
+      "description": "Checks every Suspense boundary for a non-empty fallback.",
+      "id": "suspense-fallback-useful",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "Suspense fallbacks are useful"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "states",
+      "confidence": "medium",
+      "description": "Checks recognizable data-backed collections for an explicit empty state.",
+      "id": "empty-state-present",
+      "maxScore": 4,
+      "severity": "warning",
+      "title": "data collections have empty states"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "states",
+      "confidence": "high",
+      "description": "Checks detected error UI for a wired retry control.",
+      "id": "error-state-retry-present",
+      "maxScore": 4,
+      "severity": "error",
+      "title": "error states provide retry recovery"
+    },
+    {
+      "adapters": [
+        "next-app-router",
+        "next-hybrid-router",
+        "next-pages-router"
+      ],
+      "category": "states",
+      "confidence": "high",
+      "description": "Checks Next not-found UI and rendered local components for a navigation or search recovery path.",
+      "id": "not-found-recovery-present",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "not-found states provide recovery"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "states",
+      "confidence": "medium",
+      "description": "Checks asynchronous actions for visible pending feedback and duplicate-submit prevention.",
+      "id": "async-action-pending-state",
+      "maxScore": 4,
+      "severity": "warning",
+      "title": "async actions communicate pending state"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "states",
+      "confidence": "high",
+      "description": "Checks whether toast infrastructure is mounted from the app shell.",
+      "id": "toast-provider-mounted",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "toast provider is mounted"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks native and Next images for alternative text.",
+      "id": "images-have-alt",
+      "maxScore": 4,
+      "severity": "error",
+      "title": "images have alternative text"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks native and Next links for an accessible name.",
+      "id": "links-have-accessible-names",
+      "maxScore": 3,
+      "severity": "error",
+      "title": "links have accessible names"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks common shadcn custom controls for accessible names.",
+      "id": "custom-controls-have-labels",
+      "maxScore": 4,
+      "severity": "error",
+      "title": "custom controls have accessible labels"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks JSX for positive literal tabIndex values.",
+      "id": "no-positive-tabindex",
+      "maxScore": 2,
+      "severity": "error",
+      "title": "focus order avoids positive tabIndex"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks iframe elements for a meaningful title attribute.",
+      "id": "iframes-have-title",
+      "maxScore": 2,
+      "severity": "error",
+      "title": "iframes have titles"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks navigation landmark instances that share a proven render surface for distinguishing accessible names.",
+      "id": "nav-landmarks-have-names",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "multiple navigation landmarks are named"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks for interactive controls nested inside other interactive controls.",
+      "id": "no-nested-interactive-controls",
+      "maxScore": 3,
+      "severity": "error",
+      "title": "interactive controls are not nested"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "medium",
+      "description": "Checks dynamic status messages for a live region or accessible toast channel.",
+      "id": "status-messages-announced",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "status messages are announced"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "medium",
+      "description": "Checks detected forms for native, library, or schema validation.",
+      "id": "validation-wired-to-form",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "form validation is wired"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "medium",
+      "description": "Checks custom form-validation state for rendered field errors.",
+      "id": "field-errors-rendered",
+      "maxScore": 3,
+      "severity": "error",
+      "title": "field validation errors are rendered"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "high",
+      "description": "Checks aria-invalid form controls for an associated error description.",
+      "id": "invalid-fields-associated-with-errors",
+      "maxScore": 2,
+      "severity": "error",
+      "title": "invalid fields reference their errors"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "high",
+      "description": "Checks native fieldsets and RadioGroup controls for a legend or accessible group name.",
+      "id": "grouped-controls-have-legend",
+      "maxScore": 2,
+      "severity": "error",
+      "title": "grouped controls have legends"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "high",
+      "description": "Checks buttons inside forms for an explicit valid type.",
+      "id": "form-buttons-have-explicit-type",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "form buttons have explicit types"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "forms",
+      "confidence": "high",
+      "description": "Checks fields collecting personal data for an explicit autocomplete purpose.",
+      "id": "personal-data-autocomplete-present",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "personal-data fields declare autocomplete purposes"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "low",
+      "description": "Looks for obvious heading-level skips and multiple primary headings in individual render branches.",
+      "id": "heading-structure-sane",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "rendered heading structure is logical"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "high",
+      "description": "Checks inline icons in shadcn Buttons for position-correct data-icon attributes.",
+      "id": "button-icons-have-data-icon",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "button icons declare inline spacing"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "low",
+      "description": "Looks for responsive breakpoint behavior in the application's top-level shell.",
+      "id": "responsive-shell-present",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "the application shell adapts across viewports"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
+      "confidence": "low",
+      "description": "Looks for correlated confirmation or undo affordances around structurally detected destructive actions.",
+      "id": "destructive-actions-confirmed",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "destructive actions are confirmed or reversible"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "low",
+      "description": "Looks for a reduced-motion strategy when application animations or transitions are present.",
+      "id": "animations-respect-reduced-motion",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "animations respect reduced-motion preferences"
+    },
+    {
+      "adapters": [
+        "next-app-router",
+        "next-hybrid-router",
+        "next-pages-router",
+        "vite-react"
+      ],
+      "category": "production-polish",
+      "confidence": "low",
+      "description": "Looks for robots and sitemap files in web apps that appear publicly indexable.",
+      "id": "public-app-seo-files-present",
+      "maxScore": 0,
+      "severity": "info",
+      "title": "public apps expose robots and sitemap files"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "low",
+      "description": "Looks for focus-managed primitives behind dialog-like user interfaces.",
+      "id": "dialog-focus-trap-works",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "dialogs trap and restore focus correctly"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "low",
+      "description": "Looks for proven keyboard behavior behind composite widgets such as menus, tabs, and listboxes.",
+      "id": "keyboard-navigation-works",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "composite widgets support keyboard navigation"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "low",
+      "description": "Marks styled color pairs for computed browser contrast verification.",
+      "id": "color-contrast-passes",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "rendered color contrast meets accessibility thresholds"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "low",
+      "description": "Marks interactive controls for rendered pointer-target size verification.",
+      "id": "pointer-target-size-passes",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "pointer targets meet minimum rendered size"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "production-polish",
+      "confidence": "low",
+      "description": "Marks uncontained fixed or viewport widths in layout-bearing contexts for rendered horizontal-overflow verification.",
+      "id": "mobile-overflow-absent",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "mobile pages avoid unintended horizontal overflow"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks icon-only buttons for accessible labels.",
+      "id": "icon-buttons-have-labels",
+      "maxScore": 6,
+      "severity": "error",
+      "title": "icon buttons have labels"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks obvious clickable div/span elements for keyboard support.",
+      "id": "interactive-elements-are-semantic",
+      "maxScore": 3,
+      "severity": "warning",
+      "title": "interactive elements are semantic"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "high",
+      "description": "Checks native form controls and common shadcn field wrappers for associated labels or accessible names.",
+      "id": "forms-have-labels",
+      "maxScore": 4,
+      "severity": "error",
+      "title": "forms have labels"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "accessibility",
+      "confidence": "medium",
+      "description": "Checks dialog/sheet content for a title or accessible name.",
+      "id": "dialogs-have-accessible-names",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "dialogs have accessible names"
+    }
+  ],
+  "rulesetVersion": "2026.07.33"
+}
