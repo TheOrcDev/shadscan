@@ -68,8 +68,9 @@ output cannot be verified or published by accident.
 Publish each release candidate under `next` after an authorized organization
 member reviews the packed artifact.
 
-1. Set the CLI package version to the next unused prerelease and update the
-   changelog.
+1. Set the CLI package version to the next unused prerelease, update the
+   changelog, and add the narrative release entry at
+   `changelog/<version>.md` for the site's `/changelog` page.
 2. Commit and push the release-candidate preparation.
 3. Run every release gate above.
 4. Authenticate with `npm login` and confirm the account with `npm whoami`.

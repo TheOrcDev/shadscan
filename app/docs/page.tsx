@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CodeBlockCommand } from "@/components/code-block-command";
 import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
@@ -137,9 +138,17 @@ export default function DocsPage() {
 
       <article className="typeset min-w-0 max-w-3xl pb-20 [&_section[id]]:scroll-mt-10">
         <header>
-          <p className="not-typeset font-mono text-muted-foreground text-sm">
-            CLI documentation
-          </p>
+          <div className="not-typeset flex items-baseline justify-between gap-4">
+            <p className="font-mono text-muted-foreground text-sm">
+              CLI documentation
+            </p>
+            <Link
+              className="font-mono text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
+              href="/changelog"
+            >
+              Changelog
+            </Link>
+          </div>
           <h1>Shadscan CLI</h1>
           <div className="not-typeset mt-5">
             <CodeBlockCommand {...getCliCommands()} />

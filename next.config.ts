@@ -4,6 +4,7 @@ const SCANNER_TRACE_EXCLUDES = [
   "./.git",
   "./.git/**/*",
   "./app/**/*",
+  "./changelog/**/*",
   // Common directory names must not strip matching JavaScript from Next.
   "./components/**/*.{ts,tsx}",
   "./design/**/*",

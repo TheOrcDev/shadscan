@@ -4,6 +4,7 @@ import {
   ArrowSquareOut,
   BookOpen,
   ClipboardText,
+  ClockCounterClockwise,
   GithubLogo,
   MagnifyingGlass,
   Sparkle,
@@ -160,6 +161,15 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
                   {section.label}
                 </CommandItem>
               ))}
+              <CommandItem
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/changelog");
+                }}
+              >
+                <ClockCounterClockwise weight="bold" />
+                Changelog
+              </CommandItem>
             </CommandGroup>
             <CommandGroup heading="CLI">
               <CommandItem onSelect={copySourceCommand}>
