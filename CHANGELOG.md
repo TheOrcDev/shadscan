@@ -6,6 +6,31 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.5 - 2026-07-22
+
+### Added
+
+- Advance the bundled ruleset to `2026.07.34` (59 rules) with three advisory
+  composition rules built on a shared component-anatomy engine: Select,
+  DropdownMenu, and Command items composed inside their group parts,
+  InputGroup composed from its own input, textarea, and addon parts, and
+  Alert anatomy with at most one icon and a required title. Part discovery
+  reads the project's own `components/ui` source, so user-defined anatomy
+  extensions never fail, and uncertain composition across component
+  boundaries is never reported.
+- Add a composite GitHub Action at the repository root that runs the CLI in
+  consumer CI: score and category table in the job summary, an optional
+  `fail-under` score floor, and a single tracked issue embedding the
+  paste-ready agent handoff.
+- Add the `/rules` catalog and `/changelog` release-notes pages to the
+  product site, both linked from the docs and the command menu.
+
+### Changed
+
+- Base the recommended agent prompt on the `--prompt` handoff so agents plan
+  from fix, decide, and verify work items and surface decide items as owner
+  questions before editing code.
+
 ## 0.1.0-rc.4 - 2026-07-22
 
 ### Added
