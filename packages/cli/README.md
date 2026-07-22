@@ -14,19 +14,20 @@
 
 <p align="center">
   <a href="https://www.shadscan.com">Website</a> &middot;
-  <a href="https://www.shadscan.com/scan">Web scanner</a> &middot;
+  <a href="https://www.shadscan.com/scan">Scan a repository</a> &middot;
   <a href="https://www.shadscan.com/docs">Docs</a> &middot;
-  <a href="https://www.shadscan.com/agent/v1.md">Agent guide</a> &middot;
+  <a href="https://www.shadscan.com/docs">56 rules</a> &middot;
   <a href="https://www.shadscan.com/sponsors">Sponsor</a>
 </p>
 
 Shadscan inspects a React shadcn app, scores its UI fundamentals from 0 to 100,
-and gives you evidence and an actionable fix for every finding. It catches the
-product details that are easy to postpone: command menus, theme shortcuts,
-route states, accessible controls, form feedback, metadata, mobile behavior,
-and more.
+and shows the evidence behind every finding.
 
-The default scan is deterministic and read-only. It does not start your app,
+It catches the product details that are easy to postpone: command menus, theme
+shortcuts, route states, accessible controls, form feedback, metadata, mobile
+behavior, and more.
+
+The default scan is deterministic and read-only. It does not start the app,
 edit files, call an AI model, upload source, or require application secrets.
 
 ## Quick Start
@@ -34,19 +35,20 @@ edit files, call an AI model, upload source, or require application secrets.
 Run Shadscan from the root of a project:
 
 ```bash
-npx --yes @shadscan/cli@next
-```
-
-Pass a path to scan another project:
-
-```bash
-npx --yes @shadscan/cli@next ../my-shadcn-app
-```
-
-Using pnpm or Bun:
-
-```bash
 pnpm dlx @shadscan/cli@next
+```
+
+The project path defaults to the current directory. Pass a path to scan another
+app:
+
+```bash
+pnpm dlx @shadscan/cli@next ../my-shadcn-app
+```
+
+Using npm or Bun:
+
+```bash
+npx --yes @shadscan/cli@next
 bunx @shadscan/cli@next
 ```
 
@@ -72,40 +74,43 @@ Missing: command menu has a Cmd/Ctrl+K shortcut
   Fix: Register a shortcut that prevents the browser default and toggles the menu.
 ```
 
-Every report separates required fixes, product decisions, score-neutral
-advisories, and rules that do not apply to the scanned project.
+Every report separates:
+
+- **Fixes**: high-confidence defects with repository-relative evidence.
+- **Decisions**: product choices that should be implemented or explicitly waived.
+- **Advisories**: lower-confidence checks that need rendered or manual verification.
+- **Not applicable**: rules excluded because the relevant UI surface is absent.
 
 ## Common Commands
 
 ```bash
 # Machine-readable, versioned report
-npx --yes @shadscan/cli@next --json
+pnpm dlx @shadscan/cli@next --json
 
 # Paste-ready remediation plan for a coding agent
-npx --yes @shadscan/cli@next --prompt
+pnpm dlx @shadscan/cli@next --prompt
 
-# Explicitly launch an installed coding agent with that plan
-npx --yes @shadscan/cli@next --apply --agent codex
+# Explicitly launch an installed agent with the generated plan
+pnpm dlx @shadscan/cli@next --apply --agent codex
+
+# Install the current candidate as an exact CI dependency, then enforce a floor
+pnpm add --save-dev --save-exact @shadscan/cli@next
+pnpm exec shadscan --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
-npx --yes @shadscan/cli@next --category accessibility
-```
-
-For a reproducible CI gate, save an exact version in the lockfile and fail when
-the complete assessed score falls below your floor:
-
-```bash
-npm install --save-dev --save-exact @shadscan/cli@next
-npx shadscan --fail-under 80 --no-interactive --no-roast
+pnpm dlx @shadscan/cli@next --category accessibility
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
-needs to be explicit. Run `npx --yes @shadscan/cli@next --help` for every option.
+needs to be explicit.
+
+Pin an exact package version in CI; use the moving `next` tag for local
+evaluation. Run `pnpm dlx @shadscan/cli@next --help` for every option.
 
 ## Agent Handoff
 
-`--prompt` turns the deterministic report into a neutral, paste-ready plan for
-another coding agent. It includes:
+`--prompt` turns the same deterministic report into a neutral, paste-ready plan
+for another coding agent. The handoff includes:
 
 - prioritized work items grouped as `fix`, `decide`, or `verify`;
 - rule IDs, evidence, suggested fixes, and acceptance criteria;
@@ -151,8 +156,15 @@ categories.
 | Forms and Data Entry | validation, rendered field errors, error associations, legends, button types, autocomplete |
 | Production Polish | complete metadata, social previews, Button icon spacing, responsive shells, SEO files, mobile overflow |
 
-Raw rule points are normalized within each category to produce the 100-point
-score. High- and medium-confidence failures can reduce it. Low-confidence
+See the [CLI documentation](https://www.shadscan.com/docs) for usage, automation,
+agent workflows, and every supported option.
+
+## Scoring
+
+Raw rule points are normalized within each weighted category to produce the
+100-point score.
+
+High- and medium-confidence failures can reduce the score. Low-confidence
 checks stay visible as score-neutral advisories instead of pretending static
 analysis can prove rendered behavior.
 
@@ -161,14 +173,28 @@ Router, hybrid Next.js projects, Vite React, and generic React applications.
 
 ## Privacy And Exit Status
 
-Local scanning is static and stays on your machine. Findings return exit status
-`0` unless `--fail-under` is not satisfied. Discovery, audit, setup, and
-launched-agent failures return `1`. Use `--no-interactive` for deterministic
-automation.
+Local scanning is static and stays on your machine.
 
-The optional [web scanner](https://www.shadscan.com/scan) and
-[hosted API](https://www.shadscan.com/openapi.json) accept public GitHub
-repositories through separate, documented source-handling contracts.
+Findings return exit status `0` unless `--fail-under` is not satisfied.
+Discovery, audit, setup, and launched-agent failures return `1`. Use
+`--no-interactive` for deterministic automation.
+
+## Web Scanner And Hosted API
+
+The [web scanner](https://www.shadscan.com/scan) audits a public GitHub
+repository without installing the CLI or exposing an API key to the browser.
+GitHub access, extraction, rate limiting, and scanning stay on the server.
+
+For agent and service integrations, Shadscan also exposes a versioned hosted
+API for public GitHub repositories and sanitized gzip tar snapshots.
+
+- [Pinned agent instructions](https://www.shadscan.com/agent/v1.md)
+- [OpenAPI 3.1 contract](https://www.shadscan.com/openapi.json)
+- [CLI documentation](https://www.shadscan.com/docs)
+- [Web scanner](https://www.shadscan.com/scan)
+
+The hosted surfaces are opt-in and have separate source-handling contracts from
+the local CLI.
 
 ## Contracts
 
@@ -180,4 +206,6 @@ repositories through separate, documented source-handling contracts.
 
 ## License
 
-Shadscan is available under the MIT License.
+Shadscan is available under the MIT License. The header and badges are rendered
+by [shieldcn](https://shieldcn.dev), a shadcn-styled badge and README graphics
+service.
