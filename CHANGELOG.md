@@ -44,6 +44,8 @@ stable releases published under `latest`.
   patched `sharp` 0.35.3 for the Next.js image runtime.
 - Exclude worktree metadata and contribution docs from scanner production
   traces.
+- Prevent responsive command-menu width changes from animating through
+  overflowing intermediate layouts.
 
 ## 0.1.0-rc.3 - 2026-07-21
 

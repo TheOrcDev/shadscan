@@ -122,7 +122,7 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="Search documentation"
-        className="relative size-8 justify-start bg-muted/50 font-normal text-muted-foreground normal-case tracking-normal shadow-none sm:h-8 sm:w-40 sm:px-3 sm:pr-12 lg:w-64"
+        className="relative size-8 justify-start bg-muted/50 font-normal text-muted-foreground normal-case tracking-normal shadow-none transition-colors sm:h-8 sm:w-40 sm:px-3 sm:pr-12 lg:w-64"
         onClick={() => setOpen(true)}
         type="button"
         variant="outline"
