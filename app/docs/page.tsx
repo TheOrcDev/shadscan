@@ -2,6 +2,7 @@ import { CodeBlockCommand } from "@/components/code-block-command";
 import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
 import { AGENT_AUDIT_PROMPT } from "@/lib/agent-prompt";
+import { DOCS_SECTIONS } from "@/lib/docs-sections";
 import { createPageMetadata } from "@/lib/site-metadata";
 
 const CLI_PACKAGE = "@shadscan/cli@next";
@@ -76,17 +77,6 @@ const CLI_OPTIONS = [
   },
 ] as const;
 
-const sections = [
-  { href: "#usage", label: "Usage" },
-  { href: "#options", label: "Options" },
-  { href: "#agent-prompt", label: "Agent prompt" },
-  { href: "#apply", label: "Apply with an agent" },
-  { href: "#automation", label: "JSON and CI" },
-  { href: "#pre-commit", label: "Pre-commit gate" },
-  { href: "#agent-skill", label: "Agent skill" },
-  { href: "#project-rule", label: "Project rule" },
-] as const satisfies ReadonlyArray<{ href: `#${string}`; label: string }>;
-
 interface DocsCodeBlockProps {
   code: string;
   label: string;
@@ -142,7 +132,7 @@ export default function DocsPage() {
   return (
     <main className="mx-auto grid w-full max-w-6xl flex-1 gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-16">
       <aside className="hidden lg:block">
-        <DocsOnThisPage sections={sections} />
+        <DocsOnThisPage sections={DOCS_SECTIONS} />
       </aside>
 
       <article className="typeset min-w-0 max-w-3xl pb-20 [&_section[id]]:scroll-mt-10">
