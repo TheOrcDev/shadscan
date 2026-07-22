@@ -41,6 +41,7 @@ Plans added after the OrcDev audit cycle:
 |------|-------|----------|--------|------------|--------|
 | 006 | Manifest-driven component anatomy rules | P2 | L | - | DONE (`0a2d1ff`) |
 | 007 | Post-scan handoff call to action | P1 | M | - | DONE (`15fd501`) |
+| 008 | Arrow-key selection for the post-scan menu | P2 | M | 007 | TODO |
 
 ## Audit Truth Table
 
