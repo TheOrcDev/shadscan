@@ -245,6 +245,36 @@ const getMeaningfulChildren = (
   return { children, uncertain };
 };
 
+type AncestorKind = "context" | "group" | "other" | "unknown-component";
+
+const classifyAncestor = (
+  ancestor: Node,
+  contract: AnatomyContainerContract,
+  imports: UiModuleImports
+): AncestorKind => {
+  const openingElement = getOpeningElement(ancestor);
+  if (!openingElement) {
+    return "other";
+  }
+
+  const tagName = getJsxTagName(openingElement);
+  if (!tagName) {
+    return "other";
+  }
+
+  const resolved = resolveUiTagName(tagName, imports);
+  if (resolved === contract.groupComponent) {
+    return "group";
+  }
+  if (resolved === contract.contextComponent) {
+    return "context";
+  }
+  if (resolved === null && COMPONENT_TAG_PATTERN.test(tagName)) {
+    return "unknown-component";
+  }
+  return "other";
+};
+
 const findContainerViolation = ({
   contract,
   file,
@@ -260,25 +290,20 @@ const findContainerViolation = ({
   let sawUnknownComponent = false;
 
   while (ancestor) {
-    const openingElement = getOpeningElement(ancestor);
-    if (openingElement) {
-      const tagName = getJsxTagName(openingElement);
-      const resolved = tagName ? resolveUiTagName(tagName, imports) : null;
-
-      if (resolved === contract.groupComponent) {
-        return { line: 0, status: "ok" };
-      }
-      if (resolved === contract.contextComponent) {
-        return sawUnknownComponent
-          ? { line: 0, status: "uncertain" }
-          : {
-              line: getLineNumber(file, getOpeningElement(node) ?? node),
-              status: "violation",
-            };
-      }
-      if (tagName && COMPONENT_TAG_PATTERN.test(tagName) && resolved === null) {
-        sawUnknownComponent = true;
-      }
+    const kind = classifyAncestor(ancestor, contract, imports);
+    if (kind === "group") {
+      return { line: 0, status: "ok" };
+    }
+    if (kind === "context") {
+      return sawUnknownComponent
+        ? { line: 0, status: "uncertain" }
+        : {
+            line: getLineNumber(file, getOpeningElement(node) ?? node),
+            status: "violation",
+          };
+    }
+    if (kind === "unknown-component") {
+      sawUnknownComponent = true;
     }
     ancestor = ancestor.parent;
   }
@@ -436,6 +461,94 @@ const classifyAnatomyChild = ({
     : { kind: "unknown" };
 };
 
+interface AnatomyChildScan {
+  iconCount: number;
+  sawUncertainChild: boolean;
+  seenParts: Set<string>;
+  violation: AnatomyViolation | null;
+}
+
+const toChildViolation = (
+  child: JsxChild,
+  file: ParsedSourceFile,
+  manifest: ComponentAnatomyManifest,
+  forbiddenEntry: AnatomyForbiddenChild | null
+): AnatomyViolation => {
+  const openingElement = getOpeningElement(child);
+  const childTag = openingElement ? getJsxTagName(openingElement) : null;
+  const line = getLineNumber(file, openingElement ?? child);
+
+  if (forbiddenEntry) {
+    return {
+      filePath: file.filePath,
+      line,
+      message: `${manifest.component} contains ${forbiddenEntry.component}, which is not part of its anatomy.`,
+      remediation: forbiddenEntry.remediation,
+    };
+  }
+
+  return {
+    filePath: file.filePath,
+    line,
+    message: `${manifest.component} contains ${childTag ?? "a child"} that is not part of its anatomy.`,
+    remediation: `Compose ${manifest.component} from its own parts (${manifest.requiredParts.join(", ") || "its exported subcomponents"}) or extend the ui module with the new part.`,
+  };
+};
+
+const scanAnatomyChildren = ({
+  children,
+  exportedParts,
+  file,
+  forbiddenImports,
+  imports,
+  manifest,
+}: {
+  children: readonly JsxChild[];
+  exportedParts: Set<string> | null;
+  file: ParsedSourceFile;
+  forbiddenImports: ReadonlyMap<string, UiModuleImports>;
+  imports: UiModuleImports;
+  manifest: ComponentAnatomyManifest;
+}): AnatomyChildScan => {
+  const scan: AnatomyChildScan = {
+    iconCount: 0,
+    sawUncertainChild: false,
+    seenParts: new Set(),
+    violation: null,
+  };
+
+  for (const child of children) {
+    const forbiddenEntry = findForbiddenChild({
+      child,
+      forbidden: manifest.forbidden,
+      forbiddenImports,
+    });
+    if (forbiddenEntry) {
+      scan.violation = toChildViolation(child, file, manifest, forbiddenEntry);
+      return scan;
+    }
+
+    const classified = classifyAnatomyChild({
+      child,
+      exportedParts,
+      imports,
+      manifest,
+    });
+    if (classified.kind === "part" && classified.part) {
+      scan.seenParts.add(classified.part);
+    } else if (classified.kind === "icon") {
+      scan.iconCount += 1;
+    } else if (classified.kind === "uncertain") {
+      scan.sawUncertainChild = true;
+    } else {
+      scan.violation = toChildViolation(child, file, manifest, null);
+      return scan;
+    }
+  }
+
+  return scan;
+};
+
 const evaluateAnatomyInstance = ({
   exportedParts,
   file,
@@ -453,73 +566,37 @@ const evaluateAnatomyInstance = ({
 }): { uncertain: boolean; violation: AnatomyViolation | null } => {
   const { children, uncertain } = getMeaningfulChildren(node);
   const line = getLineNumber(file, node.openingElement);
-  const seenParts = new Set<string>();
-  let iconCount = 0;
-  let sawUncertainChild = uncertain;
+  const scan = scanAnatomyChildren({
+    children,
+    exportedParts,
+    file,
+    forbiddenImports,
+    imports,
+    manifest,
+  });
 
-  for (const child of children) {
-    const forbiddenEntry = findForbiddenChild({
-      child,
-      forbidden: manifest.forbidden,
-      forbiddenImports,
-    });
-    if (forbiddenEntry) {
-      return {
-        uncertain: false,
-        violation: {
-          filePath: file.filePath,
-          line: getLineNumber(file, getOpeningElement(child) ?? child),
-          message: `${manifest.component} contains ${forbiddenEntry.component}, which is not part of its anatomy.`,
-          remediation: forbiddenEntry.remediation,
-        },
-      };
-    }
-
-    const classified = classifyAnatomyChild({
-      child,
-      exportedParts,
-      imports,
-      manifest,
-    });
-    if (classified.kind === "part" && classified.part) {
-      seenParts.add(classified.part);
-    } else if (classified.kind === "icon") {
-      iconCount += 1;
-    } else if (classified.kind === "uncertain") {
-      sawUncertainChild = true;
-    } else {
-      const openingElement = getOpeningElement(child);
-      const childTag = openingElement ? getJsxTagName(openingElement) : null;
-      return {
-        uncertain: false,
-        violation: {
-          filePath: file.filePath,
-          line: getLineNumber(file, openingElement ?? child),
-          message: `${manifest.component} contains ${childTag ?? "a child"} that is not part of its anatomy.`,
-          remediation: `Compose ${manifest.component} from its own parts (${manifest.requiredParts.join(", ") || "its exported subcomponents"}) or extend the ui module with the new part.`,
-        },
-      };
-    }
+  if (scan.violation) {
+    return { uncertain: false, violation: scan.violation };
   }
 
-  if (iconCount > 1) {
+  if (scan.iconCount > 1) {
     return {
       uncertain: false,
       violation: {
         filePath: file.filePath,
         line,
-        message: `${manifest.component} renders ${iconCount} icons; its anatomy allows at most one.`,
+        message: `${manifest.component} renders ${scan.iconCount} icons; its anatomy allows at most one.`,
         remediation: `Keep a single leading icon inside ${manifest.component}.`,
       },
     };
   }
 
-  if (sawUncertainChild || children.length === 0) {
+  if (uncertain || scan.sawUncertainChild || children.length === 0) {
     return { uncertain: true, violation: null };
   }
 
   const missingPart = manifest.requiredParts.find(
-    (part) => !seenParts.has(part)
+    (part) => !scan.seenParts.has(part)
   );
   if (missingPart) {
     return {
