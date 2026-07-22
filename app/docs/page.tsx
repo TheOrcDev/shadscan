@@ -175,18 +175,14 @@ export default function DocsPage() {
           </p>
           <h3>Run with an AI agent (recommended)</h3>
           <div className="not-typeset mt-4">
-            <CodeBlockCommand
-              prompt={AGENT_AUDIT_PROMPT}
-              {...getCliCommands()}
-            />
+            <CodeBlockCommand prompt={AGENT_AUDIT_PROMPT} />
           </div>
           <p>
             The recommended way to start is to hand the audit to your AI coding
-            agent. Copy the <code>prompt</code> tab and paste it in — it runs
-            Shadscan, then, without editing any code, summarizes the findings by
-            severity and proposes a prioritized remediation plan for you to
-            approve before anything changes. Switch tabs for the raw one-shot
-            command.
+            agent. Copy the prompt above and paste it in — it runs Shadscan,
+            then, without editing any code, summarizes the findings by severity
+            and proposes a prioritized remediation plan for you to approve
+            before anything changes.
           </p>
           <h3>Scan another directory</h3>
           <div className="not-typeset mt-4">
