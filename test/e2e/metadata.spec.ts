@@ -166,9 +166,12 @@ test("publishes app identity and structured data", async ({ page }) => {
   expect(softwareApplication?.sameAs).toEqual([
     "https://www.npmjs.com/package/@shadscan/cli",
   ]);
-  await expect(
-    page.locator('a[href="https://github.com/TheOrcDev/shadscan"]')
-  ).toHaveCount(0);
+  const githubLink = page.locator(
+    'a[href="https://github.com/TheOrcDev/shadscan"]'
+  );
+  await expect(githubLink).toHaveCount(1);
+  await expect(githubLink).toHaveAttribute("target", "_blank");
+  await expect(githubLink).toHaveAttribute("rel", "noreferrer");
 });
 
 test("serves a complete web app manifest and install icons", async ({
