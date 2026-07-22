@@ -187,6 +187,7 @@ published CLI lives in [`packages/cli`](packages/cli).
 
 | Document | Purpose |
 | --- | --- |
+| [Contributing guide](CONTRIBUTING.md) | Development setup, repository map, tests, documentation, and pull requests |
 | [CLI contract](docs/cli-contract.md) | Invocation, output, exit status, stability, privacy, and security guarantees |
 | [Rule catalog](docs/rules.md) | All bundled checks and their scoring behavior |
 | [Hosted API](docs/hosted-api.md) | Authentication, request formats, deployment, and source handling |
