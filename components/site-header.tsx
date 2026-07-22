@@ -12,9 +12,8 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
   { href: "/scan", label: "Scan" },
+  { href: "/sponsors", label: "Sponsors" },
 ] as const;
-
-const SPONSORS_HREF = "/sponsors";
 
 interface SiteHeaderProps {
   githubRepository: {
@@ -28,7 +27,6 @@ const isActivePath = (pathname: string | null, href: string): boolean =>
 
 function SiteHeader({ githubRepository }: SiteHeaderProps) {
   const pathname = usePathname();
-  const isSponsorsActive = isActivePath(pathname, SPONSORS_HREF);
 
   return (
     <header>
@@ -71,17 +69,6 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
                 : undefined
             }
           />
-          <Link
-            aria-current={isSponsorsActive ? "page" : undefined}
-            className={cn(
-              buttonVariants({ size: "sm", variant: "ghost" }),
-              "px-2 sm:px-4",
-              isSponsorsActive && "bg-muted text-foreground"
-            )}
-            href={SPONSORS_HREF}
-          >
-            Sponsors
-          </Link>
           {githubRepository ? (
             <div className="hidden sm:block">
               <GitHubStars
