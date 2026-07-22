@@ -4,7 +4,6 @@ import {
   ArrowSquareOut,
   BookOpen,
   ClipboardText,
-  Gauge,
   GithubLogo,
   MagnifyingGlass,
   Sparkle,
@@ -21,7 +20,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
 } from "@/components/ui/command";
 import { AGENT_AUDIT_PROMPT } from "@/lib/agent-prompt";
 import { DOCS_SECTIONS } from "@/lib/docs-sections";
@@ -54,11 +52,6 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
-
-  const scrollToReport = () => {
-    setOpen(false);
-    document.querySelector("#report")?.scrollIntoView({ behavior: "smooth" });
-  };
 
   const openRepository = () => {
     if (!repositoryUrl) {
@@ -148,20 +141,15 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
           <CommandInput placeholder="Type a command or search..." />
           <CommandList>
             <CommandEmpty>No matching command.</CommandEmpty>
-            <CommandGroup heading="Navigate">
-              <CommandItem onSelect={scrollToReport}>
-                <Gauge weight="bold" />
-                View audit checks
-                <CommandShortcut>Enter</CommandShortcut>
-              </CommandItem>
-              {repositoryUrl ? (
+            {repositoryUrl ? (
+              <CommandGroup heading="Navigate">
                 <CommandItem onSelect={openRepository}>
                   <GithubLogo weight="bold" />
                   Open GitHub repository
                   <ArrowSquareOut className="ml-auto" weight="bold" />
                 </CommandItem>
-              ) : null}
-            </CommandGroup>
+              </CommandGroup>
+            ) : null}
             <CommandGroup heading="Docs">
               {DOCS_SECTIONS.map((section) => (
                 <CommandItem
