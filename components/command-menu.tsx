@@ -127,7 +127,11 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
         type="button"
         variant="outline"
       >
-        <MagnifyingGlass className="sm:hidden" weight="bold" />
+        <MagnifyingGlass
+          className="sm:hidden"
+          data-icon="inline-start"
+          weight="bold"
+        />
         <span className="hidden sm:inline-flex lg:hidden">Search...</span>
         <span className="hidden lg:inline-flex">Search documentation...</span>
         <kbd className="pointer-events-none absolute top-1.5 right-1.5 hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-medium font-mono text-[10px] text-muted-foreground sm:flex">

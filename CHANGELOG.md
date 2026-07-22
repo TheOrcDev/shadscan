@@ -38,6 +38,12 @@ stable releases published under `latest`.
   exact failed counter, configured threshold, observed value, and affected path.
 - Keep package-manager selection local to each documentation code block so
   changing one example no longer changes every example on the page.
+- Generate Next.js route types before the standalone TypeScript gate so fresh
+  checkouts can resolve typed route-handler contexts.
+- Keep the shadcn authoring CLI out of the production dependency graph and pin
+  patched `sharp` 0.35.3 for the Next.js image runtime.
+- Exclude worktree metadata and contribution docs from scanner production
+  traces.
 
 ## 0.1.0-rc.3 - 2026-07-21
 

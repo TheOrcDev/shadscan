@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const SCANNER_TRACE_EXCLUDES = [
+  "./.git",
   "./.git/**/*",
   "./app/**/*",
   // Common directory names must not strip matching JavaScript from Next.
