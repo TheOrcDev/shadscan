@@ -36,21 +36,23 @@ const Hero = ({
 }: HeroProps) => (
   <section className={cn("py-8 sm:py-10", className)}>
     <div className="overflow-hidden">
-      <div className="container mx-auto">
-        <div className="mx-auto max-w-5xl">
-          <div className="flex flex-col items-center gap-4 text-center sm:gap-5">
-            {logo && (
-              <div className="flex items-center justify-center">{logo}</div>
-            )}
-            <h1 className="max-w-xl text-pretty font-semibold text-4xl tracking-tight md:text-5xl lg:max-w-3xl">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-5xl flex-col items-center">
+          <div className="flex w-full flex-col items-center gap-4 text-center sm:gap-5">
+            {logo ? (
+              <div className="flex w-full items-center justify-center">
+                {logo}
+              </div>
+            ) : null}
+            <h1 className="max-w-xl text-pretty text-center font-semibold text-4xl tracking-tight md:text-5xl lg:max-w-3xl">
               {heading}
             </h1>
-            <p className="mx-auto max-w-3xl text-balance text-muted-foreground text-sm lg:text-base">
+            <p className="mx-auto max-w-3xl text-balance text-center text-muted-foreground text-sm lg:text-base">
               {description}
             </p>
-            {(buttons?.primary || buttons?.secondary) && (
-              <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
-                {buttons?.primary && (
+            {buttons?.primary || buttons?.secondary ? (
+              <div className="flex w-full flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                {buttons?.primary ? (
                   <Button asChild className="w-full sm:w-auto" size="lg">
                     <a
                       href={buttons.primary.url}
@@ -60,8 +62,8 @@ const Hero = ({
                       <ArrowRightIcon data-icon="inline-end" />
                     </a>
                   </Button>
-                )}
-                {buttons?.secondary && (
+                ) : null}
+                {buttons?.secondary ? (
                   <Button
                     asChild
                     className="w-full sm:w-auto"
@@ -75,11 +77,15 @@ const Hero = ({
                       {buttons.secondary.text}
                     </a>
                   </Button>
-                )}
+                ) : null}
               </div>
-            )}
+            ) : null}
           </div>
-          {media && <div className="mt-8 w-full sm:mt-10">{media}</div>}
+          {media ? (
+            <div className="mt-8 flex w-full justify-center sm:mt-10">
+              {media}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

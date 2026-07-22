@@ -29,11 +29,15 @@ export default async function Page() {
           description="shadscan statically analyzes your React shadcn components for accessibility, state, and composition regressions — the same result on every run, built for your terminal and your CI."
           heading="Deterministic UI audits for shadcn apps"
           logo={
-            <Badge asChild variant="secondary">
+            <Badge asChild variant="outline">
               <Link href="/changelog">
-                {latestRelease
-                  ? `v${latestRelease.version} — Changelog`
-                  : "Changelog"}
+                {latestRelease ? (
+                  <>
+                    <span>v{latestRelease.version}</span>
+                    <span aria-hidden="true">·</span>
+                  </>
+                ) : null}
+                <span>Changelog</span>
                 <ArrowRightIcon data-icon="inline-end" />
               </Link>
             </Badge>
