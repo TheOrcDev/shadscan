@@ -6,6 +6,15 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Changed
+
+- Select post-scan menu options with the arrow keys and Enter instead of
+  typed numbers, with an in-place highlighted cursor, wrap-around movement,
+  vim-style j/k, number-key shortcuts, and Esc or q to keep just the score.
+  The handoff option starts highlighted, so a single Enter copies the plan.
+  Terminals without raw-mode support keep the numbered prompt, and all
+  non-interactive surfaces are unchanged.
+
 ## 0.1.0-rc.6 - 2026-07-23
 
 ### Added

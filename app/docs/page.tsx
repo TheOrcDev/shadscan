@@ -409,8 +409,9 @@ export default function DocsPage() {
             A local interactive scan ends with a post-scan menu: copy the agent
             handoff to your clipboard (it prints too), print it without copying,
             launch an installed agent, or add a score gate when no active
-            blocking Shadscan hook protects the project yet. Press Enter to
-            choose <code>Done</code> and keep just the score, or use{" "}
+            blocking Shadscan hook protects the project yet. Pick with the arrow
+            keys and Enter — the handoff is highlighted first, so a single Enter
+            grabs it. Press <code>Esc</code> to keep just the score, or use{" "}
             <code>--no-interactive</code> to suppress the menu entirely.
             Category-scoped scans do not offer a hook because their score cannot
             establish a full-project floor.

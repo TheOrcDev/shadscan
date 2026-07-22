@@ -1,5 +1,11 @@
 import { createInterface } from "node:readline/promises";
 import type { AgentCliCandidate, AgentId } from "./agent-cli";
+import {
+  type SelectInputStream,
+  selectFromMenu,
+  supportsRawSelection,
+} from "./interactive-select";
+import { resolveTerminalCapabilities } from "./terminal-capabilities";
 
 const DONE_ACTION_VALUE = "done" as const;
 const PRE_COMMIT_ACTION_VALUE = "pre-commit" as const;
@@ -120,16 +126,13 @@ const createPostScanMenu = ({
   return options;
 };
 
+const getMenuHeader = (options: PostScanMenuOption[]): string =>
+  options.some((option) => option.action.kind === "agent")
+    ? "What next? External agents may read and edit files, run commands, and send prompt data to their provider."
+    : "What next?";
+
 const renderPostScanMenu = (options: PostScanMenuOption[]): string => {
-  const includesAgent = options.some(
-    (option) => option.action.kind === "agent"
-  );
-  const lines = [
-    "",
-    includesAgent
-      ? "What next? External agents may read and edit files, run commands, and send prompt data to their provider."
-      : "What next?",
-  ];
+  const lines = ["", getMenuHeader(options)];
 
   for (const [index, option] of options.entries()) {
     lines.push(`  ${index + 1}. ${option.label}`, `     ${option.description}`);
@@ -176,6 +179,34 @@ const promptPostScanAction = async ({
     includeHandoff,
     includePreCommit,
   });
+
+  if (!ask && supportsRawSelection(input as SelectInputStream)) {
+    const doneIndex = options.findIndex(
+      (option) => option.action.kind === "done"
+    );
+    const selectedIndex = await selectFromMenu({
+      capabilities: resolveTerminalCapabilities({
+        columns: process.stderr.columns,
+        env: {
+          CI: process.env.CI,
+          FORCE_COLOR: process.env.FORCE_COLOR,
+          NO_COLOR: process.env.NO_COLOR,
+          TERM: process.env.TERM,
+        },
+        isTTY: process.stderr.isTTY === true,
+      }),
+      escapeIndex: doneIndex === -1 ? undefined : doneIndex,
+      header: getMenuHeader(options),
+      input: input as SelectInputStream,
+      options: options.map((option) => ({
+        description: option.description,
+        label: option.label,
+      })),
+      output: process.stderr,
+    });
+    return options[selectedIndex]?.action ?? { kind: DONE_ACTION_VALUE };
+  }
+
   write(renderPostScanMenu(options));
 
   if (ask) {
