@@ -247,7 +247,7 @@ try {
     importCheckPath,
     [
       'import { AUDIT_REPORT_SCHEMA_VERSION, RULE_CATALOG, scanProject } from "@shadscan/cli";',
-      `if (AUDIT_REPORT_SCHEMA_VERSION !== ${JSON.stringify(report.schemaVersion)} || RULE_CATALOG.length !== 56 || typeof scanProject !== "function") {`,
+      `if (AUDIT_REPORT_SCHEMA_VERSION !== ${JSON.stringify(report.schemaVersion)} || RULE_CATALOG.length !== 59 || typeof scanProject !== "function") {`,
       '  throw new Error("The installed library exports are incomplete.");',
       "}",
       "",
