@@ -174,9 +174,11 @@ export default function DocsPage() {
             Pass a relative or absolute path to scan another project.
           </p>
           <h3>Run with an AI agent (recommended)</h3>
-          <div className="not-typeset mt-4">
-            <CodeBlockCommand prompt={AGENT_AUDIT_PROMPT} />
-          </div>
+          <DocsCodeBlock
+            code={AGENT_AUDIT_PROMPT}
+            label="Prompt"
+            language="text"
+          />
           <p>
             The recommended way to start is to hand the audit to your AI coding
             agent. Copy the prompt above and paste it in — it runs Shadscan,

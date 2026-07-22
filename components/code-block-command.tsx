@@ -2,9 +2,7 @@
 
 import { ScrollArea } from "@base-ui/react/scroll-area";
 import { TerminalIcon, TextAlignLeftIcon } from "@phosphor-icons/react";
-import { useAtom } from "jotai";
-import { atomWithStorage } from "jotai/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { IconSwap, IconSwapItem } from "@/components/icon-swap";
 import {
@@ -17,15 +15,6 @@ import {
 import { cn } from "@/lib/utils";
 
 export type PackageManager = "prompt" | "pnpm" | "yarn" | "npm" | "bun";
-
-const packageManagerAtom = atomWithStorage<PackageManager>(
-  "packageManager",
-  "pnpm"
-);
-
-export function usePackageManager() {
-  return useAtom(packageManagerAtom);
-}
 
 export interface CodeBlockCommandProps {
   bun?: string;
@@ -49,7 +38,7 @@ export function CodeBlockCommand({
   onCopySuccess,
   onCopyError,
 }: CodeBlockCommandProps) {
-  const [packageManager, setPackageManager] = usePackageManager();
+  const [packageManager, setPackageManager] = useState<PackageManager>("pnpm");
 
   const tabs = useMemo(
     () => ({
