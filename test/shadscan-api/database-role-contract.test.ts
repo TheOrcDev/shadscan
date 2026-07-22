@@ -25,4 +25,22 @@ describe("database role contract", () => {
       'REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM "shadscan_runtime"'
     );
   });
+
+  it("exposes scan caching only through hardened functions", async () => {
+    const migration = await readFile("drizzle/0004_scan_cache.sql", "utf8");
+
+    expect(migration).toContain("SECURITY DEFINER");
+    expect(migration).toContain(
+      "SET search_path = pg_catalog, public, pg_temp"
+    );
+    expect(migration).toContain(
+      'REVOKE ALL PRIVILEGES ON TABLE public.scan_cache FROM "shadscan_runtime"'
+    );
+    expect(migration).toContain(
+      'GRANT EXECUTE ON FUNCTION public."get_shadscan_scan_cache"(text) TO "shadscan_runtime"'
+    );
+    expect(migration).toContain(
+      'GRANT EXECUTE ON FUNCTION public."put_shadscan_scan_cache"(text, text, text, text, text, text, text, jsonb, integer) TO "shadscan_runtime"'
+    );
+  });
 });

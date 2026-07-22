@@ -51,6 +51,11 @@ export default function PrivacyPage() {
               storage and deleted after the scan completes or fails.
             </li>
             <li>
+              We may cache a successful report for the same public repository
+              commit to avoid repeating identical work. Source files and
+              archives are not cached.
+            </li>
+            <li>
               Shadscan uses deterministic rules rather than AI, and we do not
               use submitted source or reports to train AI models.
             </li>
@@ -95,6 +100,13 @@ export default function PrivacyPage() {
             revision, score, actionable count, and Shadscan engine and ruleset
             versions. Failed scans are logged without the submitted repository
             name.
+          </p>
+          <p>
+            When report caching is enabled, Neon may store a successful report,
+            the immutable commit, selected project path, scanner versions, and a
+            digest of the repository identifier. The cache does not contain
+            source files or archives. Failed and incomplete scans are not
+            cached.
           </p>
 
           <h3>Hosted API scans</h3>
@@ -197,6 +209,12 @@ export default function PrivacyPage() {
               marked to expire after two configured windows, and are pruned in
               bounded batches, subject to provider backup and operational
               practices.
+            </li>
+            <li>
+              Successful cached reports expire after the configured cache
+              period, which is no more than 30 days, subject to provider backup
+              and operational practices. Source files and archives are not
+              included in those records.
             </li>
             <li>
               Runtime logs are retained according to our hosting configuration

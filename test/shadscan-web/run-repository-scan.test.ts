@@ -5,6 +5,7 @@ import { HostedScanError } from "../../lib/shadscan-api/errors";
 import type { GitHubTreeEntry } from "../../lib/shadscan-api/github-tree";
 import { executeWebRepositoryScan } from "../../lib/shadscan-web/run-repository-scan";
 import { createTarGzip } from "../shadscan-api/test-archive";
+import { WEB_SCAN_COMPLETE_FIXTURE } from "./fixtures";
 
 const COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567";
 
@@ -192,7 +193,7 @@ describe("executeWebRepositoryScan", () => {
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
 
-  it("rejects at capacity before consuming discovery or scan quota", async () => {
+  it("rejects a cache miss at capacity after discovery but before scan quota", async () => {
     const admissionController = new HostedScanAdmissionController(1);
     const activeOperation = Promise.withResolvers<void>();
     const activeRun = admissionController.run(() => activeOperation.promise);
@@ -211,7 +212,47 @@ describe("executeWebRepositoryScan", () => {
       retryAfterSeconds: 5,
       retryable: true,
     });
-    expect(dependencies.enforceDiscoveryRateLimit).not.toHaveBeenCalled();
+    expect(dependencies.enforceDiscoveryRateLimit).toHaveBeenCalledOnce();
+    expect(dependencies.enforceRateLimit).not.toHaveBeenCalled();
+
+    activeOperation.resolve();
+    await activeRun;
+  });
+
+  it("serves a validated cache hit without scan admission or full quota", async () => {
+    const admissionController = new HostedScanAdmissionController(1);
+    const activeOperation = Promise.withResolvers<void>();
+    const activeRun = admissionController.run(() => activeOperation.promise);
+    const dependencies = createDiscoveryDependencies();
+    const readCache = vi.fn(() =>
+      Promise.resolve(WEB_SCAN_COMPLETE_FIXTURE.result)
+    );
+
+    const result = await executeWebRepositoryScan(
+      {
+        clientAddress: "203.0.113.4",
+        repositoryInput: "acme/widget",
+      },
+      {
+        ...dependencies,
+        admissionController,
+        cacheConfig: { enabled: true, ttlSeconds: 3600 },
+        readCache,
+      }
+    );
+
+    expect(result).toMatchObject({
+      projectPath: ".",
+      status: "complete",
+    });
+    expect(readCache).toHaveBeenCalledWith(
+      { enabled: true, ttlSeconds: 3600 },
+      {
+        commitSha: COMMIT_SHA,
+        projectPath: ".",
+        repositoryKey: "acme/widget",
+      }
+    );
     expect(dependencies.enforceRateLimit).not.toHaveBeenCalled();
 
     activeOperation.resolve();

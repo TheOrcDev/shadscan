@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -45,4 +46,45 @@ const rateLimitWindows = pgTable(
   ]
 );
 
-export { rateLimitWindows };
+const scanCache = pgTable(
+  "scan_cache",
+  {
+    cacheKey: text("cache_key").primaryKey(),
+    category: text("category").notNull(),
+    commitSha: text("commit_sha").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    }).notNull(),
+    engineVersion: text("engine_version").notNull(),
+    expiresAt: timestamp("expires_at", {
+      mode: "date",
+      withTimezone: true,
+    }).notNull(),
+    payload: jsonb("payload").notNull(),
+    projectPath: text("project_path").notNull(),
+    repositoryHash: text("repository_hash").notNull(),
+    rulesetVersion: text("ruleset_version").notNull(),
+  },
+  (table) => [
+    index("scan_cache_expires_at_idx").on(table.expiresAt),
+    check(
+      "scan_cache_cache_key_check",
+      sql`char_length(${table.cacheKey}) = 64`
+    ),
+    check(
+      "scan_cache_repository_hash_check",
+      sql`char_length(${table.repositoryHash}) = 64`
+    ),
+    check(
+      "scan_cache_commit_sha_check",
+      sql`char_length(${table.commitSha}) = 40`
+    ),
+    check(
+      "scan_cache_project_path_check",
+      sql`char_length(${table.projectPath}) between 1 and 512`
+    ),
+  ]
+);
+
+export { rateLimitWindows, scanCache };

@@ -17,7 +17,7 @@ Configure these variables on every production deployment:
 
 | Variable | Requirement |
 | --- | --- |
-| `DATABASE_URL` | Server-only Neon connection for a restricted runtime login that can execute only the rate-limit function. |
+| `DATABASE_URL` | Server-only Neon connection for a restricted runtime login that can execute only the bounded rate-limit and optional cache functions. |
 | `SHADSCAN_WEB_RATE_LIMIT_SALT` | Secret random value of at least 32 characters. It HMACs client addresses before rate-limit storage and must not be exposed through `NEXT_PUBLIC_*`. |
 
 Optional server-only variables:
@@ -30,6 +30,8 @@ Optional server-only variables:
 | `SHADSCAN_WEB_MAX_ARCHIVE_ENTRIES` | Raw tar entry limit. Default `10000`; hard ceiling `50000`. |
 | `SHADSCAN_WEB_MAX_RETAINED_FILE_MIB` | Per-file limit for source the scanner reads. Default `8`; hard ceiling `16`. |
 | `SHADSCAN_WEB_SOURCE_MODE` | Source acquisition mode: `archive`, `sparse`, or `auto`. Default `archive`. |
+| `SHADSCAN_WEB_CACHE_ENABLED` | Set to `true` to reuse successful reports for the same immutable commit, selected project path, and scanner identity. Default `false`. |
+| `SHADSCAN_WEB_CACHE_TTL_HOURS` | Successful-report cache lifetime. Default `168`; hard ceiling `720`. |
 | `SHADSCAN_PUBLIC_GITHUB_REPOSITORY` | Enables the public source link and star count after an unauthenticated GitHub lookup confirms the configured `owner/repository` is public. Leave unset while the source repository is private. |
 | `SHADSCAN_WEB_RATE_LIMIT_MODE=database` | Exercises the production web limiter outside `NODE_ENV=production`. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the authenticated `/v1/scans` limiter outside production. |
@@ -67,8 +69,11 @@ workflow.
 
 Runtime identities are SHA-256 or HMAC-SHA-256 digests. Raw client addresses,
 repository names, API keys, source archives, and scan reports are not stored in
-the rate-limit table. Expired windows are removed in bounded batches during
-normal traffic.
+the rate-limit table. When report caching is enabled, Neon stores a validated
+successful report keyed by a repository digest, immutable commit, selected
+project path, and scanner contract versions. Source files and archives are
+never cached. Expired windows and cache rows are removed in bounded batches
+during normal traffic.
 
 ## Runtime Boundaries
 
@@ -100,7 +105,9 @@ normal traffic.
   truncated tree is completed through at most 100 non-recursive subtree
   requests; incomplete trees are never scanned silently.
 - Temporary source is removed after success and failure.
-- The browser result is session-only; no source or report is persisted.
+- Source is always temporary. Successful reports are persisted only when
+  `SHADSCAN_WEB_CACHE_ENABLED=true`, for at most the configured cache lifetime;
+  failed and partial scans are never cached.
 
 `next.config.ts` excludes repository source and development files from the
 scanner route traces while retaining `packages/cli/dist/index.js` and its
@@ -129,4 +136,5 @@ violations.
 
 For a production deployment, also confirm that the platform honors the
 30-second function duration, injects the required variables only on the server,
-and does not cache Server Action results or source archives.
+and does not cache Server Action responses or source archives at the platform
+edge.

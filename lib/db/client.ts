@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
-import { rateLimitWindows } from "./schema";
+import { rateLimitWindows, scanCache } from "./schema";
 
-const schema = { rateLimitWindows };
+const schema = { rateLimitWindows, scanCache };
 
 class DatabaseConfigurationError extends Error {
   constructor() {

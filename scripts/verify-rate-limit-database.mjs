@@ -16,6 +16,11 @@ const verificationId = randomUUID();
 const bucketPrefix = `verification-${verificationId}`;
 const hashIdentity = (value) =>
   createHash("sha256").update(value, "utf8").digest("hex");
+const cacheKey = hashIdentity(`cache-${verificationId}`);
+const cacheRepositoryHash = hashIdentity(`repository-${verificationId}`);
+const cacheCommitSha = createHash("sha1")
+  .update(`commit-${verificationId}`, "utf8")
+  .digest("hex");
 
 const consume = (rules) =>
   runtimeSql`select * from consume_shadscan_rate_limits(${JSON.stringify(rules)}::jsonb)`;
@@ -58,7 +63,37 @@ try {
         current_user,
         'public.consume_shadscan_rate_limits(jsonb)',
         'EXECUTE'
-      ) as can_execute
+      ) as can_execute,
+      has_table_privilege(
+        current_user,
+        'public.scan_cache',
+        'SELECT'
+      ) as can_select_cache,
+      has_table_privilege(
+        current_user,
+        'public.scan_cache',
+        'INSERT'
+      ) as can_insert_cache,
+      has_table_privilege(
+        current_user,
+        'public.scan_cache',
+        'UPDATE'
+      ) as can_update_cache,
+      has_table_privilege(
+        current_user,
+        'public.scan_cache',
+        'DELETE'
+      ) as can_delete_cache,
+      has_function_privilege(
+        current_user,
+        'public.get_shadscan_scan_cache(text)',
+        'EXECUTE'
+      ) as can_get_cache,
+      has_function_privilege(
+        current_user,
+        'public.put_shadscan_scan_cache(text, text, text, text, text, text, text, jsonb, integer)',
+        'EXECUTE'
+      ) as can_put_cache
   `;
   const ownerRole = ownerIdentity[0]?.role_name;
   const runtimeRole = runtimeIdentity[0]?.role_name;
@@ -71,6 +106,12 @@ try {
   assert.equal(runtimeIdentity[0]?.can_update, false);
   assert.equal(runtimeIdentity[0]?.can_delete, false);
   assert.equal(runtimeIdentity[0]?.can_execute, true);
+  assert.equal(runtimeIdentity[0]?.can_select_cache, false);
+  assert.equal(runtimeIdentity[0]?.can_insert_cache, false);
+  assert.equal(runtimeIdentity[0]?.can_update_cache, false);
+  assert.equal(runtimeIdentity[0]?.can_delete_cache, false);
+  assert.equal(runtimeIdentity[0]?.can_get_cache, true);
+  assert.equal(runtimeIdentity[0]?.can_put_cache, true);
 
   const runtimeRoleAttributes = await ownerSql`
     select
@@ -211,12 +252,38 @@ try {
   `;
   assert.equal(expiredRows[0]?.count, 0);
 
+  const cachePayload = {
+    report: "database verifier",
+    verificationId,
+  };
+  await runtimeSql`
+    select public.put_shadscan_scan_cache(
+      ${cacheKey},
+      ${cacheRepositoryHash},
+      ${cacheCommitSha},
+      ${"."},
+      ${"all"},
+      ${"verification-engine"},
+      ${"verification-ruleset"},
+      ${JSON.stringify(cachePayload)}::jsonb,
+      ${60}
+    )
+  `;
+  const cachedRows = await runtimeSql`
+    select * from public.get_shadscan_scan_cache(${cacheKey})
+  `;
+  assert.deepEqual(cachedRows[0]?.payload, cachePayload);
+
   console.log(
-    `Verified database rate limiting: ${allowedCount}/${concurrentResults.length} concurrent requests allowed.`
+    `Verified database rate limiting and scan caching: ${allowedCount}/${concurrentResults.length} concurrent requests allowed.`
   );
 } finally {
   await ownerSql`
     delete from rate_limit_windows
     where bucket like ${`${bucketPrefix}%`}
+  `;
+  await ownerSql`
+    delete from scan_cache
+    where cache_key = ${cacheKey}
   `;
 }

@@ -25,6 +25,13 @@ import { enforceWebDiscoveryRateLimit } from "./discovery-rate-limit";
 import { asWebScanServiceError } from "./errors";
 import { normalizeGitHubRepository } from "./normalize-repository";
 import { enforceWebScanRateLimit, type WebRateLimitInput } from "./rate-limit";
+import {
+  getScanCacheConfig,
+  readScanCacheFailOpen,
+  type ScanCacheConfig,
+  type ScanCacheIdentity,
+  writeScanCacheFailOpen,
+} from "./scan-cache";
 import { getWebSourceConfig, type WebSourceConfig } from "./source-config";
 import type {
   WebProjectOption,
@@ -48,12 +55,15 @@ interface ExecuteWebRepositoryScanDependencies {
   fetchImplementation?: FetchImplementation;
   loadTree?: typeof loadGitHubRepositoryTree;
   materializeSource?: typeof materializeResolvedGitHubSource;
+  cacheConfig?: ScanCacheConfig;
+  readCache?: typeof readScanCacheFailOpen;
   resolveSource?: typeof resolvePublicGitHubSource;
   runScan?: (
     source: Parameters<typeof runHostedScan>[0],
     signal?: AbortSignal
   ) => HostedScanResponse | Promise<HostedScanResponse>;
   sourceConfig?: WebSourceConfig;
+  writeCache?: typeof writeScanCacheFailOpen;
 }
 
 type WebRepositoryScanResult = WebProjectSelectionState | WebScanCompleteState;
@@ -91,57 +101,76 @@ const executeWebRepositoryScan = async (
         input.repositoryInput,
         input.projectPath
       );
+      const rateLimitInput = {
+        clientAddress: input.clientAddress,
+        repositoryKey: repository.repositoryKey,
+      };
+      const enforceDiscoveryRateLimit =
+        dependencies.enforceDiscoveryRateLimit ?? enforceWebDiscoveryRateLimit;
+      await enforceDiscoveryRateLimit(rateLimitInput);
+      signal.throwIfAborted();
+
+      const sourceConfig = dependencies.sourceConfig ?? getWebSourceConfig();
+      const resolveSource =
+        dependencies.resolveSource ?? resolvePublicGitHubSource;
+      const resolvedSource = await resolveSource(
+        repository.repository,
+        "HEAD",
+        dependencies.fetchImplementation,
+        signal
+      );
+      const loadTree = dependencies.loadTree ?? loadGitHubRepositoryTree;
+      const treeEntries = await loadTree(
+        repository.repository,
+        resolvedSource.commitSha,
+        sourceConfig.limits.maxRawEntries,
+        dependencies.fetchImplementation,
+        signal
+      );
+      const projects = discoverGitHubProjectCandidates(treeEntries);
+      if (projects.length === 0) {
+        throw new HostedScanError(
+          "No supported React project was found in the repository.",
+          {
+            code: "PROJECT_ROOT_NOT_FOUND",
+            status: 422,
+          }
+        );
+      }
+      const projectPath = selectProjectPath(projects, repository.projectPath);
+      if (!projectPath) {
+        return WebProjectSelectionStateSchema.parse({
+          projects,
+          repository: repository.repository,
+          repositoryInput: repository.repositoryInput,
+          repositoryUrl: repository.repositoryUrl,
+          status: "project_selection_required",
+        });
+      }
+
+      const cacheConfig = dependencies.cacheConfig ?? getScanCacheConfig();
+      const cacheIdentity: ScanCacheIdentity = {
+        commitSha: resolvedSource.commitSha,
+        projectPath,
+        repositoryKey: repository.repositoryKey,
+      };
+      const readCache = dependencies.readCache ?? readScanCacheFailOpen;
+      const cachedResult = await readCache(cacheConfig, cacheIdentity);
+      if (
+        cachedResult?.scan.resolvedRevision === resolvedSource.commitSha
+      ) {
+        return WebScanCompleteStateSchema.parse({
+          projectPath,
+          repository: repository.repository,
+          repositoryUrl: repository.repositoryUrl,
+          result: cachedResult,
+          status: "complete",
+        });
+      }
+
       const admissionController =
         dependencies.admissionController ?? hostedScanAdmissionController;
-      return await admissionController.run(async () => {
-        const rateLimitInput = {
-          clientAddress: input.clientAddress,
-          repositoryKey: repository.repositoryKey,
-        };
-        const enforceDiscoveryRateLimit =
-          dependencies.enforceDiscoveryRateLimit ??
-          enforceWebDiscoveryRateLimit;
-        await enforceDiscoveryRateLimit(rateLimitInput);
-        signal.throwIfAborted();
-
-        const sourceConfig = dependencies.sourceConfig ?? getWebSourceConfig();
-        const resolveSource =
-          dependencies.resolveSource ?? resolvePublicGitHubSource;
-        const resolvedSource = await resolveSource(
-          repository.repository,
-          "HEAD",
-          dependencies.fetchImplementation,
-          signal
-        );
-        const loadTree = dependencies.loadTree ?? loadGitHubRepositoryTree;
-        const treeEntries = await loadTree(
-          repository.repository,
-          resolvedSource.commitSha,
-          sourceConfig.limits.maxRawEntries,
-          dependencies.fetchImplementation,
-          signal
-        );
-        const projects = discoverGitHubProjectCandidates(treeEntries);
-        if (projects.length === 0) {
-          throw new HostedScanError(
-            "No supported React project was found in the repository.",
-            {
-              code: "PROJECT_ROOT_NOT_FOUND",
-              status: 422,
-            }
-          );
-        }
-        const projectPath = selectProjectPath(projects, repository.projectPath);
-        if (!projectPath) {
-          return WebProjectSelectionStateSchema.parse({
-            projects,
-            repository: repository.repository,
-            repositoryInput: repository.repositoryInput,
-            repositoryUrl: repository.repositoryUrl,
-            status: "project_selection_required",
-          });
-        }
-
+      return admissionController.run(async () => {
         const enforceRateLimit =
           dependencies.enforceRateLimit ?? enforceWebScanRateLimit;
         await enforceRateLimit(rateLimitInput);
@@ -174,6 +203,8 @@ const executeWebRepositoryScan = async (
           await runScan(source, signal)
         );
         signal.throwIfAborted();
+        const writeCache = dependencies.writeCache ?? writeScanCacheFailOpen;
+        await writeCache(cacheConfig, cacheIdentity, result);
 
         return WebScanCompleteStateSchema.parse({
           projectPath,
