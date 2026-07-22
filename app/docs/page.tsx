@@ -176,6 +176,47 @@ export default function DocsPage() {
             and proposes a prioritized remediation plan for you to approve
             before anything changes.
           </p>
+          <h3>Hand the results off to an agent</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand {...getCliCommands("--prompt")} />
+          </div>
+          <p>
+            After a scan, <code>--prompt</code> turns the results into a
+            paste-ready Markdown handoff: the exact findings with evidence,
+            suggested fixes, acceptance criteria, and the rescan command. Paste
+            it into Claude Code, Codex, or any coding agent — or skip the paste
+            entirely with <code>--apply</code>, which launches an installed
+            agent with the same handoff.
+          </p>
+          <p>
+            A handoff works better than a &quot;fix my UI&quot; prompt because
+            the agent starts from deterministic evidence instead of
+            rediscovering problems: every task is scoped to a real finding, has
+            acceptance criteria to meet, and ends with the exact command that
+            verifies the fix. The same source always produces the same handoff,
+            so agent sessions stay reproducible and reviewable.
+          </p>
+          <p>To get the most out of a handoff:</p>
+          <ul>
+            <li>
+              Start from a clean working tree, so the agent&apos;s diff contains
+              nothing but remediation and stays easy to review.
+            </li>
+            <li>
+              Narrow big audits with <code>--category</code> or a path — one
+              focused session per category beats one sprawling session that
+              loses context.
+            </li>
+            <li>
+              Have the agent propose a plan before editing, and approve it first
+              — the recommended prompt above already insists on this.
+            </li>
+            <li>
+              When the agent says it is done, rescan. The score is the
+              acceptance test, and <code>--fail-under</code> makes it a CI gate
+              so regressions cannot merge.
+            </li>
+          </ul>
           <h3>Scan another directory</h3>
           <div className="not-typeset mt-4">
             <CodeBlockCommand {...getCliCommands("../my-shadcn-app")} />
