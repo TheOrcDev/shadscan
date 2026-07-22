@@ -243,7 +243,7 @@ function RepositoryForm() {
     INITIAL_SCAN_STATE
   );
   const state = useQueuedScan(actionState, isPending);
-  const isWorking = isPending || isQueuedScanState(state);
+  const pending = isPending || isQueuedScanState(state);
   const [repositoryInput, setRepositoryInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const projectSelectRef = useRef<HTMLSelectElement>(null);
@@ -271,17 +271,17 @@ function RepositoryForm() {
   return (
     <div className="flex w-full flex-col gap-8">
       <form action={formAction} id={REPOSITORY_FORM_ID}>
-        <Field data-disabled={isWorking} data-invalid={inputError}>
+        <Field data-disabled={pending} data-invalid={inputError}>
           <FieldLabel htmlFor={REPOSITORY_INPUT_ID}>
             GitHub repository
           </FieldLabel>
-          <InputGroup data-disabled={isWorking}>
+          <InputGroup data-disabled={pending}>
             <InputGroupInput
               aria-describedby={inputError ? REPOSITORY_ERROR_ID : undefined}
               aria-invalid={inputError}
               autoCapitalize="none"
               autoComplete="url"
-              disabled={isWorking}
+              disabled={pending}
               id={REPOSITORY_INPUT_ID}
               maxLength={MAX_REPOSITORY_INPUT_LENGTH}
               name="repository"
@@ -299,12 +299,12 @@ function RepositoryForm() {
             </InputGroupAddon>
             <InputGroupAddon align="inline-end">
               <InputGroupButton
-                disabled={isWorking}
+                disabled={pending}
                 size="sm"
                 type="submit"
                 variant="default"
               >
-                {isWorking ? (
+                {pending ? (
                   <Spinner data-icon="inline-start" />
                 ) : (
                   <MagnifyingGlassIcon
@@ -325,7 +325,7 @@ function RepositoryForm() {
 
         {state.status === "project_selection_required" ? (
           <ProjectSelector
-            disabled={isWorking}
+            disabled={pending}
             selectRef={projectSelectRef}
             state={state}
           />
