@@ -33,6 +33,14 @@ All five plans were completed and pushed to `main`:
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
+## Subsequent Plans
+
+Plans added after the OrcDev audit cycle:
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| 006 | Manifest-driven component anatomy rules | P2 | L | - | TODO |
+
 ## Audit Truth Table
 
 | Finding | CLI status | Verdict | Evidence |
