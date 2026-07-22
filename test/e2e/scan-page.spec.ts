@@ -78,7 +78,9 @@ test("renders the aligned square-ended mark across product surfaces", async ({
   page,
 }) => {
   await page.goto("/");
-  const mark = page.getByRole("img", { name: "shadscan" });
+  // The hero now leads with the changelog badge, so the brand mark lives in
+  // the header as a decorative (aria-hidden) svg beside the brand text.
+  const mark = page.getByRole("banner").locator('a[href="/"] svg').first();
   await expect(mark).toBeVisible();
   await expect(mark).toHaveAttribute("stroke-linecap", "square");
   await expect(mark.locator("g")).toHaveAttribute(

@@ -48,9 +48,12 @@ test("renders every generated rule in its canonical category", async ({
     await expect(categorySection).toBeVisible();
     await expect(
       categorySection.getByRole("heading", {
-        // Accordion headers render as h3 via Radix Accordion.Header.
+        // Accordion headers render as h3 via Radix Accordion.Header, with the
+        // rule count in the accessible name; exact matching keeps rule titles
+        // containing category words from also resolving.
+        exact: true,
         level: 3,
-        name: category.title,
+        name: `${category.title} ${categoryRules.length}`,
       })
     ).toBeVisible();
     await expect(categorySection.locator("article[id]")).toHaveCount(
