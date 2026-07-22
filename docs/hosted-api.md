@@ -46,7 +46,7 @@ Optional:
 
 | Variable | Purpose |
 | --- | --- |
-| `GITHUB_TOKEN` | Server-side token for GitHub metadata and revision resolution. It is never forwarded to archive downloads. Public repositories only remain enforced. |
+| `GITHUB_TOKEN` | Server-side token for GitHub API metadata, revision, and archive requests. It is never forwarded to `codeload.github.com`. Public repositories only remain enforced. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the distributed limiter outside production. Development otherwise uses an in-memory limiter. |
 
 Production fails closed when authentication or distributed rate limiting is not

@@ -1,3 +1,4 @@
+import type { HostedScanErrorDiagnostics } from "../shadscan-api/errors";
 import { HostedScanError } from "../shadscan-api/errors";
 import type { SourceLimitDetail } from "../shadscan-api/source-limits";
 import { WebScanErrorSchema } from "./contracts";
@@ -9,6 +10,16 @@ interface WebScanServiceErrorOptions {
   retryAfterSeconds?: number;
   retryable?: boolean;
   sourceLimit?: SourceLimitDetail;
+}
+
+interface WebScanFailureDiagnostics extends HostedScanErrorDiagnostics {
+  internalErrorCode?: string;
+  internalStatus?: number;
+}
+
+interface WebScanFailure {
+  diagnostics: WebScanFailureDiagnostics;
+  publicError: WebScanError;
 }
 
 const SOURCE_TOO_LARGE_CODES = new Set([
@@ -42,14 +53,22 @@ const UPSTREAM_CODES = new Set([
 
 class WebScanServiceError extends Error {
   readonly code: WebScanErrorCode;
+  readonly diagnostics: HostedScanErrorDiagnostics | undefined;
+  readonly internalErrorCode: string | undefined;
+  readonly internalStatus: number | undefined;
   readonly retryable: boolean;
   readonly retryAfterSeconds: number | undefined;
   readonly sourceLimit: SourceLimitDetail | undefined;
 
   constructor(message: string, options: WebScanServiceErrorOptions) {
     super(message, { cause: options.cause });
+    const hostedCause =
+      options.cause instanceof HostedScanError ? options.cause : undefined;
     this.name = "WebScanServiceError";
     this.code = options.code;
+    this.diagnostics = hostedCause?.diagnostics;
+    this.internalErrorCode = hostedCause?.code;
+    this.internalStatus = hostedCause?.status;
     this.retryable = options.retryable ?? false;
     this.retryAfterSeconds = options.retryAfterSeconds;
     this.sourceLimit = options.sourceLimit;
@@ -185,6 +204,19 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
     );
   }
 
+  if (
+    error.code === "GITHUB_INVALID_RESPONSE" &&
+    error.diagnostics?.kind === "upstream_response_too_large"
+  ) {
+    return new WebScanServiceError(
+      "GitHub returned source metadata the web scanner could not safely process. Run shadscan locally instead.",
+      {
+        cause: error,
+        code: "SOURCE_UNSUPPORTED",
+      }
+    );
+  }
+
   if (UPSTREAM_CODES.has(error.code)) {
     return new WebScanServiceError(
       "GitHub is temporarily unavailable to the scanner. Try again shortly.",
@@ -254,20 +286,36 @@ const asWebScanServiceError = (error: unknown): WebScanServiceError => {
   );
 };
 
-const toWebScanError = (error: unknown): WebScanError => {
+const toWebScanFailure = (error: unknown): WebScanFailure => {
   const serviceError = asWebScanServiceError(error);
-  return WebScanErrorSchema.parse({
-    code: serviceError.code,
-    message: serviceError.message,
-    retryable: serviceError.retryable,
-    retryAfterSeconds: serviceError.retryAfterSeconds,
-    sourceLimit: serviceError.sourceLimit,
-  });
+  return {
+    diagnostics: {
+      ...serviceError.diagnostics,
+      ...(serviceError.internalErrorCode
+        ? { internalErrorCode: serviceError.internalErrorCode }
+        : {}),
+      ...(serviceError.internalStatus === undefined
+        ? {}
+        : { internalStatus: serviceError.internalStatus }),
+    },
+    publicError: WebScanErrorSchema.parse({
+      code: serviceError.code,
+      message: serviceError.message,
+      retryable: serviceError.retryable,
+      retryAfterSeconds: serviceError.retryAfterSeconds,
+      sourceLimit: serviceError.sourceLimit,
+    }),
+  };
 };
 
+const toWebScanError = (error: unknown): WebScanError =>
+  toWebScanFailure(error).publicError;
+
+export type { WebScanFailure, WebScanFailureDiagnostics };
 export {
   asWebScanServiceError,
   mapHostedScanError,
   toWebScanError,
+  toWebScanFailure,
   WebScanServiceError,
 };

@@ -1,7 +1,8 @@
-import { HostedScanError } from "./errors";
+import { HostedScanError, type HostedScanErrorDiagnostics } from "./errors";
 import type { SourceLimitDetail } from "./source-limits";
 
 interface ReadBytesOptions {
+  diagnostics?: HostedScanErrorDiagnostics;
   emptyCode?: string;
   emptyMessage?: string;
   emptyRetryable?: boolean;
@@ -9,6 +10,7 @@ interface ReadBytesOptions {
   maxBytes: number;
   signal?: AbortSignal;
   tooLargeCode: string;
+  tooLargeDiagnostics?: HostedScanErrorDiagnostics;
   tooLargeMessage: string;
   tooLargeRetryable?: boolean;
   tooLargeSourceLimit?: Pick<SourceLimitDetail, "kind" | "unit">;
@@ -18,6 +20,7 @@ interface ReadBytesOptions {
 const createEmptyBodyError = (options: ReadBytesOptions): HostedScanError =>
   new HostedScanError(options.emptyMessage ?? "A request body is required.", {
     code: options.emptyCode ?? "EMPTY_BODY",
+    diagnostics: options.diagnostics,
     retryable: options.emptyRetryable,
     status: options.emptyStatus ?? 400,
   });
@@ -28,6 +31,14 @@ const createTooLargeError = (
 ): HostedScanError =>
   new HostedScanError(options.tooLargeMessage, {
     code: options.tooLargeCode,
+    diagnostics:
+      (options.tooLargeDiagnostics ?? options.diagnostics)
+        ? {
+            ...(options.tooLargeDiagnostics ?? options.diagnostics),
+            limitBytes: options.maxBytes,
+            observedBytes,
+          }
+        : undefined,
     retryable: options.tooLargeRetryable,
     sourceLimit: options.tooLargeSourceLimit
       ? {

@@ -9,7 +9,11 @@ import {
   GitHubScanRequestSchema,
   type MaterializedScanSource,
 } from "./contracts";
-import { HostedScanError } from "./errors";
+import {
+  HostedScanError,
+  type HostedScanErrorDiagnostics,
+  type HostedScanErrorStage,
+} from "./errors";
 import {
   materializeSparseGitHubSource,
   planSparseGitHubSource,
@@ -35,6 +39,7 @@ import {
 } from "./request-bytes";
 
 const MAX_GITHUB_REQUEST_BYTES = 16 * 1024;
+const MAX_GITHUB_COMMIT_SHA_BYTES = 64;
 const MAX_GITHUB_METADATA_BYTES = 64 * 1024;
 const MAX_GITHUB_TREE_BYTES = 8 * 1024 * 1024;
 const MAX_GITHUB_TREE_REQUESTS = 100;
@@ -42,12 +47,12 @@ const GITHUB_SOURCE_TIMEOUT_MS = 12_000;
 const GITHUB_API_ORIGIN = "https://api.github.com";
 const GITHUB_ARCHIVE_HOSTS = new Set(["codeload.github.com"]);
 const GITHUB_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const GITHUB_COMMIT_SHA_MEDIA_TYPE = "application/vnd.github.sha";
 const COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
+const UPSTREAM_REQUEST_ID_PATTERN = /^[A-Za-z0-9:._-]+$/;
+const MAX_UPSTREAM_REQUEST_ID_LENGTH = 128;
 
 const GitHubRepositoryMetadataSchema = z.object({ private: z.boolean() });
-const GitHubCommitSchema = z.object({
-  sha: z.string().regex(COMMIT_SHA_PATTERN),
-});
 
 type FetchImplementation = typeof fetch;
 type GitHubScanRequest = z.infer<typeof GitHubScanRequestSchema>;
@@ -81,9 +86,43 @@ const getGitHubHeaders = (
   return headers;
 };
 
+const getResponseContentLength = (response: Response): number | undefined => {
+  const contentLength = response.headers.get("content-length");
+  if (!contentLength) {
+    return;
+  }
+
+  const parsedLength = Number.parseInt(contentLength, 10);
+  return Number.isSafeInteger(parsedLength) && parsedLength >= 0
+    ? parsedLength
+    : undefined;
+};
+
+const getGitHubResponseDiagnostics = (
+  response: Response,
+  stage: HostedScanErrorStage
+): HostedScanErrorDiagnostics => {
+  const rawRequestId = response.headers.get("x-github-request-id")?.trim();
+  const upstreamRequestId =
+    rawRequestId &&
+    rawRequestId.length <= MAX_UPSTREAM_REQUEST_ID_LENGTH &&
+    UPSTREAM_REQUEST_ID_PATTERN.test(rawRequestId)
+      ? rawRequestId
+      : undefined;
+  const responseBytes = getResponseContentLength(response);
+
+  return {
+    ...(responseBytes === undefined ? {} : { observedBytes: responseBytes }),
+    stage,
+    ...(upstreamRequestId ? { upstreamRequestId } : {}),
+    upstreamStatus: response.status,
+  };
+};
+
 const throwGitHubRequestError = (
   error: unknown,
-  sourceSignal: AbortSignal
+  sourceSignal: AbortSignal,
+  stage?: HostedScanErrorStage
 ): never => {
   if (sourceSignal.aborted && sourceSignal.reason instanceof HostedScanError) {
     throw sourceSignal.reason;
@@ -101,6 +140,10 @@ const throwGitHubRequestError = (
     {
       cause: error,
       code: isTimeout ? "GITHUB_TIMEOUT" : "GITHUB_UNAVAILABLE",
+      diagnostics: {
+        kind: "upstream_request_failed",
+        ...(stage ? { stage } : {}),
+      },
       retryable: true,
       status: isTimeout ? 504 : 502,
     }
@@ -131,7 +174,8 @@ const fetchGitHub = async (
   url: string,
   init: RequestInit,
   fetchImplementation: FetchImplementation,
-  sourceSignal: AbortSignal
+  sourceSignal: AbortSignal,
+  stage: HostedScanErrorStage
 ): Promise<Response> => {
   try {
     return await fetchImplementation(url, {
@@ -139,7 +183,7 @@ const fetchGitHub = async (
       signal: sourceSignal,
     });
   } catch (error) {
-    return throwGitHubRequestError(error, sourceSignal);
+    return throwGitHubRequestError(error, sourceSignal, stage);
   }
 };
 
@@ -158,17 +202,23 @@ const readGitHubResponseBytes = async (
       throw error;
     }
 
-    return throwGitHubRequestError(error, sourceSignal);
+    return throwGitHubRequestError(
+      error,
+      sourceSignal,
+      options.diagnostics?.stage
+    );
   }
 };
 
 const throwGitHubResponseError = (
   response: Response,
-  notFoundMessage: string
+  notFoundMessage: string,
+  stage: HostedScanErrorStage
 ): never => {
   if (response.status === 404) {
     throw new HostedScanError(notFoundMessage, {
       code: "GITHUB_SOURCE_NOT_FOUND",
+      diagnostics: getGitHubResponseDiagnostics(response, stage),
       status: 422,
     });
   }
@@ -178,6 +228,7 @@ const throwGitHubResponseError = (
       "GitHub temporarily refused the source request.",
       {
         code: "GITHUB_RATE_LIMITED",
+        diagnostics: getGitHubResponseDiagnostics(response, stage),
         retryable: true,
         status: 502,
       }
@@ -186,6 +237,7 @@ const throwGitHubResponseError = (
 
   throw new HostedScanError("GitHub returned an unexpected response.", {
     code: "GITHUB_UPSTREAM_ERROR",
+    diagnostics: getGitHubResponseDiagnostics(response, stage),
     retryable: response.status >= 500,
     status: 502,
   });
@@ -195,23 +247,30 @@ const readGitHubJson = async (
   response: Response,
   notFoundMessage: string,
   sourceSignal: AbortSignal,
+  stage: HostedScanErrorStage,
   maxBytes = MAX_GITHUB_METADATA_BYTES
 ): Promise<unknown> => {
   if (!response.ok) {
-    throwGitHubResponseError(response, notFoundMessage);
+    throwGitHubResponseError(response, notFoundMessage, stage);
   }
 
+  const diagnostics = getGitHubResponseDiagnostics(response, stage);
   const responseBuffer = await readGitHubResponseBytes(
     response,
     {
+      diagnostics,
       emptyCode: "GITHUB_INVALID_RESPONSE",
       emptyMessage: "GitHub returned an empty metadata response.",
       emptyRetryable: true,
       emptyStatus: 502,
       maxBytes,
       tooLargeCode: "GITHUB_INVALID_RESPONSE",
+      tooLargeDiagnostics: {
+        ...diagnostics,
+        kind: "upstream_response_too_large",
+      },
       tooLargeMessage: "GitHub returned an oversized metadata response.",
-      tooLargeRetryable: true,
+      tooLargeRetryable: false,
       tooLargeStatus: 502,
     },
     sourceSignal
@@ -222,6 +281,10 @@ const readGitHubJson = async (
     throw new HostedScanError("GitHub returned invalid metadata.", {
       cause: error,
       code: "GITHUB_INVALID_RESPONSE",
+      diagnostics: {
+        ...diagnostics,
+        observedBytes: responseBuffer.byteLength,
+      },
       retryable: true,
       status: 502,
     });
@@ -237,19 +300,25 @@ const assertPublicGitHubRepository = async (
     `${GITHUB_API_ORIGIN}/repos/${repository}`,
     { headers: getGitHubHeaders(), redirect: "error" },
     fetchImplementation,
-    sourceSignal
+    sourceSignal,
+    "repository_metadata"
   );
   const metadata = GitHubRepositoryMetadataSchema.safeParse(
     await readGitHubJson(
       response,
       "The public GitHub repository was not found.",
-      sourceSignal
+      sourceSignal,
+      "repository_metadata"
     )
   );
   if (!metadata.success) {
     throw new HostedScanError("GitHub returned invalid repository metadata.", {
       cause: metadata.error,
       code: "GITHUB_INVALID_RESPONSE",
+      diagnostics: getGitHubResponseDiagnostics(
+        response,
+        "repository_metadata"
+      ),
       retryable: true,
       status: 502,
     });
@@ -274,27 +343,60 @@ const resolveGitHubRevision = async (
 ): Promise<string> => {
   const response = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/commits/${encodeURIComponent(revision)}`,
-    { headers: getGitHubHeaders(), redirect: "error" },
+    {
+      headers: getGitHubHeaders(true, GITHUB_COMMIT_SHA_MEDIA_TYPE),
+      redirect: "error",
+    },
     fetchImplementation,
-    sourceSignal
+    sourceSignal,
+    "resolve_revision"
   );
-  const commit = GitHubCommitSchema.safeParse(
-    await readGitHubJson(
+  if (!response.ok) {
+    throwGitHubResponseError(
       response,
       "The requested GitHub revision was not found.",
-      sourceSignal
-    )
+      "resolve_revision"
+    );
+  }
+
+  const diagnostics = getGitHubResponseDiagnostics(
+    response,
+    "resolve_revision"
   );
-  if (!commit.success) {
+  const commitShaBuffer = await readGitHubResponseBytes(
+    response,
+    {
+      diagnostics,
+      emptyCode: "GITHUB_INVALID_RESPONSE",
+      emptyMessage: "GitHub returned an empty commit revision.",
+      emptyRetryable: true,
+      emptyStatus: 502,
+      maxBytes: MAX_GITHUB_COMMIT_SHA_BYTES,
+      tooLargeCode: "GITHUB_INVALID_RESPONSE",
+      tooLargeDiagnostics: {
+        ...diagnostics,
+        kind: "upstream_response_too_large",
+      },
+      tooLargeMessage: "GitHub returned an oversized commit revision.",
+      tooLargeRetryable: false,
+      tooLargeStatus: 502,
+    },
+    sourceSignal
+  );
+  const commitSha = commitShaBuffer.toString("utf8").trim();
+  if (!COMMIT_SHA_PATTERN.test(commitSha)) {
     throw new HostedScanError("GitHub returned invalid commit metadata.", {
-      cause: commit.error,
       code: "GITHUB_INVALID_RESPONSE",
+      diagnostics: {
+        ...diagnostics,
+        observedBytes: commitShaBuffer.byteLength,
+      },
       retryable: true,
       status: 502,
     });
   }
 
-  return commit.data.sha;
+  return commitSha;
 };
 
 const createGitHubSourceSignal = (
@@ -372,13 +474,15 @@ const fetchGitHubTreePage = async (
     `${GITHUB_API_ORIGIN}/repos/${repository}/git/trees/${treeSha}${recursiveQuery}`,
     { headers: getGitHubHeaders(), redirect: "error" },
     fetchImplementation,
-    sourceSignal
+    sourceSignal,
+    "repository_tree"
   );
   const parsedTree = GitHubTreeResponseSchema.safeParse(
     await readGitHubJson(
       response,
       "The GitHub source tree was not found.",
       sourceSignal,
+      "repository_tree",
       MAX_GITHUB_TREE_BYTES
     )
   );
@@ -386,6 +490,7 @@ const fetchGitHubTreePage = async (
     throw new HostedScanError("GitHub returned an invalid source tree.", {
       cause: parsedTree.error,
       code: "GITHUB_INVALID_RESPONSE",
+      diagnostics: getGitHubResponseDiagnostics(response, "repository_tree"),
       retryable: true,
       status: 502,
     });
@@ -484,11 +589,16 @@ const loadGitHubRepositoryTree = async (
 const getAllowedRedirectUrl = (response: Response): string => {
   const location = response.headers.get("location");
   if (!GITHUB_REDIRECT_STATUSES.has(response.status)) {
-    throwGitHubResponseError(response, "The GitHub archive was not found.");
+    throwGitHubResponseError(
+      response,
+      "The GitHub archive was not found.",
+      "archive_redirect"
+    );
   }
   if (!location) {
     throw new HostedScanError("GitHub returned an invalid archive redirect.", {
       code: "GITHUB_UNSAFE_REDIRECT",
+      diagnostics: getGitHubResponseDiagnostics(response, "archive_redirect"),
       status: 502,
     });
   }
@@ -500,6 +610,7 @@ const getAllowedRedirectUrl = (response: Response): string => {
     throw new HostedScanError("GitHub returned an invalid archive redirect.", {
       cause: error,
       code: "GITHUB_UNSAFE_REDIRECT",
+      diagnostics: getGitHubResponseDiagnostics(response, "archive_redirect"),
       status: 502,
     });
   }
@@ -513,6 +624,7 @@ const getAllowedRedirectUrl = (response: Response): string => {
   ) {
     throw new HostedScanError("GitHub returned an unsafe archive redirect.", {
       code: "GITHUB_UNSAFE_REDIRECT",
+      diagnostics: getGitHubResponseDiagnostics(response, "archive_redirect"),
       status: 502,
     });
   }
@@ -528,9 +640,10 @@ const fetchGitHubArchiveResponse = async (
 ): Promise<Response> => {
   const initialResponse = await fetchGitHub(
     `${GITHUB_API_ORIGIN}/repos/${repository}/tarball/${commitSha}`,
-    { headers: getGitHubHeaders(false), redirect: "manual" },
+    { headers: getGitHubHeaders(), redirect: "manual" },
     fetchImplementation,
-    sourceSignal
+    sourceSignal,
+    "archive_redirect"
   );
   const archiveResponse = initialResponse.ok
     ? initialResponse
@@ -538,13 +651,15 @@ const fetchGitHubArchiveResponse = async (
         getAllowedRedirectUrl(initialResponse),
         { headers: getGitHubHeaders(false), redirect: "error" },
         fetchImplementation,
-        sourceSignal
+        sourceSignal,
+        "archive_download"
       );
 
   if (!archiveResponse.ok) {
     throwGitHubResponseError(
       archiveResponse,
-      "The GitHub archive was not found."
+      "The GitHub archive was not found.",
+      "archive_download"
     );
   }
 
@@ -567,6 +682,10 @@ const downloadGitHubArchive = async (
   return readGitHubResponseBytes(
     archiveResponse,
     {
+      diagnostics: getGitHubResponseDiagnostics(
+        archiveResponse,
+        "archive_download"
+      ),
       emptyCode: "GITHUB_INVALID_RESPONSE",
       emptyMessage: "GitHub returned an empty source archive.",
       emptyRetryable: true,
@@ -581,18 +700,6 @@ const downloadGitHubArchive = async (
     },
     sourceSignal
   );
-};
-
-const getResponseContentLength = (response: Response): number | undefined => {
-  const contentLength = response.headers.get("content-length");
-  if (!contentLength) {
-    return;
-  }
-
-  const parsedLength = Number.parseInt(contentLength, 10);
-  return Number.isSafeInteger(parsedLength) && parsedLength >= 0
-    ? parsedLength
-    : undefined;
 };
 
 const downloadGitHubBlob = async (
@@ -612,14 +719,20 @@ const downloadGitHubBlob = async (
       redirect: "error",
     },
     fetchImplementation,
-    sourceSignal
+    sourceSignal,
+    "source_blob"
   );
   if (!response.ok) {
-    throwGitHubResponseError(response, "A GitHub source blob was not found.");
+    throwGitHubResponseError(
+      response,
+      "A GitHub source blob was not found.",
+      "source_blob"
+    );
   }
   return readGitHubResponseBytes(
     response,
     {
+      diagnostics: getGitHubResponseDiagnostics(response, "source_blob"),
       maxBytes,
       tooLargeCode: "GITHUB_INVALID_RESPONSE",
       tooLargeMessage: "GitHub returned an oversized source blob.",

@@ -580,7 +580,7 @@ describe("POST /v1/scans", () => {
         return Response.json({ private: false });
       }
       if (url === "https://api.github.com/repos/acme/widget/commits/main") {
-        return Response.json({ sha: IMMUTABLE_COMMIT_SHA });
+        return new Response(IMMUTABLE_COMMIT_SHA);
       }
       if (
         url ===
@@ -727,13 +727,21 @@ describe("POST /v1/scans", () => {
           return Response.json({ private: false });
         }
         if (url === "https://api.github.com/repos/acme/widget/commits/main") {
-          return Response.json({ sha: IMMUTABLE_COMMIT_SHA });
+          expect(new Headers(init?.headers).get("accept")).toBe(
+            "application/vnd.github.sha"
+          );
+          expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer server-side-github-token"
+          );
+          return new Response(IMMUTABLE_COMMIT_SHA);
         }
         if (
           url ===
           `https://api.github.com/repos/acme/widget/tarball/${IMMUTABLE_COMMIT_SHA}`
         ) {
-          expect(new Headers(init?.headers).has("authorization")).toBe(false);
+          expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer server-side-github-token"
+          );
           return new Response(null, {
             headers: { location: archiveUrl },
             status: 302,
@@ -778,7 +786,7 @@ describe("POST /v1/scans", () => {
         return Response.json({ private: false });
       }
       if (url === "https://api.github.com/repos/acme/widget/commits/main") {
-        return Response.json({ sha: IMMUTABLE_COMMIT_SHA });
+        return new Response(IMMUTABLE_COMMIT_SHA);
       }
       if (
         url ===

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { PortableSubdirectorySchema } from "@/lib/shadscan-api/contracts";
 import { WebScanErrorStateSchema } from "@/lib/shadscan-web/contracts";
-import { toWebScanError } from "@/lib/shadscan-web/errors";
+import { toWebScanFailure } from "@/lib/shadscan-web/errors";
 import { writeWebScanLog } from "@/lib/shadscan-web/log";
 import { executeWebRepositoryScan } from "@/lib/shadscan-web/run-repository-scan";
 import {
@@ -102,13 +102,21 @@ const scanGitHubRepository = async (
     });
     return result;
   } catch (error) {
-    const publicError = toWebScanError(error);
+    const { diagnostics, publicError } = toWebScanFailure(error);
     writeWebScanLog({
       durationMs: Date.now() - startedAt,
       errorCode: publicError.code,
       event: "web_scan",
+      failureKind: diagnostics.kind,
+      failureStage: diagnostics.stage,
+      internalErrorCode: diagnostics.internalErrorCode,
+      internalStatus: diagnostics.internalStatus,
+      limitBytes: diagnostics.limitBytes,
+      observedBytes: diagnostics.observedBytes,
       outcome: "failed",
       requestId,
+      upstreamRequestId: diagnostics.upstreamRequestId,
+      upstreamStatus: diagnostics.upstreamStatus,
     });
     return WebScanErrorStateSchema.parse({
       error: publicError,

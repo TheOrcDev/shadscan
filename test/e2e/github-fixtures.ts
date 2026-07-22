@@ -142,7 +142,7 @@ const createGitHubFetchHandler = ({
     }
 
     if (request.url === revisionUrl) {
-      return Response.json({ sha: COMMIT_SHA });
+      return new Response(COMMIT_SHA);
     }
 
     if (request.url === treeUrl) {

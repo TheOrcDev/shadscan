@@ -65,7 +65,7 @@ describe("executeWebRepositoryScan", () => {
         return Promise.resolve(Response.json({ private: false }));
       }
       if (url === "https://api.github.com/repos/acme/widget/commits/HEAD") {
-        return Promise.resolve(Response.json({ sha: COMMIT_SHA }));
+        return Promise.resolve(new Response(COMMIT_SHA));
       }
       if (
         url ===

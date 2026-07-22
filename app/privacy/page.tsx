@@ -104,7 +104,8 @@ export default function PrivacyPage() {
             random request identifier, scan outcome, duration, resolved
             revision, score, actionable count, and Shadscan engine and ruleset
             versions. Failed scans are logged without the submitted repository
-            name.
+            name, but may include bounded byte counts, the failed processing
+            stage, internal status codes, and GitHub&apos;s request identifier.
           </p>
           <p>
             When report caching is enabled, Neon may store a successful report,

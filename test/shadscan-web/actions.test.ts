@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HostedScanError } from "../../lib/shadscan-api/errors";
 
 const mocks = vi.hoisted(() => ({
   executeScan: vi.fn(),
@@ -133,6 +134,54 @@ describe("scanGitHubRepository", () => {
         repository: "acme/monorepo",
       })
     );
+  });
+
+  it("logs allowlisted upstream diagnostics without returning them", async () => {
+    mocks.executeScan.mockRejectedValue(
+      new HostedScanError("Internal upstream detail", {
+        code: "GITHUB_INVALID_RESPONSE",
+        diagnostics: {
+          kind: "upstream_response_too_large",
+          limitBytes: 65_536,
+          observedBytes: 77_750,
+          stage: "resolve_revision",
+          upstreamRequestId: "ABCD:1234:EFGH:5678",
+          upstreamStatus: 200,
+        },
+        status: 502,
+      })
+    );
+    const formData = new FormData();
+    formData.set("repository", "acme/widget");
+
+    const result = await scanGitHubRepository({ status: "idle" }, formData);
+
+    expect(result).toEqual({
+      error: {
+        code: "SOURCE_UNSUPPORTED",
+        message:
+          "GitHub returned source metadata the web scanner could not safely process. Run shadscan locally instead.",
+        retryable: false,
+      },
+      projectPath: undefined,
+      repositoryInput: "acme/widget",
+      status: "error",
+    });
+    expect(mocks.writeLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: "SOURCE_UNSUPPORTED",
+        failureKind: "upstream_response_too_large",
+        failureStage: "resolve_revision",
+        internalErrorCode: "GITHUB_INVALID_RESPONSE",
+        internalStatus: 502,
+        limitBytes: 65_536,
+        observedBytes: 77_750,
+        outcome: "failed",
+        upstreamRequestId: "ABCD:1234:EFGH:5678",
+        upstreamStatus: 200,
+      })
+    );
+    expect(JSON.stringify(result)).not.toContain("Internal upstream detail");
   });
 
   it("returns a queued scan without logging it as complete", async () => {
