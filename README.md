@@ -52,6 +52,10 @@ bunx @shadscan/cli@next
 
 `next` is the current release-candidate channel.
 
+Every interactive scan ends with a short menu: copy the agent handoff to your
+clipboard, print it, launch an installed coding agent, or add a pre-commit
+score gate. Press Enter to keep just the score.
+
 ## What You Get
 
 ```text

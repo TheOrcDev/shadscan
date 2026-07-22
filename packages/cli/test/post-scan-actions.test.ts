@@ -65,6 +65,7 @@ describe("post-scan actions", () => {
   it("puts Done last and uses it for an empty answer", () => {
     const options = createPostScanMenu({
       agents: [CODEX_AGENT],
+      includeHandoff: false,
       includePreCommit: true,
     });
 
@@ -83,12 +84,58 @@ describe("post-scan actions", () => {
     expect(parseMenuSelection({ answer: "99", options })).toBeNull();
   });
 
+  it("leads with the handoff options when a handoff exists", () => {
+    const options = createPostScanMenu({
+      agents: [CODEX_AGENT],
+      includeHandoff: true,
+      includePreCommit: true,
+    });
+
+    expect(options.map((option) => option.action.kind)).toEqual([
+      "copy-handoff",
+      "print-handoff",
+      "agent",
+      "pre-commit",
+      "done",
+    ]);
+    expect(options[0]?.label).toBe("Copy the agent handoff");
+    expect(options[0]?.description).toContain("clipboard");
+    expect(parseMenuSelection({ answer: "1", options })).toEqual({
+      kind: "copy-handoff",
+    });
+    expect(parseMenuSelection({ answer: "2", options })).toEqual({
+      kind: "print-handoff",
+    });
+    expect(parseMenuSelection({ answer: "", options })).toEqual({
+      kind: "done",
+    });
+  });
+
+  it("offers a handoff-only menu when no agents or hooks are available", async () => {
+    const write = vi.fn<(message: string) => void>();
+
+    const action = await promptPostScanAction({
+      agents: [],
+      ask: async () => "1",
+      includeHandoff: true,
+      includePreCommit: false,
+      write,
+    });
+
+    expect(action).toEqual({ kind: "copy-handoff" });
+    expect(write).toHaveBeenCalledWith(expect.stringContaining("What next?"));
+    expect(write).not.toHaveBeenCalledWith(
+      expect.stringContaining("External agents may read and edit files")
+    );
+  });
+
   it("does not show an external-agent warning for a hook-only menu", async () => {
     const write = vi.fn<(message: string) => void>();
 
     const action = await promptPostScanAction({
       agents: [],
       ask: async () => "",
+      includeHandoff: false,
       includePreCommit: true,
       write,
     });
@@ -110,6 +157,7 @@ describe("post-scan actions", () => {
     const action = await promptPostScanAction({
       agents: [CODEX_AGENT],
       ask,
+      includeHandoff: false,
       includePreCommit: false,
       write,
     });

@@ -406,12 +406,14 @@ export default function DocsPage() {
         <section id="pre-commit">
           <h2>Add a pre-commit score gate</h2>
           <p>
-            A local interactive scan checks whether an active blocking Shadscan
-            hook already exists. If it does not, the post-scan menu offers a
-            score gate alongside any installed agents. Press Enter to choose{" "}
-            <code>Done</code>, or use <code>--no-interactive</code> to suppress
-            the menu entirely. Category-scoped scans do not offer a hook because
-            their score cannot establish a full-project floor.
+            A local interactive scan ends with a post-scan menu: copy the agent
+            handoff to your clipboard (it prints too), print it without copying,
+            launch an installed agent, or add a score gate when no active
+            blocking Shadscan hook protects the project yet. Press Enter to
+            choose <code>Done</code> and keep just the score, or use{" "}
+            <code>--no-interactive</code> to suppress the menu entirely.
+            Category-scoped scans do not offer a hook because their score cannot
+            establish a full-project floor.
           </p>
           <h3>Preview the exact hook plan</h3>
           <div className="not-typeset mt-4">

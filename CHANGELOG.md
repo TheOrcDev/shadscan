@@ -6,6 +6,16 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- End every interactive scan with a post-scan call to action: copy the agent
+  handoff to the clipboard (printed as well), print it without copying,
+  launch an installed agent, or add a pre-commit score gate — with Enter
+  keeping just the score. Clipboard support uses platform utilities with an
+  OSC 52 terminal fallback and degrades to printing when neither is
+  available. Non-interactive, CI, `--json`, `--prompt`, and
+  `--no-interactive` behavior is unchanged.
+
 ## 0.1.0-rc.5 - 2026-07-22
 
 ### Added

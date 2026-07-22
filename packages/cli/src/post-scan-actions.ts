@@ -23,8 +23,10 @@ interface ResolveInteractiveModeOptions {
 
 type PostScanAction =
   | { agentId: AgentId; kind: "agent" }
+  | { kind: "copy-handoff" }
   | { kind: "done" }
-  | { kind: "pre-commit" };
+  | { kind: "pre-commit" }
+  | { kind: "print-handoff" };
 
 interface PostScanMenuOption {
   action: PostScanAction;
@@ -34,6 +36,7 @@ interface PostScanMenuOption {
 
 interface CreatePostScanMenuOptions {
   agents: AgentCliCandidate[];
+  includeHandoff: boolean;
   includePreCommit: boolean;
 }
 
@@ -70,15 +73,35 @@ const resolveInteractiveMode = ({
 
 const createPostScanMenu = ({
   agents,
+  includeHandoff,
   includePreCommit,
 }: CreatePostScanMenuOptions): PostScanMenuOption[] => {
-  const options = agents.map(
-    (agent): PostScanMenuOption => ({
+  const options: PostScanMenuOption[] = [];
+
+  if (includeHandoff) {
+    options.push(
+      {
+        action: { kind: "copy-handoff" },
+        description:
+          "Copy the paste-ready remediation plan to the clipboard and print it.",
+        label: "Copy the agent handoff",
+      },
+      {
+        action: { kind: "print-handoff" },
+        description:
+          "Print the paste-ready remediation plan without copying it.",
+        label: "Print the agent handoff",
+      }
+    );
+  }
+
+  for (const agent of agents) {
+    options.push({
       action: { agentId: agent.agentId, kind: "agent" },
       description: "Validate and launch the selected provider from PATH.",
       label: `Fix with ${agent.label}`,
-    })
-  );
+    });
+  }
 
   if (includePreCommit) {
     options.push({
@@ -143,11 +166,16 @@ const parseMenuSelection = ({
 const promptPostScanAction = async ({
   agents,
   ask,
+  includeHandoff,
   includePreCommit,
   input = process.stdin,
   write = (message) => process.stderr.write(message),
 }: PromptPostScanActionOptions): Promise<PostScanAction> => {
-  const options = createPostScanMenu({ agents, includePreCommit });
+  const options = createPostScanMenu({
+    agents,
+    includeHandoff,
+    includePreCommit,
+  });
   write(renderPostScanMenu(options));
 
   if (ask) {

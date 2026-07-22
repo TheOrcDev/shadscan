@@ -14,6 +14,7 @@ import {
   parseAgentId,
 } from "./agent-cli";
 import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
+import { copyToClipboard } from "./clipboard";
 import {
   discoverProject,
   type ProjectDiscovery,
@@ -333,6 +334,7 @@ const runExplicitApply = async ({
 
     const action = await promptPostScanAction({
       agents,
+      includeHandoff: false,
       includePreCommit: false,
     });
     if (action.kind !== "agent") {
@@ -362,13 +364,13 @@ const runDefaultPostScanAction = async ({
   const agentTrustRoot = await resolveAgentTrustRoot(
     project.packageManagerRoot
   );
-  const availableAgents =
-    report.agentHandoff.workItems.length > 0
-      ? await findAgentCliCandidates({
-          cwd: project.packageManagerRoot,
-          projectRoot: agentTrustRoot,
-        })
-      : [];
+  const includeHandoff = report.agentHandoff.workItems.length > 0;
+  const availableAgents = includeHandoff
+    ? await findAgentCliCandidates({
+        cwd: project.packageManagerRoot,
+        projectRoot: agentTrustRoot,
+      })
+    : [];
   const detection = canEstablishPreCommitFloor({
     category,
     score: report.score,
@@ -383,14 +385,32 @@ const runDefaultPostScanAction = async ({
       detection.floor === null ||
       detection.floor < report.score);
 
-  if (availableAgents.length === 0 && !includePreCommit) {
+  if (!includeHandoff && availableAgents.length === 0 && !includePreCommit) {
     return;
   }
 
   const action = await promptPostScanAction({
     agents: availableAgents,
+    includeHandoff,
     includePreCommit,
   });
+
+  if (action.kind === "copy-handoff" || action.kind === "print-handoff") {
+    const handoffMarkdown = renderAgentPrompt(stripRoasts(report));
+    process.stdout.write(handoffMarkdown);
+
+    if (action.kind === "copy-handoff") {
+      const clipboard = await copyToClipboard(handoffMarkdown, {
+        osc52Write: (sequence) => process.stderr.write(sequence),
+      });
+      process.stderr.write(
+        clipboard.copied
+          ? "\nThe agent handoff is on your clipboard and printed above.\n"
+          : "\nClipboard unavailable; the agent handoff is printed above.\n"
+      );
+    }
+    return;
+  }
 
   if (action.kind === "agent") {
     await runAgent({ agentId: action.agentId, project, report });
