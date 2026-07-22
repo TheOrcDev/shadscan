@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const SCANNER_TRACE_EXCLUDES = [
+  "./.claude/**/*",
   "./.git",
   "./.git/**/*",
   "./app/**/*",
