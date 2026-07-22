@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const SITE_ORIGIN = "http://localhost:3210";
 const INDEX_FOLLOW_PATTERN = /index, follow/;
+const NOREFERRER_REL_PATTERN = /noreferrer/;
 
 const PAGE_METADATA = [
   {
@@ -169,9 +170,13 @@ test("publishes app identity and structured data", async ({ page }) => {
   const githubLink = page.locator(
     'a[href="https://github.com/TheOrcDev/shadscan"]'
   );
-  await expect(githubLink).toHaveCount(1);
-  await expect(githubLink).toHaveAttribute("target", "_blank");
-  await expect(githubLink).toHaveAttribute("rel", "noreferrer");
+  // Hero CTA + header GitHub stars both point at the source repository.
+  await expect(githubLink).toHaveCount(2);
+  await expect(githubLink.first()).toHaveAttribute("target", "_blank");
+  await expect(githubLink.first()).toHaveAttribute(
+    "rel",
+    NOREFERRER_REL_PATTERN
+  );
 });
 
 test("serves a complete web app manifest and install icons", async ({

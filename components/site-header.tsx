@@ -19,7 +19,7 @@ interface SiteHeaderProps {
   githubRepository: {
     name: string;
     stargazersCount: number;
-  } | null;
+  };
 }
 
 const isActivePath = (pathname: string | null, href: string): boolean =>
@@ -63,20 +63,14 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <CommandMenu
-            repositoryUrl={
-              githubRepository
-                ? `https://github.com/${githubRepository.name}`
-                : undefined
-            }
+            repositoryUrl={`https://github.com/${githubRepository.name}`}
           />
-          {githubRepository ? (
-            <div className="hidden sm:block">
-              <GitHubStars
-                repo={githubRepository.name}
-                stargazersCount={githubRepository.stargazersCount}
-              />
-            </div>
-          ) : null}
+          <div className="hidden sm:block">
+            <GitHubStars
+              repo={githubRepository.name}
+              stargazersCount={githubRepository.stargazersCount}
+            />
+          </div>
           <ModeSwitcher />
         </div>
       </div>

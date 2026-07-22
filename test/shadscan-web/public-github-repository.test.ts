@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  fetchGitHubStargazerCount,
   fetchPublicGitHubRepository,
   getConfiguredGitHubRepository,
+  SOURCE_CODE_GITHUB_REPOSITORY,
 } from "@/lib/public-github-repository";
 
 describe("public GitHub repository configuration", () => {
@@ -80,5 +82,29 @@ describe("public GitHub repository lookup", () => {
         Promise.reject(new Error("offline"))
       )
     ).resolves.toBeNull();
+  });
+});
+
+describe("GitHub stargazer count", () => {
+  it("returns the stargazer count for a reachable repository", async () => {
+    const fetchImplementation = vi.fn(() =>
+      Promise.resolve(Response.json({ stargazers_count: 128 }))
+    );
+
+    await expect(
+      fetchGitHubStargazerCount("TheOrcDev/shadscan", fetchImplementation)
+    ).resolves.toBe(128);
+  });
+
+  it("falls back to zero when GitHub cannot be reached", async () => {
+    await expect(
+      fetchGitHubStargazerCount("TheOrcDev/shadscan", () =>
+        Promise.reject(new Error("offline"))
+      )
+    ).resolves.toBe(0);
+  });
+
+  it("exports the canonical source repository for header fallbacks", () => {
+    expect(SOURCE_CODE_GITHUB_REPOSITORY).toBe("TheOrcDev/shadscan");
   });
 });

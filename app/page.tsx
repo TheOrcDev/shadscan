@@ -5,12 +5,16 @@ import { Hero } from "@/components/hero";
 import { SiteStructuredData } from "@/components/site-structured-data";
 import { Badge } from "@/components/ui/badge";
 import { getChangelogReleases } from "@/lib/changelog";
-import { getConfiguredGitHubRepository } from "@/lib/public-github-repository";
+import {
+  getConfiguredGitHubRepository,
+  SOURCE_CODE_GITHUB_REPOSITORY,
+} from "@/lib/public-github-repository";
 
 export default async function Page() {
   // Falls back to the canonical repo until SHADSCAN_PUBLIC_GITHUB_REPOSITORY is
   // configured (the repo goes public on release).
-  const repository = getConfiguredGitHubRepository() ?? "TheOrcDev/shadscan";
+  const repository =
+    getConfiguredGitHubRepository() ?? SOURCE_CODE_GITHUB_REPOSITORY;
   const releases = await getChangelogReleases();
   const latestRelease = releases[0];
 
@@ -29,7 +33,11 @@ export default async function Page() {
           description="shadscan statically analyzes your React shadcn components for accessibility, state, and composition regressions — the same result on every run, built for your terminal and your CI."
           heading="Deterministic UI audits for shadcn apps"
           logo={
-            <Badge asChild variant="outline">
+            <Badge
+              asChild
+              className="h-5 border border-border bg-secondary px-2 text-secondary-foreground hover:bg-secondary/80"
+              variant="secondary"
+            >
               <Link href="/changelog">
                 {latestRelease ? (
                   <>

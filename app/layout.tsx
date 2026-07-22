@@ -7,7 +7,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { getPublicGitHubRepository } from "@/lib/public-github-repository";
+import { getHeaderGitHubRepository } from "@/lib/public-github-repository";
 import {
   createPageMetadata,
   createRobotsMetadata,
@@ -81,7 +81,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const githubRepository = await getPublicGitHubRepository();
+  const githubRepository = await getHeaderGitHubRepository();
 
   return (
     <html
