@@ -12,7 +12,7 @@ export default function Page() {
   return (
     <>
       <SiteStructuredData />
-      <main className="flex-1 bg-background">
+      <main className="flex flex-1 flex-col justify-center bg-background">
         <Hero
           buttons={{
             primary: { text: "Get started", url: "/docs" },
@@ -26,7 +26,7 @@ export default function Page() {
           logo={
             <ShadscanMark
               accessibleTitle="shadscan"
-              className="size-16 text-foreground"
+              className="size-12 text-foreground sm:size-14"
             />
           }
           media={

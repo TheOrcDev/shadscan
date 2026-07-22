@@ -34,15 +34,15 @@ const Hero = ({
   media,
   className,
 }: HeroProps) => (
-  <section className={cn("pt-20 pb-32", className)}>
+  <section className={cn("py-8 sm:py-10", className)}>
     <div className="overflow-hidden">
       <div className="container mx-auto">
         <div className="mx-auto max-w-5xl">
-          <div className="flex flex-col items-center gap-6 text-center">
+          <div className="flex flex-col items-center gap-4 text-center sm:gap-5">
             {logo && (
               <div className="flex items-center justify-center">{logo}</div>
             )}
-            <h1 className="max-w-xl text-pretty font-semibold text-4xl tracking-tight md:text-5xl lg:max-w-3xl lg:text-6xl">
+            <h1 className="max-w-xl text-pretty font-semibold text-4xl tracking-tight md:text-5xl lg:max-w-3xl">
               {heading}
             </h1>
             <p className="mx-auto max-w-3xl text-balance text-muted-foreground text-sm lg:text-base">
@@ -79,7 +79,7 @@ const Hero = ({
               </div>
             )}
           </div>
-          {media && <div className="mt-16 w-full">{media}</div>}
+          {media && <div className="mt-8 w-full sm:mt-10">{media}</div>}
         </div>
       </div>
     </div>
