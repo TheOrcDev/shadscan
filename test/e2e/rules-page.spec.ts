@@ -40,7 +40,7 @@ test("renders every generated rule in its canonical category", async ({
   );
 
   for (const category of ruleCatalog.categories) {
-    const categorySection = page.locator(`section#category-${category.id}`);
+    const categorySection = page.locator(`#category-${category.id}`);
     const categoryRules = ruleCatalog.rules.filter(
       (rule) => rule.category === category.id
     );
@@ -48,7 +48,8 @@ test("renders every generated rule in its canonical category", async ({
     await expect(categorySection).toBeVisible();
     await expect(
       categorySection.getByRole("heading", {
-        level: 2,
+        // Accordion headers render as h3 via Radix Accordion.Header.
+        level: 3,
         name: category.title,
       })
     ).toBeVisible();
