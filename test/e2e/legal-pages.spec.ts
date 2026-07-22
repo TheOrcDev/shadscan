@@ -1,9 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { LEGAL_LAST_UPDATED_ISO, PRIVACY_LAST_UPDATED_ISO } from "@/lib/legal";
 
 const LEGAL_PAGES = [
   {
-    lastUpdated: "2026-07-21",
+    lastUpdated: PRIVACY_LAST_UPDATED_ISO,
     path: "/privacy",
     title: "Privacy Policy",
     visibleStatements: [
@@ -13,7 +14,7 @@ const LEGAL_PAGES = [
     ],
   },
   {
-    lastUpdated: "2026-07-21",
+    lastUpdated: LEGAL_LAST_UPDATED_ISO,
     path: "/terms",
     title: "Terms of Service",
     visibleStatements: ["Scan results are guidance"],

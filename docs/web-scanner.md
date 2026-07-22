@@ -17,7 +17,7 @@ Configure these variables on every production deployment:
 
 | Variable | Requirement |
 | --- | --- |
-| `DATABASE_URL` | Server-only Neon connection for a restricted runtime login that can execute only the bounded rate-limit and optional cache functions. |
+| `DATABASE_URL` | Server-only Neon connection for a restricted runtime login that can execute only the bounded rate-limit, cache, and queued-job functions. |
 | `SHADSCAN_WEB_RATE_LIMIT_SALT` | Secret random value of at least 32 characters. It HMACs client addresses before rate-limit storage and must not be exposed through `NEXT_PUBLIC_*`. |
 
 Optional server-only variables:
@@ -32,6 +32,12 @@ Optional server-only variables:
 | `SHADSCAN_WEB_SOURCE_MODE` | Source acquisition mode: `archive`, `sparse`, or `auto`. Default `archive`. |
 | `SHADSCAN_WEB_CACHE_ENABLED` | Set to `true` to reuse successful reports for the same immutable commit, selected project path, and scanner identity. Default `false`. |
 | `SHADSCAN_WEB_CACHE_TTL_HOURS` | Successful-report cache lifetime. Default `168`; hard ceiling `720`. |
+| `SHADSCAN_WEB_ASYNC_ENABLED` | Set to `true` to queue hard-bounded projects above the synchronous soft thresholds. Default `false`. |
+| `SHADSCAN_WEB_SYNC_RELEVANT_FILES` | Relevant-file soft threshold before async dispatch. Default `1500`; hard ceiling `10000`. |
+| `SHADSCAN_WEB_SYNC_RELEVANT_MIB` | Relevant-source soft threshold before async dispatch. Default `16`; hard ceiling `50`. |
+| `SHADSCAN_WEB_ASYNC_JOB_TTL_HOURS` | Queue message, job, and polling-access lifetime. Default `24`; hard ceiling `168`. |
+| `SHADSCAN_WEB_ASYNC_MAX_ATTEMPTS` | Worker claim limit for retryable failures. Default `5`; hard ceiling `10`. |
+| `SHADSCAN_WEB_ASYNC_MAX_CONCURRENCY` | Global active job-lease limit enforced in Neon. Default `2`; hard ceiling `10`. |
 | `SHADSCAN_PUBLIC_GITHUB_REPOSITORY` | Enables the public source link and star count after an unauthenticated GitHub lookup confirms the configured `owner/repository` is public. Leave unset while the source repository is private. |
 | `SHADSCAN_WEB_RATE_LIMIT_MODE=database` | Exercises the production web limiter outside `NODE_ENV=production`. |
 | `SHADSCAN_RATE_LIMIT_MODE=database` | Exercises the authenticated `/v1/scans` limiter outside production. |
@@ -75,11 +81,32 @@ project path, and scanner contract versions. Source files and archives are
 never cached. Expired windows and cache rows are removed in bounded batches
 during normal traffic.
 
+Async dispatch uses Vercel Queues topic `shadscan-scans`, configured by the
+private `queue/v2beta` trigger in `vercel.json`. Vercel supplies queue OIDC
+credentials automatically in deployments. A queued message contains only a
+schema version, opaque job ID, cache key, public `owner/repository`, immutable
+commit SHA, selected project path, and optional category. It never contains
+source files or an archive. The browser polls with a 256-bit bearer token;
+Neon stores only its SHA-256 hash.
+
 ## Runtime Boundaries
 
 - Each process admits at most two active scans. Additional submissions are not
   queued and return retryable `SCAN_BUSY` with a five-second retry interval;
   rejected submissions do not consume scan quota.
+- When async dispatch is enabled, relevant manifests over either soft threshold
+  bypass synchronous admission and enter the durable queue only after the full
+  scan rate limit succeeds. The CLI hard limits remain 10,000 relevant files
+  and 50 MiB; work beyond either limit is never queued.
+- Queue consumers claim jobs through an atomic Neon lease. Active unexpired
+  leases are globally capped, duplicate delivery checks the result cache before
+  source work, and retryable failures are attempted at most the configured
+  count. The provider uses at-least-once delivery, so every transition is
+  idempotent.
+- The private queue route has a 300-second function duration, a 240-second
+  application deadline, and a five-minute visibility lease that the SDK
+  extends while work is active. The public polling route is non-cacheable and
+  accepts the bearer token only through the `Authorization` header.
 - Source parsing and rule evaluation run in a disposable, resource-limited
   worker with no deployment secrets in its environment. Request aborts
   terminate the worker before temporary source cleanup; worker crashes become
@@ -107,7 +134,9 @@ during normal traffic.
 - Temporary source is removed after success and failure.
 - Source is always temporary. Successful reports are persisted only when
   `SHADSCAN_WEB_CACHE_ENABLED=true`, for at most the configured cache lifetime;
-  failed and partial scans are never cached.
+  failed and partial scans are never cached. Async jobs necessarily persist a
+  successful report in the same cache so polling can return it, even when
+  general synchronous cache reuse is disabled.
 
 `next.config.ts` excludes repository source and development files from the
 scanner route traces while retaining `packages/cli/dist/index.js` and its
@@ -138,3 +167,24 @@ For a production deployment, also confirm that the platform honors the
 30-second function duration, injects the required variables only on the server,
 and does not cache Server Action responses or source archives at the platform
 edge.
+
+## Staged Rollout And Rollback
+
+1. Deploy migrations and exact source-limit reporting with
+   `SHADSCAN_WEB_SOURCE_MODE=archive`, cache disabled, and async disabled.
+2. Set `SHADSCAN_WEB_SOURCE_MODE=auto` and compare archive/sparse report parity
+   for the same immutable commit and project path.
+3. Enable cache reads and writes with `SHADSCAN_WEB_CACHE_ENABLED=true`. Disable
+   the flag to roll back immediately; retained rows do not block synchronous
+   scans and expire without manual deletion.
+4. Enable async only after observed synchronous latency justifies it. Start
+   with the default soft thresholds and concurrency of two. Disabling
+   `SHADSCAN_WEB_ASYNC_ENABLED` stops new dispatches immediately; the private
+   consumer intentionally continues draining already accepted messages.
+5. Lower concurrency or raise the soft thresholds to reduce queue traffic.
+   Changing either setting requires no data migration. Never raise source
+   settings beyond their compiled hard ceilings.
+
+Before enabling each stage, run `pnpm db:verify`, deploy a preview, and test a
+root app, selected monorepo app, cache hit, exact hard-limit failure, and queued
+scan. Rollback never requires deleting cache or job rows.

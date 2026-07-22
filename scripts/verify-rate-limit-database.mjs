@@ -21,6 +21,9 @@ const cacheRepositoryHash = hashIdentity(`repository-${verificationId}`);
 const cacheCommitSha = createHash("sha1")
   .update(`commit-${verificationId}`, "utf8")
   .digest("hex");
+const jobId = randomUUID();
+const jobCacheKey = hashIdentity(`job-cache-${verificationId}`);
+const jobTokenHash = hashIdentity(`job-token-${verificationId}`);
 
 const consume = (rules) =>
   runtimeSql`select * from consume_shadscan_rate_limits(${JSON.stringify(rules)}::jsonb)`;
@@ -93,7 +96,42 @@ try {
         current_user,
         'public.put_shadscan_scan_cache(text, text, text, text, text, text, text, jsonb, integer)',
         'EXECUTE'
-      ) as can_put_cache
+      ) as can_put_cache,
+      not has_table_privilege(current_user, 'public.scan_jobs', 'SELECT')
+        and not has_table_privilege(current_user, 'public.scan_jobs', 'INSERT')
+        and not has_table_privilege(current_user, 'public.scan_jobs', 'UPDATE')
+        and not has_table_privilege(current_user, 'public.scan_jobs', 'DELETE')
+        as jobs_are_restricted,
+      not has_table_privilege(current_user, 'public.scan_job_access', 'SELECT')
+        and not has_table_privilege(current_user, 'public.scan_job_access', 'INSERT')
+        and not has_table_privilege(current_user, 'public.scan_job_access', 'UPDATE')
+        and not has_table_privilege(current_user, 'public.scan_job_access', 'DELETE')
+        as job_access_is_restricted,
+      has_function_privilege(
+        current_user,
+        'public.create_shadscan_scan_job(uuid, text, text, text, text, text, text, integer)',
+        'EXECUTE'
+      ) as can_create_job,
+      has_function_privilege(
+        current_user,
+        'public.get_shadscan_scan_job(uuid, text)',
+        'EXECUTE'
+      ) as can_get_job,
+      has_function_privilege(
+        current_user,
+        'public.claim_shadscan_scan_job(uuid, integer, integer, integer)',
+        'EXECUTE'
+      ) as can_claim_job,
+      has_function_privilege(
+        current_user,
+        'public.complete_shadscan_scan_job(uuid, text)',
+        'EXECUTE'
+      ) as can_complete_job,
+      has_function_privilege(
+        current_user,
+        'public.record_shadscan_scan_job_failure(uuid, jsonb, boolean, integer)',
+        'EXECUTE'
+      ) as can_record_job_failure
   `;
   const ownerRole = ownerIdentity[0]?.role_name;
   const runtimeRole = runtimeIdentity[0]?.role_name;
@@ -112,6 +150,13 @@ try {
   assert.equal(runtimeIdentity[0]?.can_delete_cache, false);
   assert.equal(runtimeIdentity[0]?.can_get_cache, true);
   assert.equal(runtimeIdentity[0]?.can_put_cache, true);
+  assert.equal(runtimeIdentity[0]?.jobs_are_restricted, true);
+  assert.equal(runtimeIdentity[0]?.job_access_is_restricted, true);
+  assert.equal(runtimeIdentity[0]?.can_create_job, true);
+  assert.equal(runtimeIdentity[0]?.can_get_job, true);
+  assert.equal(runtimeIdentity[0]?.can_claim_job, true);
+  assert.equal(runtimeIdentity[0]?.can_complete_job, true);
+  assert.equal(runtimeIdentity[0]?.can_record_job_failure, true);
 
   const runtimeRoleAttributes = await ownerSql`
     select
@@ -274,8 +319,70 @@ try {
   `;
   assert.deepEqual(cachedRows[0]?.payload, cachePayload);
 
+  const createdJobs = await runtimeSql`
+    select * from public.create_shadscan_scan_job(
+      ${jobId}::uuid,
+      ${jobTokenHash},
+      ${jobCacheKey},
+      ${cacheRepositoryHash},
+      ${cacheCommitSha},
+      ${"."},
+      ${"all"},
+      ${3600}
+    )
+  `;
+  assert.equal(createdJobs[0]?.resolved_job_id, jobId);
+  assert.equal(createdJobs[0]?.resolved_state, "queued");
+
+  const unauthorizedJob = await runtimeSql`
+    select * from public.get_shadscan_scan_job(
+      ${jobId}::uuid,
+      ${hashIdentity("wrong-token")}
+    )
+  `;
+  assert.equal(unauthorizedJob.length, 0);
+
+  const claimedJobs = await runtimeSql`
+    select * from public.claim_shadscan_scan_job(
+      ${jobId}::uuid,
+      ${300},
+      ${5},
+      ${2}
+    )
+  `;
+  assert.equal(claimedJobs[0]?.claim_action, "claimed");
+  assert.equal(claimedJobs[0]?.attempt_count, 1);
+
+  await runtimeSql`
+    select public.put_shadscan_scan_cache(
+      ${jobCacheKey},
+      ${cacheRepositoryHash},
+      ${cacheCommitSha},
+      ${"."},
+      ${"all"},
+      ${"verification-engine"},
+      ${"verification-ruleset"},
+      ${JSON.stringify(cachePayload)}::jsonb,
+      ${3600}
+    )
+  `;
+  await runtimeSql`
+    select public.complete_shadscan_scan_job(
+      ${jobId}::uuid,
+      ${jobCacheKey}
+    )
+  `;
+  const completedJobs = await runtimeSql`
+    select * from public.get_shadscan_scan_job(
+      ${jobId}::uuid,
+      ${jobTokenHash}
+    )
+  `;
+  assert.equal(completedJobs[0]?.job_state, "completed");
+  assert.deepEqual(completedJobs[0]?.payload, cachePayload);
+
   console.log(
-    `Verified database rate limiting and scan caching: ${allowedCount}/${concurrentResults.length} concurrent requests allowed.`
+    `Verified database rate limiting, scan caching, and queued job leases: ${allowedCount}/${concurrentResults.length} concurrent requests allowed.`
   );
 } finally {
   await ownerSql`
@@ -284,6 +391,10 @@ try {
   `;
   await ownerSql`
     delete from scan_cache
-    where cache_key = ${cacheKey}
+    where cache_key in (${cacheKey}, ${jobCacheKey})
+  `;
+  await ownerSql`
+    delete from scan_jobs
+    where job_id = ${jobId}::uuid
   `;
 }

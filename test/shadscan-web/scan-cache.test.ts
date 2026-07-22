@@ -1,7 +1,4 @@
-import {
-  BUNDLED_RULESET_VERSION,
-  ENGINE_VERSION,
-} from "@shadscan/cli";
+import { BUNDLED_RULESET_VERSION, ENGINE_VERSION } from "@shadscan/cli";
 import { describe, expect, it, vi } from "vitest";
 import type { HostedScanResponse } from "../../lib/shadscan-api/contracts";
 import {
@@ -14,6 +11,8 @@ import {
 } from "../../lib/shadscan-web/scan-cache";
 import { WEB_SCAN_COMPLETE_FIXTURE } from "./fixtures";
 
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
+const SCAN_ID_PATTERN = /^scan_[a-f0-9]{32}$/;
 const IDENTITY = {
   commitSha: "0123456789abcdef0123456789abcdef01234567",
   projectPath: ".",
@@ -61,8 +60,8 @@ describe("web scan cache", () => {
   it("keys immutable repository, path, category, and version identity", () => {
     const descriptor = createScanCacheDescriptor(IDENTITY);
 
-    expect(descriptor.cacheKey).toMatch(/^[a-f0-9]{64}$/);
-    expect(descriptor.repositoryHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(descriptor.cacheKey).toMatch(SHA256_HEX_PATTERN);
+    expect(descriptor.repositoryHash).toMatch(SHA256_HEX_PATTERN);
     expect(JSON.stringify(descriptor)).not.toContain("acme/widget");
     expect(
       createScanCacheDescriptor({ ...IDENTITY, projectPath: "apps/web" })
@@ -82,7 +81,7 @@ describe("web scan cache", () => {
     const first = await readScanCache(IDENTITY, execute);
     const second = await readScanCache(IDENTITY, execute);
 
-    expect(first?.scan.id).toMatch(/^scan_[a-f0-9]{32}$/);
+    expect(first?.scan.id).toMatch(SCAN_ID_PATTERN);
     expect(first?.scan.id).not.toBe(CURRENT_RESPONSE.scan.id);
     expect(second?.scan.id).not.toBe(first?.scan.id);
     expect(first?.report).toEqual(CURRENT_RESPONSE.report);
@@ -90,17 +89,23 @@ describe("web scan cache", () => {
 
   it("treats a stale or invalid payload as a miss through fail-open reads", async () => {
     await expect(
-      readScanCacheFailOpen(
-        { enabled: true, ttlSeconds: 3600 },
-        IDENTITY,
-        () => Promise.resolve([{ payload: WEB_SCAN_COMPLETE_FIXTURE.result }])
+      readScanCacheFailOpen({ enabled: true, ttlSeconds: 3600 }, IDENTITY, () =>
+        Promise.resolve([
+          {
+            payload: {
+              ...WEB_SCAN_COMPLETE_FIXTURE.result,
+              scan: {
+                ...WEB_SCAN_COMPLETE_FIXTURE.result.scan,
+                engineVersion: "0.0.0-stale",
+              },
+            },
+          },
+        ])
       )
     ).resolves.toBeUndefined();
     await expect(
-      readScanCacheFailOpen(
-        { enabled: true, ttlSeconds: 3600 },
-        IDENTITY,
-        () => Promise.reject(new Error("database unavailable"))
+      readScanCacheFailOpen({ enabled: true, ttlSeconds: 3600 }, IDENTITY, () =>
+        Promise.reject(new Error("database unavailable"))
       )
     ).resolves.toBeUndefined();
   });
@@ -111,7 +116,7 @@ describe("web scan cache", () => {
     await writeScanCache(IDENTITY, CURRENT_RESPONSE, 3600, execute);
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        cacheKey: expect.stringMatching(/^[a-f0-9]{64}$/),
+        cacheKey: expect.stringMatching(SHA256_HEX_PATTERN),
         projectPath: ".",
       }),
       CURRENT_RESPONSE,

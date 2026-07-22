@@ -55,6 +55,51 @@ const WebScanCompleteStateSchema = z
   })
   .strict();
 
+const WebScanJobStateBaseSchema = z.object({
+  jobId: z.string().uuid(),
+  jobToken: z.string().regex(/^[a-f0-9]{64}$/),
+  pollAfterMs: z.number().int().min(500).max(30_000),
+  projectPath: PortableSubdirectorySchema,
+  repository: z.string().min(3).max(140),
+  repositoryInput: RepositoryInputSchema,
+  repositoryUrl: z.string().url(),
+});
+
+const WebScanQueuedStateSchema = WebScanJobStateBaseSchema.extend({
+  status: z.literal("queued"),
+}).strict();
+
+const WebScanRunningStateSchema = WebScanJobStateBaseSchema.extend({
+  status: z.literal("running"),
+}).strict();
+
+const WebScanJobPollResponseSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      pollAfterMs: z.number().int().min(500).max(30_000),
+      status: z.literal("queued"),
+    })
+    .strict(),
+  z
+    .object({
+      pollAfterMs: z.number().int().min(500).max(30_000),
+      status: z.literal("running"),
+    })
+    .strict(),
+  z
+    .object({
+      error: WebScanErrorSchema,
+      status: z.literal("failed"),
+    })
+    .strict(),
+  z
+    .object({
+      result: HostedScanResponseSchema,
+      status: z.literal("complete"),
+    })
+    .strict(),
+]);
+
 const WebProjectOptionSchema = z
   .object({
     label: z.string().min(1).max(512),
@@ -77,6 +122,8 @@ const WebScanStateSchema = z.discriminatedUnion("status", [
   WebProjectSelectionStateSchema,
   WebScanErrorStateSchema,
   WebScanCompleteStateSchema,
+  WebScanQueuedStateSchema,
+  WebScanRunningStateSchema,
 ]);
 
 export type {
@@ -87,6 +134,9 @@ export type {
   WebScanError,
   WebScanErrorCode,
   WebScanErrorState,
+  WebScanJobPollResponse,
+  WebScanQueuedState,
+  WebScanRunningState,
   WebScanState,
 } from "./types";
 export {
@@ -99,5 +149,8 @@ export {
   WebScanErrorSchema,
   WebScanErrorStateSchema,
   WebScanIdleStateSchema,
+  WebScanJobPollResponseSchema,
+  WebScanQueuedStateSchema,
+  WebScanRunningStateSchema,
   WebScanStateSchema,
 };

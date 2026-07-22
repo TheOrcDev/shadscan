@@ -9,11 +9,11 @@ Production uses two different Neon credentials:
   the only database credential available to the running application.
 
 The `shadscan_runtime` no-login role owns the permission contract. It can use
-the `public` schema and execute the bounded rate-limit and optional scan-cache
-functions, but it cannot directly read or modify `rate_limit_windows` or
-`scan_cache`, create schema objects, own database objects, or inherit Neon's
-`neon_superuser` role. Each function runs as its migration-owner definer with a
-fixed search path.
+the `public` schema and execute the bounded rate-limit, scan-cache, and queued
+job functions, but it cannot directly read or modify `rate_limit_windows`,
+`scan_cache`, `scan_jobs`, or `scan_job_access`, create schema objects, own
+database objects, or inherit Neon's `neon_superuser` role. Each function runs
+as its migration-owner definer with a fixed search path.
 
 Runtime limiter calls are bounded at three layers: a 1-second PostgreSQL lock
 timeout, a 3-second statement timeout, and a 5-second Neon HTTP transport
@@ -56,4 +56,5 @@ DATABASE_MIGRATION_URL="..." DATABASE_URL="..." pnpm db:verify
 The verifier fails unless the credentials resolve to different roles, the
 runtime login is a non-privileged member of `shadscan_runtime`, direct table and
 schema creation privileges are absent, the bounded functions remain executable,
-and the concurrent rate-limit, atomic rate-limit, and scan-cache behavior pass.
+and the concurrent rate-limit, atomic rate-limit, scan-cache, bearer-token, and
+job-lease behavior pass.

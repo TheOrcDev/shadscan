@@ -4,7 +4,7 @@ interface WebScanLogEvent {
   engineVersion?: string;
   errorCode?: string;
   event: "web_scan";
-  outcome: "completed" | "failed" | "selection_required";
+  outcome: "completed" | "failed" | "queued" | "selection_required";
   repository?: string;
   requestId: string;
   resolvedRevision?: string | null;

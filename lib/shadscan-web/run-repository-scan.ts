@@ -17,9 +17,11 @@ import {
 } from "../shadscan-api/github-source";
 import { discoverGitHubProjectCandidates } from "../shadscan-api/github-tree";
 import { runHostedScan } from "../shadscan-api/run-hosted-scan";
+import { getWebAsyncConfig, type WebAsyncConfig } from "./async-config";
 import {
   WebProjectSelectionStateSchema,
   WebScanCompleteStateSchema,
+  WebScanQueuedStateSchema,
 } from "./contracts";
 import { enforceWebDiscoveryRateLimit } from "./discovery-rate-limit";
 import { asWebScanServiceError } from "./errors";
@@ -32,12 +34,20 @@ import {
   type ScanCacheIdentity,
   writeScanCacheFailOpen,
 } from "./scan-cache";
+import {
+  type ScanDispatcher,
+  SynchronousScanDispatcher,
+  VercelQueueScanDispatcher,
+} from "./scan-dispatcher";
 import { getWebSourceConfig, type WebSourceConfig } from "./source-config";
 import type {
+  NormalizedGitHubRepository,
   WebProjectOption,
   WebProjectSelectionState,
   WebScanCompleteState,
+  WebScanQueuedState,
 } from "./types";
+import { classifyWebScanWorkload } from "./workload";
 
 interface ExecuteWebRepositoryScanInput {
   clientAddress: string;
@@ -47,6 +57,10 @@ interface ExecuteWebRepositoryScanInput {
 
 interface ExecuteWebRepositoryScanDependencies {
   admissionController?: HostedScanAdmissionController;
+  asyncConfig?: WebAsyncConfig;
+  asyncDispatcher?: ScanDispatcher;
+  cacheConfig?: ScanCacheConfig;
+  classifyWorkload?: typeof classifyWebScanWorkload;
   deadlineMs?: number;
   enforceDiscoveryRateLimit?: (
     input: WebRateLimitInput
@@ -55,7 +69,6 @@ interface ExecuteWebRepositoryScanDependencies {
   fetchImplementation?: FetchImplementation;
   loadTree?: typeof loadGitHubRepositoryTree;
   materializeSource?: typeof materializeResolvedGitHubSource;
-  cacheConfig?: ScanCacheConfig;
   readCache?: typeof readScanCacheFailOpen;
   resolveSource?: typeof resolvePublicGitHubSource;
   runScan?: (
@@ -63,10 +76,14 @@ interface ExecuteWebRepositoryScanDependencies {
     signal?: AbortSignal
   ) => HostedScanResponse | Promise<HostedScanResponse>;
   sourceConfig?: WebSourceConfig;
+  synchronousDispatcher?: ScanDispatcher;
   writeCache?: typeof writeScanCacheFailOpen;
 }
 
-type WebRepositoryScanResult = WebProjectSelectionState | WebScanCompleteState;
+type WebRepositoryScanResult =
+  | WebProjectSelectionState
+  | WebScanCompleteState
+  | WebScanQueuedState;
 
 const selectProjectPath = (
   projects: WebProjectOption[],
@@ -89,6 +106,45 @@ const selectProjectPath = (
     return ".";
   }
   return projects.length === 1 ? projects[0]?.path : undefined;
+};
+
+const resolveProjectSelection = (
+  projects: WebProjectOption[],
+  repository: NormalizedGitHubRepository
+): string | WebProjectSelectionState => {
+  if (projects.length === 0) {
+    throw new HostedScanError(
+      "No supported React project was found in the repository.",
+      {
+        code: "PROJECT_ROOT_NOT_FOUND",
+        status: 422,
+      }
+    );
+  }
+
+  return (
+    selectProjectPath(projects, repository.projectPath) ??
+    WebProjectSelectionStateSchema.parse({
+      projects,
+      repository: repository.repository,
+      repositoryInput: repository.repositoryInput,
+      repositoryUrl: repository.repositoryUrl,
+      status: "project_selection_required",
+    })
+  );
+};
+
+const enforceAsyncScanRateLimit = async (
+  isAsync: boolean,
+  enforceRateLimit: (input: WebRateLimitInput) => Promise<unknown> | unknown,
+  rateLimitInput: WebRateLimitInput,
+  signal: AbortSignal
+): Promise<void> => {
+  if (!isAsync) {
+    return;
+  }
+  await enforceRateLimit(rateLimitInput);
+  signal.throwIfAborted();
 };
 
 const executeWebRepositoryScan = async (
@@ -128,25 +184,11 @@ const executeWebRepositoryScan = async (
         signal
       );
       const projects = discoverGitHubProjectCandidates(treeEntries);
-      if (projects.length === 0) {
-        throw new HostedScanError(
-          "No supported React project was found in the repository.",
-          {
-            code: "PROJECT_ROOT_NOT_FOUND",
-            status: 422,
-          }
-        );
+      const projectSelection = resolveProjectSelection(projects, repository);
+      if (typeof projectSelection !== "string") {
+        return projectSelection;
       }
-      const projectPath = selectProjectPath(projects, repository.projectPath);
-      if (!projectPath) {
-        return WebProjectSelectionStateSchema.parse({
-          projects,
-          repository: repository.repository,
-          repositoryInput: repository.repositoryInput,
-          repositoryUrl: repository.repositoryUrl,
-          status: "project_selection_required",
-        });
-      }
+      const projectPath = projectSelection;
 
       const cacheConfig = dependencies.cacheConfig ?? getScanCacheConfig();
       const cacheIdentity: ScanCacheIdentity = {
@@ -156,9 +198,7 @@ const executeWebRepositoryScan = async (
       };
       const readCache = dependencies.readCache ?? readScanCacheFailOpen;
       const cachedResult = await readCache(cacheConfig, cacheIdentity);
-      if (
-        cachedResult?.scan.resolvedRevision === resolvedSource.commitSha
-      ) {
+      if (cachedResult?.scan.resolvedRevision === resolvedSource.commitSha) {
         return WebScanCompleteStateSchema.parse({
           projectPath,
           repository: repository.repository,
@@ -168,51 +208,94 @@ const executeWebRepositoryScan = async (
         });
       }
 
-      const admissionController =
-        dependencies.admissionController ?? hostedScanAdmissionController;
-      return admissionController.run(async () => {
-        const enforceRateLimit =
-          dependencies.enforceRateLimit ?? enforceWebScanRateLimit;
-        await enforceRateLimit(rateLimitInput);
-        signal.throwIfAborted();
+      const asyncConfig = dependencies.asyncConfig ?? getWebAsyncConfig();
+      const classifyWorkload =
+        dependencies.classifyWorkload ?? classifyWebScanWorkload;
+      const workload = classifyWorkload(
+        treeEntries,
+        projectPath,
+        sourceConfig.limits,
+        asyncConfig
+      );
+      const enforceRateLimit =
+        dependencies.enforceRateLimit ?? enforceWebScanRateLimit;
+      await enforceAsyncScanRateLimit(
+        workload.kind === "async",
+        enforceRateLimit,
+        rateLimitInput,
+        signal
+      );
 
-        const request = GitHubScanRequestSchema.parse({
-          source: {
-            kind: "github",
-            repository: repository.repository,
-            revision: "HEAD",
-            subdirectory: projectPath,
-          },
+      const executeSynchronously = (): Promise<HostedScanResponse> => {
+        const admissionController =
+          dependencies.admissionController ?? hostedScanAdmissionController;
+        return admissionController.run(async () => {
+          await enforceRateLimit(rateLimitInput);
+          signal.throwIfAborted();
+          const request = GitHubScanRequestSchema.parse({
+            source: {
+              kind: "github",
+              repository: repository.repository,
+              revision: "HEAD",
+              subdirectory: projectPath,
+            },
+          });
+          const materializeSource =
+            dependencies.materializeSource ?? materializeResolvedGitHubSource;
+          const source = await materializeSource(
+            request,
+            resolvedSource,
+            dependencies.fetchImplementation,
+            signal,
+            {
+              limits: sourceConfig.limits,
+              sourceMode: sourceConfig.mode,
+              treeEntries,
+            }
+          );
+          signal.throwIfAborted();
+          const runScan = dependencies.runScan ?? runHostedScan;
+          const result = HostedScanResponseSchema.parse(
+            await runScan(source, signal)
+          );
+          signal.throwIfAborted();
+          const writeCache = dependencies.writeCache ?? writeScanCacheFailOpen;
+          await writeCache(cacheConfig, cacheIdentity, result);
+          return result;
         });
-        const materializeSource =
-          dependencies.materializeSource ?? materializeResolvedGitHubSource;
-        const source = await materializeSource(
-          request,
-          resolvedSource,
-          dependencies.fetchImplementation,
-          signal,
-          {
-            limits: sourceConfig.limits,
-            sourceMode: sourceConfig.mode,
-            treeEntries,
-          }
-        );
-        signal.throwIfAborted();
-        const runScan = dependencies.runScan ?? runHostedScan;
-        const result = HostedScanResponseSchema.parse(
-          await runScan(source, signal)
-        );
-        signal.throwIfAborted();
-        const writeCache = dependencies.writeCache ?? writeScanCacheFailOpen;
-        await writeCache(cacheConfig, cacheIdentity, result);
-
-        return WebScanCompleteStateSchema.parse({
+      };
+      const dispatcher =
+        workload.kind === "async"
+          ? (dependencies.asyncDispatcher ?? new VercelQueueScanDispatcher())
+          : (dependencies.synchronousDispatcher ??
+            new SynchronousScanDispatcher());
+      const dispatched = await dispatcher.dispatch({
+        asyncConfig,
+        cacheIdentity,
+        commitSha: resolvedSource.commitSha,
+        executeSynchronously,
+        projectPath,
+        repository: repository.repository,
+      });
+      if (dispatched.kind === "queued") {
+        return WebScanQueuedStateSchema.parse({
+          jobId: dispatched.jobId,
+          jobToken: dispatched.jobToken,
+          pollAfterMs: dispatched.pollAfterMs,
           projectPath,
           repository: repository.repository,
+          repositoryInput: repository.repositoryInput,
           repositoryUrl: repository.repositoryUrl,
-          result,
-          status: "complete",
+          status: "queued",
         });
+      }
+
+      return WebScanCompleteStateSchema.parse({
+        projectPath,
+        repository: repository.repository,
+        repositoryUrl: repository.repositoryUrl,
+        result: dispatched.result,
+        status: "complete",
       });
     }, dependencies.deadlineMs);
   } catch (error) {

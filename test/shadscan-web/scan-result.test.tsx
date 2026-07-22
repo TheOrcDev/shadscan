@@ -46,7 +46,7 @@ describe("ScanResult", () => {
     expect(markup).toContain("Acceptance criteria");
     expect(markup).toContain("Pathetic. Pressing a button manually in 2026?");
     expect(markup).toContain("Suggested skills");
-    expect(markup).toContain("pnpm dlx @shadscan/cli@0.1.0-rc.1 --json");
+    expect(markup).toContain(agentHandoff.verification.shadscanCommand);
   });
 
   it("labels projects that use both Next router trees", () => {

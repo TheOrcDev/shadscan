@@ -134,4 +134,30 @@ describe("scanGitHubRepository", () => {
       })
     );
   });
+
+  it("returns a queued scan without logging it as complete", async () => {
+    const queued = {
+      jobId: "9e83046c-84aa-4da2-a9ef-ec2b38f7058e",
+      jobToken: "a".repeat(64),
+      pollAfterMs: 1500,
+      projectPath: ".",
+      repository: "acme/widget",
+      repositoryInput: "acme/widget",
+      repositoryUrl: "https://github.com/acme/widget",
+      status: "queued",
+    };
+    mocks.executeScan.mockResolvedValue(queued);
+    const formData = new FormData();
+    formData.set("repository", "acme/widget");
+
+    const result = await scanGitHubRepository({ status: "idle" }, formData);
+
+    expect(result).toBe(queued);
+    expect(mocks.writeLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "queued",
+        repository: "acme/widget",
+      })
+    );
+  });
 });

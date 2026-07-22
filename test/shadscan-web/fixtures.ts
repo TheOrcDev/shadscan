@@ -1,3 +1,9 @@
+import {
+  AGENT_PROMPT_VERSION,
+  AUDIT_REPORT_SCHEMA_VERSION,
+  BUNDLED_RULESET_VERSION,
+  ENGINE_VERSION,
+} from "@shadscan/cli";
 import type { WebScanCompleteState } from "@/lib/shadscan-web/types";
 
 const THEME_SHORTCUT_EVIDENCE = [
@@ -22,7 +28,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
   result: {
     handoff: {
       promptMarkdown: "You are improving acme/widget from a shadscan audit.",
-      promptVersion: 5,
+      promptVersion: AGENT_PROMPT_VERSION,
     },
     report: {
       agentHandoff: {
@@ -70,7 +76,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
         suggestedSkills: ["shadcn"],
         verification: {
           projectGates: ["pnpm check", "pnpm build"],
-          shadscanCommand: "pnpm dlx @shadscan/cli@0.1.0-rc.1 --json",
+          shadscanCommand: `pnpm dlx @shadscan/cli@${ENGINE_VERSION} --json`,
         },
         workItems: [
           {
@@ -170,7 +176,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
         source: "complete",
       },
       durationMs: 1420,
-      engineVersion: "0.1.0-rc.1",
+      engineVersion: ENGINE_VERSION,
       findings: [
         {
           category: "interaction",
@@ -249,8 +255,8 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
       maxScore: 100,
       packageManager: "pnpm",
       packageName: "widget",
-      rulesetVersion: "2026.07.25",
-      schemaVersion: 4,
+      rulesetVersion: BUNDLED_RULESET_VERSION,
+      schemaVersion: AUDIT_REPORT_SCHEMA_VERSION,
       scope: {
         categories: [
           "foundation",
@@ -281,10 +287,10 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
       warnings: ["components.json exists but could not be fully inspected."],
     },
     scan: {
-      engineVersion: "0.1.0-rc.1",
+      engineVersion: ENGINE_VERSION,
       id: "scan_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       resolvedRevision: "0123456789abcdef0123456789abcdef01234567",
-      rulesetVersion: "2026.07.25",
+      rulesetVersion: BUNDLED_RULESET_VERSION,
       sourceDigest:
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       status: "completed",

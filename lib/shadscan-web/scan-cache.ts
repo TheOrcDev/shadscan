@@ -6,13 +6,13 @@ import {
   ENGINE_VERSION,
 } from "@shadscan/cli";
 import { z } from "zod";
+import { getDatabase } from "../db/client";
 import {
   type HostedScanResponse,
   HostedScanResponseSchema,
 } from "../shadscan-api/contracts";
 import { HostedScanError } from "../shadscan-api/errors";
 import { HOSTED_SCAN_SCHEMA_VERSION } from "../shadscan-api/protocol";
-import { getDatabase } from "../db/client";
 
 const CACHE_IDENTITY_SCHEMA_VERSION = 1;
 const DEFAULT_CACHE_TTL_HOURS = 24 * 7;
@@ -125,7 +125,7 @@ const createScanCacheDescriptor = (
   };
 };
 
-const executeCacheRead: ExecuteCacheRead = async (cacheKey) => {
+const executeCacheRead: ExecuteCacheRead = (cacheKey) => {
   const database = getDatabase();
   return database.$client`
     select payload
@@ -133,7 +133,7 @@ const executeCacheRead: ExecuteCacheRead = async (cacheKey) => {
   `;
 };
 
-const executeCacheWrite: ExecuteCacheWrite = async (
+const executeCacheWrite: ExecuteCacheWrite = (
   descriptor,
   response,
   ttlSeconds
@@ -157,6 +157,24 @@ const executeCacheWrite: ExecuteCacheWrite = async (
 const createFreshScanId = (): string =>
   `scan_${randomUUID().replaceAll("-", "")}`;
 
+const hydrateCachedScanResponse = (
+  payload: unknown
+): HostedScanResponse | undefined => {
+  const cachedResponse = HostedScanResponseSchema.safeParse(payload);
+  if (
+    !(cachedResponse.success && isCurrentCacheResponse(cachedResponse.data))
+  ) {
+    return;
+  }
+  return HostedScanResponseSchema.parse({
+    ...cachedResponse.data,
+    scan: {
+      ...cachedResponse.data.scan,
+      id: createFreshScanId(),
+    },
+  });
+};
+
 const readScanCache = async (
   identity: ScanCacheIdentity,
   execute: ExecuteCacheRead = executeCacheRead
@@ -168,17 +186,7 @@ const readScanCache = async (
     return;
   }
 
-  const cachedResponse = HostedScanResponseSchema.parse(row.payload);
-  if (!isCurrentCacheResponse(cachedResponse)) {
-    return;
-  }
-  return HostedScanResponseSchema.parse({
-    ...cachedResponse,
-    scan: {
-      ...cachedResponse.scan,
-      id: createFreshScanId(),
-    },
-  });
+  return hydrateCachedScanResponse(row.payload);
 };
 
 const isCurrentCacheResponse = (response: HostedScanResponse): boolean =>
@@ -245,6 +253,7 @@ export {
   createScanCacheDescriptor,
   DEFAULT_CACHE_TTL_HOURS,
   getScanCacheConfig,
+  hydrateCachedScanResponse,
   MAX_CACHE_TTL_HOURS,
   readScanCache,
   readScanCacheFailOpen,

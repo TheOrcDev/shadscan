@@ -335,13 +335,14 @@ const resolvePublicGitHubSource = (
   repository: string,
   revision: string,
   fetchImplementation: FetchImplementation = fetch,
-  deadlineSignal?: AbortSignal
+  deadlineSignal?: AbortSignal,
+  sharedSourceSignal?: AbortSignal
 ): Promise<ResolvedPublicGitHubSource> =>
   resolvePublicGitHubSourceWithSignal(
     repository,
     revision,
     fetchImplementation,
-    createGitHubSourceSignal(deadlineSignal)
+    sharedSourceSignal ?? createGitHubSourceSignal(deadlineSignal)
   );
 
 const createTreeEntryLimitError = (

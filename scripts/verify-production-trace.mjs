@@ -29,6 +29,10 @@ const HOSTED_SCANNER_RUNTIME_FILES = new Set([
 const TRACE_TARGETS = [
   {
     requiredRuntimeFiles: HOSTED_SCANNER_RUNTIME_FILES,
+    tracePath: ".next/server/app/api/queues/shadscan/route.js.nft.json",
+  },
+  {
+    requiredRuntimeFiles: HOSTED_SCANNER_RUNTIME_FILES,
     tracePath: ".next/server/app/scan/page.js.nft.json",
   },
   {

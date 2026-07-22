@@ -52,10 +52,12 @@ const nextConfig: NextConfig = {
   experimental:
     process.env.SHADSCAN_E2E === "1" ? { testProxy: true } : undefined,
   outputFileTracingExcludes: {
+    "/api/queues/shadscan": [...SCANNER_TRACE_EXCLUDES],
     "/scan": [...SCANNER_TRACE_EXCLUDES],
     "/v1/scans": [...SCANNER_TRACE_EXCLUDES],
   },
   outputFileTracingIncludes: {
+    "/api/queues/shadscan": [...SCANNER_TRACE_INCLUDES],
     "/v1/scans": [...SCANNER_TRACE_INCLUDES],
   },
   serverExternalPackages: ["@shadscan/cli"],

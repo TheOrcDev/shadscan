@@ -56,6 +56,11 @@ export default function PrivacyPage() {
               archives are not cached.
             </li>
             <li>
+              Large eligible scans may run through a durable queue. Queue and
+              job records contain immutable public repository coordinates and
+              operational metadata, not source files.
+            </li>
+            <li>
               Shadscan uses deterministic rules rather than AI, and we do not
               use submitted source or reports to train AI models.
             </li>
@@ -91,8 +96,8 @@ export default function PrivacyPage() {
           <p>
             When you submit a repository through the web scanner, we process the
             public GitHub owner and repository name. Shadscan asks GitHub for
-            repository metadata and a source archive, scans a temporary copy,
-            and returns the report to your browser.
+            repository metadata and bounded source blobs or an archive, scans a
+            temporary copy, and returns the report to your browser.
           </p>
           <p>
             Runtime logs for web scans may include the public repository name, a
@@ -107,6 +112,15 @@ export default function PrivacyPage() {
             digest of the repository identifier. The cache does not contain
             source files or archives. Failed and incomplete scans are not
             cached.
+          </p>
+          <p>
+            Large eligible scans may be queued. Vercel Queues may temporarily
+            store the public repository name, immutable commit, selected project
+            path, opaque job identifier, scanner category, and a cache key. Neon
+            stores job state, timestamps, attempts, those immutable identifiers
+            in hashed or public form, and only a hash of the browser&apos;s
+            bearer token. Neither provider receives source files in the queue or
+            job record.
           </p>
 
           <h3>Hosted API scans</h3>
@@ -176,11 +190,12 @@ export default function PrivacyPage() {
             <li>
               <a href="https://vercel.com/legal/privacy-notice">Vercel</a> for
               website hosting, delivery, runtime infrastructure, logs, and
-              aggregate Web Analytics;
+              aggregate Web Analytics, and durable processing of eligible queued
+              scans;
             </li>
             <li>
               <a href="https://neon.tech/privacy-policy">Neon</a> for
-              distributed rate-limit records;
+              distributed rate-limit, report-cache, and queued-job records;
             </li>
             <li>
               <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
@@ -215,6 +230,11 @@ export default function PrivacyPage() {
               period, which is no more than 30 days, subject to provider backup
               and operational practices. Source files and archives are not
               included in those records.
+            </li>
+            <li>
+              Queue messages, queued-job records, and hashed polling access
+              expire after the configured job period, which is no more than
+              seven days, subject to provider backup and operational practices.
             </li>
             <li>
               Runtime logs are retained according to our hosting configuration

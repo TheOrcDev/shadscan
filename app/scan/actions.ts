@@ -77,6 +77,16 @@ const scanGitHubRepository = async (
       });
       return result;
     }
+    if (result.status === "queued") {
+      writeWebScanLog({
+        durationMs: Date.now() - startedAt,
+        event: "web_scan",
+        outcome: "queued",
+        repository: result.repository,
+        requestId,
+      });
+      return result;
+    }
     const { report, scan } = result.result;
     writeWebScanLog({
       actionableCount: report.agentHandoff.workItems.length,

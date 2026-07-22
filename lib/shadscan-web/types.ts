@@ -11,6 +11,7 @@ const WEB_SCAN_ERROR_CODES = [
   "PROJECT_DISCOVERY_FAILED",
   "RATE_LIMITED",
   "SCAN_BUSY",
+  "SCAN_JOB_EXPIRED",
   "SCAN_TIMEOUT",
   "SCAN_WORKER_FAILED",
   "SERVICE_NOT_CONFIGURED",
@@ -69,11 +70,36 @@ interface WebScanCompleteState {
   status: "complete";
 }
 
+interface WebScanJobStateBase {
+  jobId: string;
+  jobToken: string;
+  pollAfterMs: number;
+  projectPath: string;
+  repository: string;
+  repositoryInput: string;
+  repositoryUrl: string;
+}
+
+interface WebScanQueuedState extends WebScanJobStateBase {
+  status: "queued";
+}
+
+interface WebScanRunningState extends WebScanJobStateBase {
+  status: "running";
+}
+
+type WebScanJobPollResponse =
+  | { pollAfterMs: number; status: "queued" | "running" }
+  | { error: WebScanError; status: "failed" }
+  | { result: HostedScanResponse; status: "complete" };
+
 type WebScanState =
   | WebProjectSelectionState
   | WebScanCompleteState
   | WebScanErrorState
-  | WebScanIdleState;
+  | WebScanIdleState
+  | WebScanQueuedState
+  | WebScanRunningState;
 
 export type {
   NormalizedGitHubRepository,
@@ -84,6 +110,9 @@ export type {
   WebScanErrorCode,
   WebScanErrorState,
   WebScanIdleState,
+  WebScanJobPollResponse,
+  WebScanQueuedState,
+  WebScanRunningState,
   WebScanState,
 };
 export { MAX_REPOSITORY_INPUT_LENGTH, WEB_SCAN_ERROR_CODES };

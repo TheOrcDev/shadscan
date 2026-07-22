@@ -259,6 +259,63 @@ describe("executeWebRepositoryScan", () => {
     await activeRun;
   });
 
+  it("dispatches only a hard-bounded project above the async soft threshold", async () => {
+    const dependencies = createDiscoveryDependencies();
+    const asyncDispatcher = {
+      dispatch: vi.fn(() =>
+        Promise.resolve({
+          jobId: "9e83046c-84aa-4da2-a9ef-ec2b38f7058e",
+          jobToken: "a".repeat(64),
+          kind: "queued" as const,
+          pollAfterMs: 1500,
+        })
+      ),
+    };
+
+    const result = await executeWebRepositoryScan(
+      {
+        clientAddress: "203.0.113.4",
+        repositoryInput: "acme/widget",
+      },
+      {
+        ...dependencies,
+        asyncConfig: {
+          enabled: true,
+          jobTtlSeconds: 86_400,
+          maxAttempts: 5,
+          maxConcurrency: 2,
+          syncRelevantBytes: 1024,
+          syncRelevantFiles: 1,
+        },
+        asyncDispatcher,
+      }
+    );
+
+    expect(result).toEqual({
+      jobId: "9e83046c-84aa-4da2-a9ef-ec2b38f7058e",
+      jobToken: "a".repeat(64),
+      pollAfterMs: 1500,
+      projectPath: ".",
+      repository: "acme/widget",
+      repositoryInput: "acme/widget",
+      repositoryUrl: "https://github.com/acme/widget",
+      status: "queued",
+    });
+    expect(dependencies.enforceRateLimit).toHaveBeenCalledOnce();
+    expect(asyncDispatcher.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cacheIdentity: {
+          commitSha: COMMIT_SHA,
+          projectPath: ".",
+          repositoryKey: "acme/widget",
+        },
+        commitSha: COMMIT_SHA,
+        projectPath: ".",
+        repository: "acme/widget",
+      })
+    );
+  });
+
   it("maps private-repository failures from immutable resolution", async () => {
     const dependencies = createDiscoveryDependencies();
     dependencies.resolveSource.mockRejectedValue(

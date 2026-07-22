@@ -31,12 +31,14 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { ClientWebScanJobPollResponseSchema } from "@/lib/shadscan-web/client-contracts";
 import {
   MAX_REPOSITORY_INPUT_LENGTH,
   type WebScanErrorCode,
   type WebScanState,
 } from "@/lib/shadscan-web/types";
 import { scanGitHubRepository } from "./actions";
+import { QueuedScanStatus } from "./queued-scan-status";
 import { ScanLoading } from "./scan-loading";
 import { ScanResult } from "./scan-result";
 
@@ -54,6 +56,113 @@ const CLI_FALLBACK_CODES = new Set<WebScanErrorCode>([
   "SOURCE_UNSUPPORTED",
 ]);
 const LOCAL_SCAN_COMMAND = "npx @shadscan/cli@next";
+
+const isQueuedScanState = (
+  state: WebScanState
+): state is Extract<WebScanState, { status: "queued" | "running" }> =>
+  state.status === "queued" || state.status === "running";
+
+interface PolledScanState {
+  jobKey: string;
+  state: WebScanState;
+}
+
+const getQueuedScanKey = (state: WebScanState): string | undefined =>
+  isQueuedScanState(state) ? `${state.jobId}:${state.jobToken}` : undefined;
+
+const useQueuedScan = (
+  actionState: WebScanState,
+  isPending: boolean
+): WebScanState => {
+  const [polledState, setPolledState] = useState<PolledScanState>();
+  const actionJobKey = getQueuedScanKey(actionState);
+  const state =
+    polledState && polledState.jobKey === actionJobKey
+      ? polledState.state
+      : actionState;
+
+  useEffect(() => {
+    if (isPending || !isQueuedScanState(state)) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const jobKey = `${state.jobId}:${state.jobToken}`;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const setNextState = (nextState: WebScanState): void => {
+      setPolledState({ jobKey, state: nextState });
+    };
+    const poll = async (): Promise<void> => {
+      try {
+        const response = await fetch(
+          `/api/scan-jobs/${encodeURIComponent(state.jobId)}`,
+          {
+            cache: "no-store",
+            headers: { Authorization: `Bearer ${state.jobToken}` },
+            signal: controller.signal,
+          }
+        );
+        if (response.status === 404) {
+          setNextState({
+            error: {
+              code: "SCAN_JOB_EXPIRED",
+              message: "This queued scan expired. Submit it again.",
+              retryable: true,
+            },
+            projectPath: state.projectPath,
+            repositoryInput: state.repositoryInput,
+            status: "error",
+          });
+          return;
+        }
+        if (!response.ok) {
+          throw new Error("Queued scan status is unavailable.");
+        }
+        const status = ClientWebScanJobPollResponseSchema.parse(
+          await response.json()
+        );
+        if (status.status === "queued" || status.status === "running") {
+          setNextState({
+            ...state,
+            pollAfterMs: status.pollAfterMs,
+            status: status.status,
+          });
+          return;
+        }
+        if (status.status === "complete") {
+          setNextState({
+            projectPath: state.projectPath,
+            repository: state.repository,
+            repositoryUrl: state.repositoryUrl,
+            result: status.result,
+            status: "complete",
+          });
+          return;
+        }
+        setNextState({
+          error: status.error,
+          projectPath: state.projectPath,
+          repositoryInput: state.repositoryInput,
+          status: "error",
+        });
+      } catch {
+        if (!controller.signal.aborted) {
+          timer = setTimeout(poll, 3000);
+        }
+      }
+    };
+
+    timer = setTimeout(poll, state.pollAfterMs);
+    return () => {
+      controller.abort();
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [isPending, state]);
+
+  return state;
+};
 
 function CliFallback({ projectPath }: { projectPath?: string }) {
   const command =
@@ -80,6 +189,12 @@ function CliFallback({ projectPath }: { projectPath?: string }) {
 }
 
 const getSubmitLabel = (isPending: boolean, state: WebScanState): string => {
+  if (state.status === "queued") {
+    return "Queued";
+  }
+  if (state.status === "running") {
+    return "Scanning";
+  }
   if (isPending) {
     return "Scanning";
   }
@@ -123,10 +238,12 @@ function ProjectSelector({
 }
 
 function RepositoryForm() {
-  const [state, formAction, isPending] = useActionState(
+  const [actionState, formAction, isPending] = useActionState(
     scanGitHubRepository,
     INITIAL_SCAN_STATE
   );
+  const state = useQueuedScan(actionState, isPending);
+  const isWorking = isPending || isQueuedScanState(state);
   const [repositoryInput, setRepositoryInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const projectSelectRef = useRef<HTMLSelectElement>(null);
@@ -154,17 +271,17 @@ function RepositoryForm() {
   return (
     <div className="flex w-full flex-col gap-8">
       <form action={formAction} id={REPOSITORY_FORM_ID}>
-        <Field data-disabled={isPending} data-invalid={inputError}>
+        <Field data-disabled={isWorking} data-invalid={inputError}>
           <FieldLabel htmlFor={REPOSITORY_INPUT_ID}>
             GitHub repository
           </FieldLabel>
-          <InputGroup data-disabled={isPending}>
+          <InputGroup data-disabled={isWorking}>
             <InputGroupInput
               aria-describedby={inputError ? REPOSITORY_ERROR_ID : undefined}
               aria-invalid={inputError}
               autoCapitalize="none"
               autoComplete="url"
-              disabled={isPending}
+              disabled={isWorking}
               id={REPOSITORY_INPUT_ID}
               maxLength={MAX_REPOSITORY_INPUT_LENGTH}
               name="repository"
@@ -182,12 +299,12 @@ function RepositoryForm() {
             </InputGroupAddon>
             <InputGroupAddon align="inline-end">
               <InputGroupButton
-                disabled={isPending}
+                disabled={isWorking}
                 size="sm"
                 type="submit"
                 variant="default"
               >
-                {isPending ? (
+                {isWorking ? (
                   <Spinner data-icon="inline-start" />
                 ) : (
                   <MagnifyingGlassIcon
@@ -208,7 +325,7 @@ function RepositoryForm() {
 
         {state.status === "project_selection_required" ? (
           <ProjectSelector
-            disabled={isPending}
+            disabled={isWorking}
             selectRef={projectSelectRef}
             state={state}
           />
@@ -239,6 +356,12 @@ const getLiveStatus = (isPending: boolean, state: WebScanState): string => {
   if (state.status === "complete") {
     return `Scan complete. Score ${state.result.report.score ?? "unassessed"}.`;
   }
+  if (state.status === "queued") {
+    return "Scan queued";
+  }
+  if (state.status === "running") {
+    return "Scanning repository";
+  }
   return state.status === "project_selection_required"
     ? "Choose a project to scan."
     : "";
@@ -257,6 +380,9 @@ function ScanFeedback({
 }) {
   if (isPending) {
     return <ScanLoading />;
+  }
+  if (state.status === "queued" || state.status === "running") {
+    return <QueuedScanStatus status={state.status} />;
   }
   if (state.status === "idle") {
     return (

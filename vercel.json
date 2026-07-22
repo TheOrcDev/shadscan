@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/queues/shadscan/route.ts": {
+      "experimentalTriggers": [
+        {
+          "initialDelaySeconds": 0,
+          "retryAfterSeconds": 5,
+          "topic": "shadscan-scans",
+          "type": "queue/v2beta"
+        }
+      ]
+    }
+  }
+}

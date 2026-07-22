@@ -75,6 +75,10 @@ const formatSourceLimitMessage = (detail?: SourceLimitDetail): string => {
     return `The repository archive has ${observedPrefix}${detail.observed.toLocaleString("en-US")} entries; the web limit is ${detail.limit.toLocaleString("en-US")}. Run shadscan locally instead.`;
   }
 
+  if (detail.kind === "relevant_files") {
+    return `The relevant repository source has ${observedPrefix}${detail.observed.toLocaleString("en-US")} files; the scanner limit is ${detail.limit.toLocaleString("en-US")}. Run shadscan locally instead.`;
+  }
+
   if (detail.kind === "retained_file_bytes") {
     const pathLabel = detail.path
       ? `The file ${detail.path}`
@@ -205,6 +209,8 @@ const mapHostedScanError = (error: HostedScanError): WebScanServiceError => {
   }
 
   if (
+    error.code === "ASYNC_CONFIGURATION_INVALID" ||
+    error.code === "ASYNC_QUEUE_UNAVAILABLE" ||
     error.code === "RATE_LIMIT_NOT_CONFIGURED" ||
     error.code === "RATE_LIMIT_UNAVAILABLE" ||
     error.code === "SOURCE_CONFIGURATION_INVALID"
