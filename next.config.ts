@@ -20,6 +20,7 @@ const SCANNER_TRACE_EXCLUDES = [
   "./test-results/**/*",
   "./AGENTS.md",
   "./CHANGELOG.md",
+  "./CONTRIBUTING.md",
   "./README.md",
   "./SECURITY.md",
   "./biome.jsonc",
