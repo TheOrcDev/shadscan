@@ -1,22 +1,19 @@
 "use client";
 
 import { MoonIcon, SunIcon } from "@phosphor-icons/react";
-import { useCallback } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
-import { toggleThemeWithTransition } from "@/lib/theme-toggle";
+import { toggleTheme } from "@/lib/theme-toggle";
 
 function ModeSwitcher() {
   const { setTheme, resolvedTheme } = useTheme();
 
-  const toggleTheme = useCallback(() => {
-    toggleThemeWithTransition({ resolvedTheme, setTheme });
-  }, [resolvedTheme, setTheme]);
-
   return (
     <Button
       className="group/toggle size-8 px-0"
-      onClick={toggleTheme}
+      onClick={() => {
+        toggleTheme({ resolvedTheme, setTheme });
+      }}
       type="button"
       variant="ghost"
     >

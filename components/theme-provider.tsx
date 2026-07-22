@@ -10,7 +10,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { toggleThemeWithTransition } from "@/lib/theme-toggle";
+import { toggleTheme } from "@/lib/theme-toggle";
 
 const STORAGE_KEY = "theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
@@ -196,7 +196,7 @@ function ThemeHotkey() {
         return;
       }
 
-      toggleThemeWithTransition({ resolvedTheme, setTheme });
+      toggleTheme({ resolvedTheme, setTheme });
     }
 
     window.addEventListener("keydown", onKeyDown);
