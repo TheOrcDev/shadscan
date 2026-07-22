@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.6 - 2026-07-23
+
 ### Added
 
 - End every interactive scan with a post-scan call to action: copy the agent
