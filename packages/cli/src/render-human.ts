@@ -289,7 +289,7 @@ const renderGradeBanner = (
   const bannerRows =
     terminal.columns !== null && terminal.columns < bannerWidth
       ? null
-      : renderBannerRows(bannerText, "█");
+      : renderBannerRows(bannerText);
 
   if (bannerRows === null) {
     return [

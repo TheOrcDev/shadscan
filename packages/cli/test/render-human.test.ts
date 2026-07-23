@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AUDIT_REPORT_SCHEMA_VERSION, type AuditReport } from "../src/audit";
+import { renderBannerRows } from "../src/grade-banner";
 import { renderHumanReport, stripRoasts } from "../src/render-human";
 import type { TerminalCapabilities } from "../src/terminal-capabilities";
 
@@ -14,9 +15,6 @@ const RICH_TERMINAL = {
   columns: 18,
   unicode: true,
 } as const satisfies TerminalCapabilities;
-
-const INDENTED_BANNER_ROW = /^ {2}█/;
-const STACKED_BANNER_ROWS = /█\n {2}█/;
 
 const createReport = (): AuditReport => ({
   agentHandoff: {
@@ -269,16 +267,12 @@ describe("renderHumanReport", () => {
       terminal: { color: false, columns: 80, unicode: true },
     });
     const lines = output.trimEnd().split("\n");
-    const bannerLines = lines.slice(-5);
+    const bannerLines = lines.slice(-6);
+    // The report ends with the banner spelling "F 50/100".
+    const expectedRows = renderBannerRows("F 50/100");
 
-    expect(bannerLines).toHaveLength(5);
-    for (const line of bannerLines) {
-      expect(line).toMatch(INDENTED_BANNER_ROW);
-    }
-    // The banner spells "F 50/100": F, space, 5, 0, /, 1, 0, 0.
-    expect(bannerLines[0]).toBe(
-      "  █████     █████  ███      █   █    ███   ███"
-    );
+    expect(expectedRows).not.toBeNull();
+    expect(bannerLines).toEqual((expectedRows ?? []).map((row) => `  ${row}`));
   });
 
   it("falls back to a single grade line when the TTY is too narrow", () => {
@@ -288,7 +282,7 @@ describe("renderHumanReport", () => {
     });
 
     expect(output).toContain("Final grade: F 50/100");
-    expect(output.trimEnd()).not.toMatch(STACKED_BANNER_ROWS);
+    expect(output).not.toContain("╗");
   });
 
   it("omits the grade banner for plain terminals and unassessed runs", () => {
@@ -304,7 +298,7 @@ describe("renderHumanReport", () => {
     expect(plainOutput).not.toContain("Final grade:");
     expect(plainOutput).not.toContain("█");
     expect(unassessedOutput).not.toContain("Final grade:");
-    expect(unassessedOutput.trimEnd().endsWith("█")).toBe(false);
+    expect(unassessedOutput).not.toContain("╗");
   });
 
   it("strips terminal and direction controls from untrusted text", () => {
