@@ -6,6 +6,26 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0 - 2026-07-23
+
+The first stable release. 0.1.0 ships the same audited content as
+0.1.0-rc.7 and finalizes the release-candidate series:
+
+- 59 deterministic rules across six weighted categories, with
+  evidence-backed scoring, confidence handling, and a component-anatomy
+  engine whose composition rules respect project-defined customization.
+- Human, JSON, and paste-ready agent-prompt output; `--apply` launches an
+  installed Claude Code, Codex CLI, or Grok Build with a private
+  remediation handoff.
+- An interactive post-scan menu with arrow-key selection that copies the
+  agent handoff to the clipboard, prints it, launches an agent, or adds a
+  version-pinned pre-commit score gate.
+- `--fail-under` CI gates, a composite GitHub Action with job summaries
+  and agent-ready tracked issues, and a hosted web scanner for public
+  repositories.
+- Stable publishes now move the npm `latest` tag; public examples pin
+  exact versions.
+
 ## 0.1.0-rc.7 - 2026-07-23
 
 ### Changed
