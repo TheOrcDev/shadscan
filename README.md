@@ -10,7 +10,6 @@
   <a href="https://www.npmjs.com/package/@shadscan/cli"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/dw/@shadscan/cli.svg?mode=dark"><img alt="npm weekly downloads" src="https://shieldcn.dev/npm/dw/@shadscan/cli.svg?mode=light"></picture></a>
   <a href="https://www.npmjs.com/package/@shadscan/cli"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/node/@shadscan/cli.svg?mode=dark"><img alt="supported Node.js version" src="https://shieldcn.dev/npm/node/@shadscan/cli.svg?mode=light"></picture></a>
   <a href="packages/cli/LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/license/@shadscan/cli.svg?mode=dark"><img alt="MIT license" src="https://shieldcn.dev/npm/license/@shadscan/cli.svg?mode=light"></picture></a>
-  <a href="https://github.com/TheOrcDev/shadscan/actions/workflows/quality.yml"><img alt="CI status" src="https://github.com/TheOrcDev/shadscan/actions/workflows/quality.yml/badge.svg"></a>
 </p>
 
 <p align="center">
