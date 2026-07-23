@@ -16,7 +16,7 @@
   <a href="https://www.shadscan.com">Website</a> &middot;
   <a href="https://www.shadscan.com/scan">Scan a repository</a> &middot;
   <a href="https://www.shadscan.com/docs">Docs</a> &middot;
-  <a href="https://www.shadscan.com/docs">56 rules</a> &middot;
+  <a href="https://www.shadscan.com/docs">59 rules</a> &middot;
   <a href="https://www.shadscan.com/sponsors">Sponsor</a>
 </p>
 
@@ -144,7 +144,7 @@ configure Git, or add a Husky or native pre-commit hook.
 
 ## What It Checks
 
-The bundled ruleset contains 56 deterministic checks across six weighted
+The bundled ruleset contains 59 deterministic checks across six weighted
 categories.
 
 | Category | Examples |

@@ -10,13 +10,14 @@
   <a href="https://www.npmjs.com/package/@shadscan/cli"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/dw/@shadscan/cli.svg?mode=dark"><img alt="npm weekly downloads" src="https://shieldcn.dev/npm/dw/@shadscan/cli.svg?mode=light"></picture></a>
   <a href="https://www.npmjs.com/package/@shadscan/cli"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/node/@shadscan/cli.svg?mode=dark"><img alt="supported Node.js version" src="https://shieldcn.dev/npm/node/@shadscan/cli.svg?mode=light"></picture></a>
   <a href="packages/cli/LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/license/@shadscan/cli.svg?mode=dark"><img alt="MIT license" src="https://shieldcn.dev/npm/license/@shadscan/cli.svg?mode=light"></picture></a>
+  <a href="https://github.com/TheOrcDev/shadscan/actions/workflows/quality.yml"><img alt="CI status" src="https://github.com/TheOrcDev/shadscan/actions/workflows/quality.yml/badge.svg"></a>
 </p>
 
 <p align="center">
   <a href="https://www.shadscan.com">Website</a> ·
   <a href="https://www.shadscan.com/scan">Scan a repository</a> ·
   <a href="https://www.shadscan.com/docs">Docs</a> ·
-  <a href="docs/rules.md">56 rules</a> ·
+  <a href="docs/rules.md">59 rules</a> ·
   <a href="https://www.shadscan.com/sponsors">Sponsor</a>
 </p>
 
@@ -96,7 +97,7 @@ pnpm dlx @shadscan/cli@next --prompt
 pnpm dlx @shadscan/cli@next --apply --agent codex
 
 # Fail CI when the complete assessed score is below the floor
-pnpm dlx @shadscan/cli@0.1.0-rc.4 --fail-under 80 --no-interactive --no-roast
+pnpm dlx @shadscan/cli@0.1.0-rc.7 --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli@next --category accessibility
@@ -132,7 +133,7 @@ jobs:
       - uses: TheOrcDev/shadscan@main
         with:
           path: .
-          version: 0.1.0-rc.4 # pin an exact CLI version in CI
+          version: 0.1.0-rc.7 # pin an exact CLI version in CI
           fail-under: "80"
           create-issue: "true"
 ```
@@ -162,7 +163,7 @@ provider and approval model.
 
 ## What It Checks
 
-The bundled ruleset contains 56 deterministic checks across six weighted
+The bundled ruleset contains 59 deterministic checks across six weighted
 categories.
 
 | Category | Examples |
