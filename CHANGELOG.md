@@ -6,6 +6,13 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- Local interactive scans now end with a large block-letter grade banner
+  (for example `F 32/100`) rendered directly above the post-scan menu, so
+  the verdict is the last thing on screen. CI, piped, and plain-terminal
+  output are unchanged.
+
 ## 0.1.0 - 2026-07-23
 
 The first stable release. 0.1.0 ships the same audited content as

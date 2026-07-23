@@ -1,5 +1,6 @@
 import picocolors from "picocolors";
 import type { AuditFinding, AuditReport } from "./audit";
+import { getBannerWidth, renderBannerRows } from "./grade-banner";
 import type { TerminalCapabilities } from "./terminal-capabilities";
 
 interface RenderHumanReportOptions {
@@ -271,6 +272,40 @@ const renderAgentHandoff = (report: AuditReport): string[] => {
   return lines;
 };
 
+const renderGradeBanner = (
+  report: AuditReport,
+  terminal: TerminalCapabilities
+): string[] => {
+  // The banner is a local-TTY finale above the post-scan menu; plain, CI,
+  // and piped output keep the existing tight deterministic report.
+  if (!terminal.unicode || report.score === null || report.grade === null) {
+    return [];
+  }
+
+  const { score } = report;
+  const colors = picocolors.createColors(terminal.color);
+  const bannerText = `${report.grade} ${score}/100`;
+  const bannerWidth = RICH_SCORE_BAR_INDENT.length + getBannerWidth(bannerText);
+  const bannerRows =
+    terminal.columns !== null && terminal.columns < bannerWidth
+      ? null
+      : renderBannerRows(bannerText, "█");
+
+  if (bannerRows === null) {
+    return [
+      "",
+      `${colors.bold("Final grade:")} ${colorizeByScore(bannerText, score, colors)}`,
+    ];
+  }
+
+  return [
+    "",
+    ...bannerRows.map(
+      (row) => `${RICH_SCORE_BAR_INDENT}${colorizeByScore(row, score, colors)}`
+    ),
+  ];
+};
+
 const stripRoasts = (report: AuditReport): AuditReport => ({
   ...report,
   findings: report.findings.map((finding) => ({
@@ -295,6 +330,7 @@ const renderHumanReport = (
     ...renderFindings(report, options),
     ...renderAgentHandoff(report),
     ...renderWarnings(report),
+    ...renderGradeBanner(report, options.terminal),
   ];
 
   return `${lines.join("\n")}\n`;

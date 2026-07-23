@@ -15,6 +15,9 @@ const RICH_TERMINAL = {
   unicode: true,
 } as const satisfies TerminalCapabilities;
 
+const INDENTED_BANNER_ROW = /^ {2}█/;
+const STACKED_BANNER_ROWS = /█\n {2}█/;
+
 const createReport = (): AuditReport => ({
   agentHandoff: {
     actionables: [
@@ -258,6 +261,50 @@ describe("renderHumanReport", () => {
 
     expect(output).toContain(`\u001b[${colorCode}m${score}/100\u001b[39m`);
     expect(output).toContain(`Grade \u001b[${colorCode}m${grade}\u001b[39m`);
+  });
+
+  it("ends a wide local TTY report with the block grade banner", () => {
+    const output = renderHumanReport(createReport(), {
+      includeRoast: false,
+      terminal: { color: false, columns: 80, unicode: true },
+    });
+    const lines = output.trimEnd().split("\n");
+    const bannerLines = lines.slice(-5);
+
+    expect(bannerLines).toHaveLength(5);
+    for (const line of bannerLines) {
+      expect(line).toMatch(INDENTED_BANNER_ROW);
+    }
+    // The banner spells "F 50/100": F, space, 5, 0, /, 1, 0, 0.
+    expect(bannerLines[0]).toBe(
+      "  █████     █████  ███      █   █    ███   ███"
+    );
+  });
+
+  it("falls back to a single grade line when the TTY is too narrow", () => {
+    const output = renderHumanReport(createReport(), {
+      includeRoast: false,
+      terminal: RICH_TERMINAL,
+    });
+
+    expect(output).toContain("Final grade: F 50/100");
+    expect(output.trimEnd()).not.toMatch(STACKED_BANNER_ROWS);
+  });
+
+  it("omits the grade banner for plain terminals and unassessed runs", () => {
+    const plainOutput = renderHumanReport(createReport(), {
+      includeRoast: false,
+      terminal: PLAIN_TERMINAL,
+    });
+    const unassessedOutput = renderHumanReport(
+      { ...createReport(), grade: null, score: null },
+      { includeRoast: false, terminal: { ...RICH_TERMINAL, columns: 80 } }
+    );
+
+    expect(plainOutput).not.toContain("Final grade:");
+    expect(plainOutput).not.toContain("█");
+    expect(unassessedOutput).not.toContain("Final grade:");
+    expect(unassessedOutput.trimEnd().endsWith("█")).toBe(false);
   });
 
   it("strips terminal and direction controls from untrusted text", () => {
