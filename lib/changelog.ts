@@ -86,9 +86,12 @@ const compareVersionsDescending = (left: string, right: string): number => {
   const length = Math.max(leftParts.length, rightParts.length);
 
   for (let index = 0; index < length; index += 1) {
-    const difference = (rightParts[index] ?? 0) - (leftParts[index] ?? 0);
-    if (difference !== 0) {
-      return difference;
+    // Extra segments only come from prerelease suffixes, so the version
+    // missing a segment is the stable release and must sort first.
+    const leftPart = leftParts[index] ?? Number.POSITIVE_INFINITY;
+    const rightPart = rightParts[index] ?? Number.POSITIVE_INFINITY;
+    if (leftPart !== rightPart) {
+      return rightPart > leftPart ? 1 : -1;
     }
   }
   return 0;

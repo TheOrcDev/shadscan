@@ -10,6 +10,7 @@ const DOCS_SECTIONS = [
   { href: "#pre-commit", label: "Pre-commit gate" },
   { href: "#agent-skill", label: "Agent skill" },
   { href: "#project-rule", label: "Project rule" },
+  { href: "#troubleshooting", label: "Troubleshooting" },
 ] as const satisfies readonly DocsSection[];
 
 export { DOCS_SECTIONS };

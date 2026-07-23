@@ -6,7 +6,7 @@ import { AGENT_AUDIT_PROMPT } from "@/lib/agent-prompt";
 import { DOCS_SECTIONS } from "@/lib/docs-sections";
 import { createPageMetadata } from "@/lib/site-metadata";
 
-const CLI_PACKAGE = "@shadscan/cli@next";
+const CLI_PACKAGE = "@shadscan/cli";
 
 const AGENT_PROMPT =
   "Use $shadscan-pre-commit for this task. Establish the current score before editing, run Shadscan immediately before every commit, and do not commit if the audit is unassessed or below the task floor.";
@@ -28,7 +28,7 @@ jobs:
       - uses: TheOrcDev/shadscan@main
         with:
           path: .
-          version: 0.1.0-rc.7 # pin an exact CLI version
+          version: 0.1.0 # pin an exact CLI version
           fail-under: "80"
           create-issue: "true"`;
 
@@ -390,8 +390,8 @@ export default function DocsPage() {
             <code>create-issue</code>, <code>issue-label</code>, and{" "}
             <code>github-token</code>. Outputs: <code>score</code>,{" "}
             <code>grade</code>, and <code>report-path</code> for downstream
-            steps. Pin an exact CLI <code>version</code> in CI — the moving{" "}
-            <code>next</code> tag is not a reproducible build input.
+            steps. Pin an exact CLI <code>version</code> in CI — a moving
+            dist-tag is not a reproducible build input.
           </p>
           <p>
             With <code>create-issue</code> enabled, the action needs the{" "}
@@ -473,6 +473,27 @@ export default function DocsPage() {
             label="AGENTS.md"
             language="markdown"
           />
+        </section>
+
+        <section id="troubleshooting">
+          <h2>Troubleshooting</h2>
+          <h3>An older version runs right after a release</h3>
+          <p>
+            pnpm 11.15 and newer delays newly published versions through its{" "}
+            <code>minimumReleaseAge</code> supply-chain setting, so{" "}
+            <code>pnpm dlx @shadscan/cli</code> can silently resolve to the
+            previous release for a few days after a new one ships. Pin the exact
+            version (<code>@shadscan/cli@&lt;version&gt;</code>) to run it
+            immediately, or wait for the delay to pass.
+          </p>
+          <h3>A stale version keeps running</h3>
+          <p>
+            One-shot runners cache downloads. If an old version persists after
+            an update, pin the exact version, or clear the cache:{" "}
+            <code>npx --yes</code> forces a fresh resolution and{" "}
+            <code>pnpm store prune</code> drops unreferenced packages. Check
+            what actually ran with <code>--version</code>.
+          </p>
         </section>
       </article>
     </main>

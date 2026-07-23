@@ -55,7 +55,7 @@ const CLI_FALLBACK_CODES = new Set<WebScanErrorCode>([
   "SOURCE_TOO_LARGE",
   "SOURCE_UNSUPPORTED",
 ]);
-const LOCAL_SCAN_COMMAND = "npx @shadscan/cli@next";
+const LOCAL_SCAN_COMMAND = "npx @shadscan/cli";
 
 const isQueuedScanState = (
   state: WebScanState

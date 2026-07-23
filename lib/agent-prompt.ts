@@ -1,7 +1,7 @@
 const AGENT_AUDIT_PROMPT = `Audit this project's UI with shadscan — a deterministic auditor for React shadcn apps that flags accessibility, state, form, and composition issues.
 
 From the repo root, generate the agent handoff:
-npx @shadscan/cli@next --prompt
+npx @shadscan/cli --prompt
 
 The handoff groups findings into fix, decide, and verify work items with evidence and acceptance criteria. Then, without editing any code yet:
 1. Summarize the work items by severity, and point out the files with the most issues.

@@ -35,25 +35,25 @@ edit files, call an AI model, upload source, or require application secrets.
 Run Shadscan from the root of a project:
 
 ```bash
-pnpm dlx @shadscan/cli@next
+pnpm dlx @shadscan/cli
 ```
 
 The project path defaults to the current directory. Pass a path to scan another
 app:
 
 ```bash
-pnpm dlx @shadscan/cli@next ../my-shadcn-app
+pnpm dlx @shadscan/cli ../my-shadcn-app
 ```
 
 Using npm or Bun:
 
 ```bash
-npx --yes @shadscan/cli@next
-bunx @shadscan/cli@next
+npx --yes @shadscan/cli
+bunx @shadscan/cli
 ```
 
-Shadscan requires Node.js 18 or newer. `next` is the current release-candidate
-channel.
+Shadscan requires Node.js 18 or newer. Commands resolve to the latest stable
+release; prereleases are published under the `next` tag (`@shadscan/cli@next`).
 
 ## What You Get
 
@@ -85,27 +85,27 @@ Every report separates:
 
 ```bash
 # Machine-readable, versioned report
-pnpm dlx @shadscan/cli@next --json
+pnpm dlx @shadscan/cli --json
 
 # Paste-ready remediation plan for a coding agent
-pnpm dlx @shadscan/cli@next --prompt
+pnpm dlx @shadscan/cli --prompt
 
 # Explicitly launch an installed agent with the generated plan
-pnpm dlx @shadscan/cli@next --apply --agent codex
+pnpm dlx @shadscan/cli --apply --agent codex
 
 # Install the current candidate as an exact CI dependency, then enforce a floor
-pnpm add --save-dev --save-exact @shadscan/cli@next
+pnpm add --save-dev --save-exact @shadscan/cli
 pnpm exec shadscan --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
-pnpm dlx @shadscan/cli@next --category accessibility
+pnpm dlx @shadscan/cli --category accessibility
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
 needs to be explicit.
 
-Pin an exact package version in CI; use the moving `next` tag for local
-evaluation. Run `pnpm dlx @shadscan/cli@next --help` for every option.
+Pin an exact package version in CI; unqualified commands resolve to the latest
+stable release. Run `pnpm dlx @shadscan/cli --help` for every option.
 
 ## Agent Handoff
 

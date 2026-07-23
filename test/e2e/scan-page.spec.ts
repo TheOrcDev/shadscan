@@ -316,7 +316,7 @@ test("renders a terminal error and copies the CLI fallback", async ({
   await page.getByRole("button", { name: "Copy local scan command" }).click();
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe("npx @shadscan/cli@next");
+    .toBe("npx @shadscan/cli");
 });
 
 test("keeps result fixtures contained across target widths and themes", async ({

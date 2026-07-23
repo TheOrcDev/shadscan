@@ -34,24 +34,25 @@ edit files, call an AI model, upload source, or require application secrets.
 Run Shadscan from the root of a project:
 
 ```bash
-pnpm dlx @shadscan/cli@next
+pnpm dlx @shadscan/cli
 ```
 
 The project path defaults to the current directory. Pass a path to scan another
 app:
 
 ```bash
-pnpm dlx @shadscan/cli@next ../my-shadcn-app
+pnpm dlx @shadscan/cli ../my-shadcn-app
 ```
 
 Using npm or Bun:
 
 ```bash
-npx --yes @shadscan/cli@next
-bunx @shadscan/cli@next
+npx --yes @shadscan/cli
+bunx @shadscan/cli
 ```
 
-`next` is the current release-candidate channel.
+Commands resolve to the latest stable release. Prereleases are published
+under the `next` tag (`@shadscan/cli@next`) for early testing.
 
 Every interactive scan ends with a short menu — pick with the arrow keys and
 Enter: copy the agent handoff to your clipboard, print it, launch an installed
@@ -88,25 +89,25 @@ Every report separates:
 
 ```bash
 # Machine-readable, versioned report
-pnpm dlx @shadscan/cli@next --json
+pnpm dlx @shadscan/cli --json
 
 # Paste-ready remediation plan for a coding agent
-pnpm dlx @shadscan/cli@next --prompt
+pnpm dlx @shadscan/cli --prompt
 
 # Explicitly launch an installed agent with the generated plan
-pnpm dlx @shadscan/cli@next --apply --agent codex
+pnpm dlx @shadscan/cli --apply --agent codex
 
 # Fail CI when the complete assessed score is below the floor
-pnpm dlx @shadscan/cli@0.1.0-rc.7 --fail-under 80 --no-interactive --no-roast
+pnpm dlx @shadscan/cli@0.1.0 --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
-pnpm dlx @shadscan/cli@next --category accessibility
+pnpm dlx @shadscan/cli --category accessibility
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
-needs to be explicit. Pin an exact package version in CI; use the moving `next`
-tag for local evaluation. Run `pnpm dlx @shadscan/cli@next --help` for every
-option.
+needs to be explicit. Pin an exact package version in CI; unqualified commands
+resolve to the latest stable release. Run `pnpm dlx @shadscan/cli --help` for
+every option.
 
 ## GitHub Action
 
@@ -133,7 +134,7 @@ jobs:
       - uses: TheOrcDev/shadscan@main
         with:
           path: .
-          version: 0.1.0-rc.7 # pin an exact CLI version in CI
+          version: 0.1.0 # pin an exact CLI version in CI
           fail-under: "80"
           create-issue: "true"
 ```
