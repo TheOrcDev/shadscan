@@ -137,6 +137,13 @@ staged tarball and approves on npm with 2FA.
   exact version.
 - Verify with `npx --yes @shadscan/cli@<exact-version>`, not a dist-tag —
   runner caches can serve a stale tag resolution minutes after publish.
+- pnpm 11.15+ ships a default `minimumReleaseAge` supply-chain gate: tag
+  specs like `@next` silently resolve to the newest version OLD ENOUGH to
+  pass the gate, while exact pins bypass it. A pnpm user reporting an
+  ancient version days after a publish is probably hitting this gate, not a
+  cache — check their pnpm major first. Locally it can be disabled with
+  `minimumReleaseAge: 0` in `~/Library/Preferences/pnpm/config.yaml` (the
+  YAML global config, not the legacy `rc` file).
 - The local shadscan audit binary (`node_modules/.bin/shadscan`) breaks when
   `packages/cli/dist` is mid-rebuild; use the published one-shot
   (`pnpm dlx @shadscan/cli@next --json`) for pre-commit audits during release

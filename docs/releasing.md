@@ -82,9 +82,20 @@ member reviews the packed artifact.
    `npx --yes @shadscan/cli@<version> --version` plus representative audits in
    clean temporary Next, Vite, and generic React projects.
 
-Do not intentionally move `latest` during release-candidate testing. Inspect
-the complete tag map with `npm view @shadscan/cli dist-tags --json` after every
-publish.
+Since 0.1.0-rc.7 the owner moves `latest` to the newest release candidate
+after its verification passes, so the npm package page headline shows the
+current version during the prerelease window. Move it explicitly with
+`npm dist-tag add @shadscan/cli@<version> latest` and inspect the complete
+tag map with `npm view @shadscan/cli dist-tags --json` after every publish.
+Public CI examples must still pin exact versions.
+
+pnpm 11.15 and later delays freshly published versions behind a default
+`minimumReleaseAge` supply-chain gate: dist tags like `@next` silently
+resolve to the newest version old enough to pass, while exact version pins
+bypass the gate. During a fast release cadence this can hand pnpm users a
+days-old version. Verify releases with exact version pins, expect tag-based
+installs to lag by the gate duration, and when a user reports an old version
+check their pnpm major before blaming caches.
 
 npm requires every package to retain a `latest` tag. The first public version
 was therefore assigned to both `latest` and `next` even though it was published
