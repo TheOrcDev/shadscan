@@ -1,6 +1,6 @@
 {
   "name": "@shadscan/cli",
-  "version": "0.1.0-rc.6",
+  "version": "0.1.0-rc.7",
   "description": "Audit React shadcn apps for missing UI fundamentals.",
   "license": "MIT",
   "type": "module",

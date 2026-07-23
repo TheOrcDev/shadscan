@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.1.0-rc.7 - 2026-07-23
+
 ### Changed
 
 - Select post-scan menu options with the arrow keys and Enter instead of
