@@ -282,6 +282,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
       versions: {
         next: "16.2.10",
         react: "19.2.4",
+        tanstackStart: null,
         vite: null,
       },
       warnings: ["components.json exists but could not be fully inspected."],

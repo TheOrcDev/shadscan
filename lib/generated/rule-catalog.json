@@ -90,11 +90,12 @@
       "adapters": [
         "next-app-router",
         "next-hybrid-router",
-        "next-pages-router"
+        "next-pages-router",
+        "tanstack-start"
       ],
       "category": "foundation",
       "confidence": "high",
-      "description": "Checks for a Next not-found boundary or 404 page.",
+      "description": "Checks for a Next not-found boundary, 404 page, or TanStack Start not-found component.",
       "id": "not-found-route-present",
       "maxScore": 3,
       "severity": "warning",
@@ -151,11 +152,12 @@
     {
       "adapters": [
         "next-app-router",
-        "next-hybrid-router"
+        "next-hybrid-router",
+        "tanstack-start"
       ],
       "category": "foundation",
       "confidence": "high",
-      "description": "Checks next-themes hydration safeguards in a Next App Router shell.",
+      "description": "Checks next-themes hydration safeguards in a Next App Router or TanStack Start document shell.",
       "id": "theme-hydration-safe",
       "maxScore": 2,
       "severity": "warning",
@@ -272,11 +274,12 @@
     {
       "adapters": [
         "next-app-router",
-        "next-hybrid-router"
+        "next-hybrid-router",
+        "tanstack-start"
       ],
       "category": "states",
       "confidence": "medium",
-      "description": "Checks runtime-dynamic Next pages for a route loading file or inline Suspense fallback.",
+      "description": "Checks runtime-dynamic Next pages and loader-backed TanStack Start routes for loading coverage.",
       "id": "route-loading-boundary-present",
       "maxScore": 4,
       "severity": "warning",
@@ -625,6 +628,7 @@
         "next-app-router",
         "next-hybrid-router",
         "next-pages-router",
+        "tanstack-start",
         "vite-react"
       ],
       "category": "production-polish",
@@ -744,5 +748,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.34"
+  "rulesetVersion": "2026.07.35"
 }

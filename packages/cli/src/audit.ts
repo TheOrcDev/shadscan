@@ -19,7 +19,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 4 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 5 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -327,6 +327,7 @@ const AuditReportSchema = z.object({
       "next-app-router",
       "next-hybrid-router",
       "next-pages-router",
+      "tanstack-start",
       "vite-react",
     ]),
     evidence: z.array(z.string()),
@@ -354,6 +355,7 @@ const AuditReportSchema = z.object({
   versions: z.object({
     next: z.string().nullable(),
     react: z.string().nullable(),
+    tanstackStart: z.string().nullable(),
     vite: z.string().nullable(),
   }),
   warnings: z.array(z.string()),

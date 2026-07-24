@@ -20,6 +20,7 @@ const publicAppSeoFilesPresentRule: AuditRule = {
     "next-app-router",
     "next-hybrid-router",
     "next-pages-router",
+    "tanstack-start",
     "vite-react",
   ],
   category: "production-polish",

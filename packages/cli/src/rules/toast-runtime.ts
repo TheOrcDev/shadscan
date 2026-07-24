@@ -417,6 +417,14 @@ const getShellPaths = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.versions.tanstackStart && project.paths.routesDir) {
+    shellPaths.push(
+      ...["__root.tsx", "__root.jsx", "__root.ts", "__root.js"].map(
+        (fileName) => path.join(project.paths.routesDir ?? "", fileName)
+      )
+    );
+  }
+
   if (shellPaths.length > 0) {
     return shellPaths;
   }

@@ -229,6 +229,14 @@ const getShellCandidates = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.versions.tanstackStart && project.paths.routesDir) {
+    candidates.push(
+      ...["__root.tsx", "__root.jsx", "__root.ts", "__root.js"].map(
+        (fileName) => path.join(project.paths.routesDir ?? "", fileName)
+      )
+    );
+  }
+
   if (candidates.length > 0) {
     return candidates;
   }

@@ -35,6 +35,15 @@ const getShellCandidateGroups = (
     });
   }
 
+  if (project.versions.tanstackStart && project.paths.routesDir) {
+    groups.push({
+      label: "TanStack Start root route",
+      paths: ["__root.tsx", "__root.jsx", "__root.ts", "__root.js"].map(
+        (fileName) => path.join(project.paths.routesDir ?? "", fileName)
+      ),
+    });
+  }
+
   if (groups.length > 0) {
     return groups;
   }

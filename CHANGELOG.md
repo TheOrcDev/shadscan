@@ -6,6 +6,26 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A `tanstack-start` framework adapter (ruleset `2026.07.35`): TanStack
+  Start projects are detected from the `@tanstack/react-start` dependency
+  and a `src/routes` or `app/routes` directory instead of falling back to
+  the generic React adapter. Framework-aware rules now understand Start
+  conventions — `head()` metadata and favicon links, `notFoundComponent`,
+  loader `pendingComponent` coverage, theme hydration in the root route
+  shell, and document-shell checks against `__root.tsx` — and the
+  component render graph seeds one surface per route file from its
+  statically resolvable route options. Generated `routeTree.gen.ts` files
+  are excluded from source scanning.
+
+### Changed
+
+- The JSON report schema version is now 5: `framework.adapter` accepts
+  `tanstack-start` and `versions` includes `tanstackStart`. Consumers
+  validating `schemaVersion: 4` strictly must accept the new value; the
+  GitHub Action (which reads `score` and `grade`) is unaffected.
+
 ## 0.1.1 - 2026-07-23
 
 ### Added

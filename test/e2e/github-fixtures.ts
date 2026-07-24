@@ -69,6 +69,51 @@ const createReactProjectArchive = (): Promise<Buffer> =>
     },
   ]);
 
+const createTanstackStartProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            "@tanstack/react-router": "1.130.2",
+            "@tanstack/react-start": "1.131.7",
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+          },
+          name: "shadscan-e2e-start-fixture",
+          packageManager: "pnpm@10.16.0",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: {
+            components: "~/components",
+            ui: "~/components/ui",
+          },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        'import { createRootRoute, Outlet } from "@tanstack/react-router";\n\nfunction RootDocument() {\n  return (\n    <html lang="en">\n      <body>\n        <main>\n          <Outlet />\n        </main>\n      </body>\n    </html>\n  );\n}\n\nexport const Route = createRootRoute({\n  head: () => ({ meta: [{ title: "Start fixture" }] }),\n  component: RootDocument,\n});\n',
+      header: { name: "shadscan-e2e/src/routes/__root.tsx", type: "file" },
+    },
+    {
+      contents:
+        'import { createFileRoute } from "@tanstack/react-router";\n\nfunction Home() {\n  return (\n    <section>\n      <h1>Start fixture</h1>\n      <button type="button">Save</button>\n    </section>\n  );\n}\n\nexport const Route = createFileRoute("/")({\n  component: Home,\n});\n',
+      header: { name: "shadscan-e2e/src/routes/index.tsx", type: "file" },
+    },
+  ]);
+
 const MONOREPO_PROJECT_TREE = [
   "package.json",
   "apps/admin/package.json",
@@ -174,5 +219,6 @@ export {
   createGitHubFetchHandler,
   createMonorepoProjectArchive,
   createReactProjectArchive,
+  createTanstackStartProjectArchive,
   MONOREPO_PROJECT_TREE,
 };

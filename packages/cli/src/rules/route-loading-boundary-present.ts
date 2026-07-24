@@ -27,7 +27,12 @@ import {
 import type { AuditRule } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
 import { fail, notApplicable, pass } from "./rule-result";
-import { fileExists, findFiles } from "./source-files";
+import {
+  fileExists,
+  findFiles,
+  getProjectSourceFiles,
+  getTextLineNumber,
+} from "./source-files";
 
 interface DynamicRouteEvidence {
   line: number;
@@ -334,15 +339,99 @@ const hasNearestLoadingFile = async (
   return false;
 };
 
+const TANSTACK_LOADER_PATTERN = /\bloader\s*:/;
+const TANSTACK_PENDING_PATTERN =
+  /\b(?:defaultPendingComponent|pendingComponent)\s*:/;
+const SUSPENSE_MARKUP_PATTERN = /<Suspense\b/;
+
+const runTanstackStartCheck = async (
+  project: Parameters<AuditRule["run"]>[0]["project"]
+): Promise<ReturnType<AuditRule["run"]>> => {
+  const routesDir = project.paths.routesDir;
+
+  if (!routesDir) {
+    return notApplicable("No TanStack Start routes directory was found.");
+  }
+
+  const relativeRoutesDir = path.relative(project.rootDir, routesDir);
+  const routePaths = (
+    await findFiles(project.rootDir, [
+      path.join(relativeRoutesDir, "**/*.{js,jsx,ts,tsx}"),
+      path.join(relativeRoutesDir, "*.{js,jsx,ts,tsx}"),
+    ])
+  ).sort(compareCodeUnits);
+  let loaderRouteCount = 0;
+  let firstUncoveredRoute: { line: number | undefined; path: string } | null =
+    null;
+  let hasDefaultPending = false;
+
+  const sourceFiles = await getProjectSourceFiles(project);
+  for (const file of sourceFiles) {
+    if (TANSTACK_PENDING_PATTERN.test(file.content)) {
+      hasDefaultPending = true;
+      break;
+    }
+  }
+
+  for (const routePath of routePaths) {
+    const content = await readFile(routePath, "utf8");
+
+    if (!TANSTACK_LOADER_PATTERN.test(content)) {
+      continue;
+    }
+
+    loaderRouteCount += 1;
+
+    if (
+      TANSTACK_PENDING_PATTERN.test(content) ||
+      SUSPENSE_MARKUP_PATTERN.test(content) ||
+      hasDefaultPending
+    ) {
+      continue;
+    }
+
+    firstUncoveredRoute ??= {
+      line: getTextLineNumber(content, TANSTACK_LOADER_PATTERN),
+      path: routePath,
+    };
+  }
+
+  if (firstUncoveredRoute) {
+    return fail(
+      "Route declares a loader but has no pending coverage.",
+      "Add `pendingComponent` to the route, `defaultPendingComponent` to `createRouter`, or wrap async content in Suspense with a useful fallback.",
+      {
+        filePath: firstUncoveredRoute.path,
+        line: firstUncoveredRoute.line,
+        roast: "A blank screen is not suspense. It is a hostage situation.",
+      }
+    );
+  }
+
+  if (loaderRouteCount === 0) {
+    return notApplicable(
+      "No TanStack Start routes declare loaders that would need pending coverage."
+    );
+  }
+
+  return pass(
+    `All ${loaderRouteCount} loader-backed routes have pending coverage.`
+  );
+};
+
 const routeLoadingBoundaryPresentRule: AuditRule = {
-  adapters: ["next-app-router", "next-hybrid-router"],
+  adapters: ["next-app-router", "next-hybrid-router", "tanstack-start"],
   category: "states",
   confidence: "medium",
   description:
-    "Checks runtime-dynamic Next pages for a route loading file or inline Suspense fallback.",
+    "Checks runtime-dynamic Next pages and loader-backed TanStack Start routes for loading coverage.",
   id: "route-loading-boundary-present",
   maxScore: 4,
   run: async ({ project }) => {
+    if (project.framework.adapter === "tanstack-start") {
+      return runTanstackStartCheck(project);
+    }
+
     const appDir = project.paths.appDir;
 
     if (!appDir) {

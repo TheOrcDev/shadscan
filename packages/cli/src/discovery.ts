@@ -9,6 +9,7 @@ type FrameworkAdapter =
   | "next-app-router"
   | "next-hybrid-router"
   | "next-pages-router"
+  | "tanstack-start"
   | "vite-react"
   | "generic-react";
 
@@ -37,6 +38,7 @@ interface ProjectPaths {
   appDir: string | null;
   packageJson: string;
   pagesDir: string | null;
+  routesDir: string | null;
   srcDir: string | null;
   tailwindCss: string | null;
   tsconfig: string | null;
@@ -46,6 +48,7 @@ interface ProjectPaths {
 interface ProjectVersions {
   next: string | null;
   react: string | null;
+  tanstackStart: string | null;
   vite: string | null;
 }
 
@@ -298,6 +301,21 @@ const detectPagesDir = async (rootDir: string): Promise<string | null> => {
   return null;
 };
 
+const detectRoutesDir = async (rootDir: string): Promise<string | null> => {
+  const routesDirs = [
+    path.join(rootDir, "src", "routes"),
+    path.join(rootDir, "app", "routes"),
+  ];
+
+  for (const routesDir of routesDirs) {
+    if (await fileExists(routesDir)) {
+      return routesDir;
+    }
+  }
+
+  return null;
+};
+
 const detectViteEntry = async (rootDir: string): Promise<string | null> => {
   const entryCandidates = [
     path.join(rootDir, "src", "main.tsx"),
@@ -343,12 +361,14 @@ const detectFramework = ({
   dependencies,
   pagesDir,
   rootDir,
+  routesDir,
   viteEntry,
 }: {
   appDir: string | null;
   dependencies: Record<string, string>;
   pagesDir: string | null;
   rootDir: string;
+  routesDir: string | null;
   viteEntry: string | null;
 }): FrameworkDiscovery => {
   const evidence: string[] = [];
@@ -390,6 +410,28 @@ const detectFramework = ({
       adapter: "next-pages-router",
       evidence,
     };
+  }
+
+  if (dependencies["@tanstack/react-start"] && routesDir) {
+    evidence.push("tanstack start dependency found");
+    evidence.push(
+      `route files directory found at ${path.relative(rootDir, routesDir)}`
+    );
+
+    return {
+      adapter: "tanstack-start",
+      evidence,
+    };
+  }
+
+  if (dependencies["@tanstack/react-start"]) {
+    evidence.push(
+      "tanstack start dependency found but no routes directory (src/routes or app/routes) exists"
+    );
+  } else if (dependencies["@tanstack/react-router"]) {
+    evidence.push(
+      "tanstack router dependency found; router-only projects use the vite or generic adapter"
+    );
   }
 
   if (dependencies.vite && dependencies.react && viteEntry) {
@@ -452,12 +494,14 @@ const discoverProject = async (
 
   const appDir = await detectAppDir(rootDir);
   const pagesDir = await detectPagesDir(rootDir);
+  const routesDir = await detectRoutesDir(rootDir);
   const viteEntry = await detectViteEntry(rootDir);
   const framework = detectFramework({
     appDir,
     dependencies,
     pagesDir,
     rootDir,
+    routesDir,
     viteEntry,
   });
   const tailwindCss = await detectTailwindCss(rootDir, shadcnConfig);
@@ -485,6 +529,7 @@ const discoverProject = async (
       appDir,
       packageJson: packageJsonPath,
       pagesDir,
+      routesDir,
       srcDir: (await fileExists(srcDir)) ? srcDir : null,
       tailwindCss,
       tsconfig: (await fileExists(tsconfig)) ? tsconfig : null,
@@ -504,6 +549,7 @@ const discoverProject = async (
     versions: {
       next: dependencies.next ?? null,
       react: dependencies.react ?? null,
+      tanstackStart: dependencies["@tanstack/react-start"] ?? null,
       vite: dependencies.vite ?? null,
     },
     warnings,

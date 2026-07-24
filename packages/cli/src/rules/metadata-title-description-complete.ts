@@ -52,6 +52,10 @@ interface MetadataExport {
 }
 
 const APP_METADATA_FILE_PATTERN = /^(?:layout|page)\.[cm]?[jt]sx?$/;
+const TANSTACK_HEAD_OPTION_PATTERN = /\bhead\s*:\s*(?:\(|[\w$]+\s*=>)/;
+const TANSTACK_HEAD_TITLE_PATTERN = /\btitle\s*:\s*["'`][^"'`]+["'`]/;
+const TANSTACK_HEAD_DESCRIPTION_PATTERN = /\bname\s*:\s*["']description["']/;
+const TANSTACK_HEAD_CONTENT_PATTERN = /\bcontent\s*:\s*["'`][^"'`]+["'`]/;
 const HTML_TITLE_PATTERN = /<title>\s*[^<\s][^<]*<\/title>/i;
 const HTML_DESCRIPTION_PATTERN =
   /<meta(?=[^>]*name=["']description["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
@@ -422,6 +426,33 @@ const evaluateNextMetadata = async (
     : evaluateMetadataWithoutRoot(metadataExports);
 };
 
+const evaluateTanstackStartMetadata = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const files = await getProjectSourceFiles(project);
+  const headPatterns = [
+    TANSTACK_HEAD_OPTION_PATTERN,
+    TANSTACK_HEAD_TITLE_PATTERN,
+    TANSTACK_HEAD_DESCRIPTION_PATTERN,
+    TANSTACK_HEAD_CONTENT_PATTERN,
+  ];
+
+  for (const file of files) {
+    if (headPatterns.every((pattern) => pattern.test(file.content))) {
+      return pass(
+        "TanStack Start head() metadata includes a non-empty title and description.",
+        file.path,
+        getTextLineNumber(file.content, TANSTACK_HEAD_TITLE_PATTERN)
+      );
+    }
+  }
+
+  return fail(
+    "No TanStack Start head() metadata with a non-empty title and description was found.",
+    "Return `meta` entries with a title and a description from the root route's `head()` option."
+  );
+};
+
 const evaluateHtmlMetadata = async (
   project: ProjectDiscovery
 ): Promise<AuditRuleResult> => {
@@ -526,6 +557,10 @@ const metadataTitleDescriptionCompleteRule: AuditRule = {
 
     if (project.versions.next && project.paths.pagesDir) {
       return evaluatePagesMetadata(project);
+    }
+
+    if (project.versions.tanstackStart && project.paths.routesDir) {
+      return evaluateTanstackStartMetadata(project);
     }
 
     return evaluateHtmlMetadata(project);
