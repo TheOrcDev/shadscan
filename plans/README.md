@@ -13,6 +13,7 @@ the executor. Each plan is marked DONE with its landing commit when complete.
 | 007 | Post-scan handoff call to action | P1 | M | - | DONE (`15fd501`) |
 | 008 | Arrow-key selection for the post-scan menu | P2 | M | 007 | DONE (`5dc0870`) |
 | [009](009-tanstack-start-adapter.md) | TanStack Start framework adapter | P1 | L | - | DONE (`935ef41`) |
+| [010](010-laravel-inertia-react-adapter.md) | Laravel (Inertia + React) framework adapter | P1 | XL | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
