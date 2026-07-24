@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { discoverProject } from "../src/discovery";
 
+const BLADE_OR_LIVEWIRE_PATTERN = /Blade or Livewire/;
 const tempDirs: string[] = [];
 
 const createFixture = async (): Promise<string> => {
@@ -190,6 +191,137 @@ describe("discoverProject", () => {
     expect(project.framework.adapter).toBe("vite-react");
     expect(project.paths.viteEntry).toBe(path.join(rootDir, "src", "main.tsx"));
     expect(project.versions.vite).toBe("7.2.0");
+  });
+
+  it("detects a Laravel Inertia React shadcn app", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+      },
+      devDependencies: {
+        "laravel-vite-plugin": "1.3.0",
+        vite: "7.2.0",
+      },
+    });
+    await writeFixtureFile(
+      rootDir,
+      "composer.json",
+      `${JSON.stringify({ require: { "laravel/framework": "^12.0" } }, null, 2)}\n`
+    );
+    await writeFixtureFile(rootDir, "artisan", "#!/usr/bin/env php\n");
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "resources/js/pages/dashboard.tsx",
+      "export default function Dashboard() { return <main />; }\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "resources/views/app.blade.php",
+      '<html lang="en"><head>@inertiaHead</head><body>@inertia</body></html>\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("laravel-inertia-react");
+    expect(project.framework.evidence).toContain(
+      "inertia react dependency found"
+    );
+    expect(project.paths.inertiaPagesDir).toBe(
+      path.join(rootDir, "resources", "js", "pages")
+    );
+    expect(project.paths.bladeRootView).toBe(
+      path.join(rootDir, "resources", "views", "app.blade.php")
+    );
+    expect(project.versions.inertia).toBe("2.0.11");
+    expect(project.versions.laravel).toBe("^12.0");
+  });
+
+  it("accepts the capitalized Inertia Pages directory", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+      },
+      devDependencies: { "laravel-vite-plugin": "1.3.0" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "resources/js/Pages/Dashboard.tsx",
+      "export default function Dashboard() { return <main />; }\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("laravel-inertia-react");
+    // Case-insensitive filesystems (macOS) may report the lowercase probe;
+    // case-sensitive systems return the real Pages casing. Both are valid.
+    expect(project.paths.inertiaPagesDir?.toLowerCase()).toBe(
+      path.join(rootDir, "resources", "js", "pages").toLowerCase()
+    );
+  });
+
+  it("keeps non-laravel inertia hosts on the vite adapter with evidence", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+    expect(project.framework.evidence).toContain(
+      "inertia react dependency found without a laravel marker (artisan or laravel-vite-plugin); non-laravel inertia hosts use the vite or generic adapter"
+    );
+  });
+
+  it("prefers laravel-inertia-react over vite-react when both signals exist", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeFixtureFile(rootDir, "artisan", "#!/usr/bin/env php\n");
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+    await writeFixtureFile(
+      rootDir,
+      "resources/js/pages/home.tsx",
+      "export default function Home() { return <main />; }\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("laravel-inertia-react");
+  });
+
+  it("names the blade or livewire stack when a laravel app has no react", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      devDependencies: { "laravel-vite-plugin": "1.3.0" },
+    });
+    await writeFixtureFile(
+      rootDir,
+      "composer.json",
+      `${JSON.stringify({ require: { "laravel/framework": "^12.0" } }, null, 2)}\n`
+    );
+
+    await expect(discoverProject(rootDir)).rejects.toThrow(
+      BLADE_OR_LIVEWIRE_PATTERN
+    );
   });
 
   it("detects a TanStack Start shadcn app", async () => {

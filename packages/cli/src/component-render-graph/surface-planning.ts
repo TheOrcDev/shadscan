@@ -1,5 +1,6 @@
 import { compareCodeUnits } from "../deterministic-order";
 import { addClientSurfacePlan } from "./client-surface-planning";
+import { addInertiaSurfacePlans } from "./inertia-surface-planning";
 import {
   addAppSurfacePlans,
   addNextConfigBoundary,
@@ -26,6 +27,10 @@ const createSurfacePlans = (state: GraphBuildState): SurfacePlan[] => {
 
   if (adapter === "tanstack-start") {
     addStartSurfacePlans(state, plans);
+  }
+
+  if (adapter === "laravel-inertia-react") {
+    addInertiaSurfacePlans(state, plans);
   }
 
   addClientSurfacePlan(state, plans);

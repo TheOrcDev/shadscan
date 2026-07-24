@@ -237,6 +237,18 @@ const getShellCandidates = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.versions.inertia && project.paths.inertiaPagesDir) {
+    candidates.push(
+      ...[
+        "resources/js/app.tsx",
+        "resources/js/app.jsx",
+        "resources/js/ssr.tsx",
+        "resources/js/layouts/app-layout.tsx",
+        "resources/js/Layouts/AppLayout.tsx",
+      ].map((fileName) => path.join(project.rootDir, fileName))
+    );
+  }
+
   if (candidates.length > 0) {
     return candidates;
   }

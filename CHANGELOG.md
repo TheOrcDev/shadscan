@@ -6,6 +6,28 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A `laravel-inertia-react` framework adapter (ruleset `2026.07.36`):
+  Laravel applications built on Inertia and React — the stack the official
+  Laravel React starter kit ships with shadcn/ui — are detected from the
+  `@inertiajs/react` dependency, a Laravel marker (`artisan` or
+  `laravel-vite-plugin`), and a `resources/js/pages` directory (both
+  casings). The scanner now reads `resources/js` source and
+  `resources/css` styles, rules understand Inertia and Blade conventions
+  (`<Head>` metadata, the Blade root view's language/favicon/social tags,
+  `errors/404.blade.php`, Inertia's navigation progress indicator), and
+  the component render graph seeds one surface per Inertia page with
+  persistent `Page.layout` wrappers resolved. Composer `vendor/`
+  directories are excluded from source scanning, and Blade-only or
+  Livewire Laravel apps get an error that names their UI stack.
+
+### Changed
+
+- The JSON report schema version is now 6: `framework.adapter` accepts
+  `laravel-inertia-react` and `versions` includes `inertia` and `laravel`.
+  The GitHub Action (which reads `score` and `grade`) is unaffected.
+
 ## 0.2.0 - 2026-07-24
 
 ### Added

@@ -114,6 +114,68 @@ const createTanstackStartProjectArchive = (): Promise<Buffer> =>
     },
   ]);
 
+const createLaravelInertiaProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            "@inertiajs/react": "2.0.11",
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+          },
+          devDependencies: {
+            "laravel-vite-plugin": "1.3.0",
+            vite: "7.2.0",
+          },
+          name: "shadscan-e2e-laravel-fixture",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        { require: { "laravel/framework": "^12.0" } },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/composer.json", type: "file" },
+    },
+    {
+      contents: "#!/usr/bin/env php\n",
+      header: { name: "shadscan-e2e/artisan", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: { components: "@/components", ui: "@/components/ui" },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        '<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <title inertia>Laravel fixture</title>\n    @inertiaHead\n  </head>\n  <body>@inertia</body>\n</html>\n',
+      header: {
+        name: "shadscan-e2e/resources/views/app.blade.php",
+        type: "file",
+      },
+    },
+    {
+      contents:
+        'export default function Dashboard() {\n  return (\n    <main>\n      <h1>Dashboard</h1>\n      <button type="button">Save</button>\n    </main>\n  );\n}\n',
+      header: {
+        name: "shadscan-e2e/resources/js/pages/dashboard.tsx",
+        type: "file",
+      },
+    },
+  ]);
+
 const MONOREPO_PROJECT_TREE = [
   "package.json",
   "apps/admin/package.json",
@@ -217,6 +279,7 @@ const createGitHubFetchHandler = ({
 
 export {
   createGitHubFetchHandler,
+  createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,
   createReactProjectArchive,
   createTanstackStartProjectArchive,

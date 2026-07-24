@@ -46,6 +46,13 @@ const getDocumentCandidateGroups = (
     });
   }
 
+  if (project.paths.bladeRootView) {
+    groups.push({
+      label: "Laravel Blade root view",
+      paths: [project.paths.bladeRootView],
+    });
+  }
+
   return groups.length > 0
     ? groups
     : [

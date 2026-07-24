@@ -30,8 +30,10 @@ import { fail, notApplicable, pass } from "./rule-result";
 import {
   fileExists,
   findFiles,
+  findSourceMatch,
   getProjectSourceFiles,
   getTextLineNumber,
+  readProjectSourceFile,
 } from "./source-files";
 
 interface DynamicRouteEvidence {
@@ -419,15 +421,89 @@ const runTanstackStartCheck = async (
   );
 };
 
+const INERTIA_PROGRESS_DISABLED_PATTERN = /\bprogress\s*:\s*false\b/;
+const INERTIA_ROUTER_START_PATTERN = /router\.on\(\s*["']start["']/;
+const INERTIA_APP_ENTRY_CANDIDATES = [
+  "resources/js/app.tsx",
+  "resources/js/app.jsx",
+  "resources/js/app.ts",
+  "resources/js/app.js",
+];
+
+const runInertiaCheck = async (
+  project: Parameters<AuditRule["run"]>[0]["project"]
+): Promise<ReturnType<AuditRule["run"]>> => {
+  let appEntry: Awaited<ReturnType<typeof readProjectSourceFile>> = null;
+
+  for (const candidate of INERTIA_APP_ENTRY_CANDIDATES) {
+    appEntry = await readProjectSourceFile(
+      project,
+      path.join(project.rootDir, candidate)
+    );
+
+    if (appEntry) {
+      break;
+    }
+  }
+
+  if (!appEntry) {
+    return notApplicable(
+      "No Inertia app entry (resources/js/app.tsx) was found."
+    );
+  }
+
+  if (!INERTIA_PROGRESS_DISABLED_PATTERN.test(appEntry.content)) {
+    return pass(
+      "Inertia's navigation progress indicator is active.",
+      appEntry.path
+    );
+  }
+
+  const startHandler = await findSourceMatch(
+    project,
+    INERTIA_ROUTER_START_PATTERN
+  );
+
+  if (startHandler) {
+    return pass(
+      "Inertia progress is disabled but a custom router start handler provides loading feedback.",
+      startHandler.file.path,
+      startHandler.line
+    );
+  }
+
+  return fail(
+    "Inertia progress is disabled and no custom loading indicator was found.",
+    'Re-enable the `progress` option in `createInertiaApp` or show loading feedback from a `router.on("start")` handler.',
+    {
+      filePath: appEntry.path,
+      line: getTextLineNumber(
+        appEntry.content,
+        INERTIA_PROGRESS_DISABLED_PATTERN
+      ),
+      roast: "A blank screen is not suspense. It is a hostage situation.",
+    }
+  );
+};
+
 const routeLoadingBoundaryPresentRule: AuditRule = {
-  adapters: ["next-app-router", "next-hybrid-router", "tanstack-start"],
+  adapters: [
+    "laravel-inertia-react",
+    "next-app-router",
+    "next-hybrid-router",
+    "tanstack-start",
+  ],
   category: "states",
   confidence: "medium",
   description:
-    "Checks runtime-dynamic Next pages and loader-backed TanStack Start routes for loading coverage.",
+    "Checks runtime-dynamic Next pages, loader-backed TanStack Start routes, and Inertia navigation for loading coverage.",
   id: "route-loading-boundary-present",
   maxScore: 4,
   run: async ({ project }) => {
+    if (project.framework.adapter === "laravel-inertia-react") {
+      return runInertiaCheck(project);
+    }
+
     if (project.framework.adapter === "tanstack-start") {
       return runTanstackStartCheck(project);
     }
