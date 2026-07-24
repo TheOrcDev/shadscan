@@ -46,6 +46,14 @@ const PAGE_METADATA = [
     socialTitle: "Sponsor shadscan | shadscan",
   },
   {
+    browserTitle: "Shadscan contributors | shadscan",
+    description:
+      "Meet the people who build shadscan, the deterministic UI audit CLI for React and shadcn applications.",
+    imagePath: "/contributors/opengraph-image",
+    path: "/contributors",
+    socialTitle: "Shadscan contributors | shadscan",
+  },
+  {
     browserTitle: "Privacy Policy | shadscan",
     description:
       "How Shadscan processes repository scans, request data, local preferences, and communications.",
@@ -253,6 +261,7 @@ for (const imagePath of [
   "/scan/opengraph-image",
   "/docs/opengraph-image",
   "/sponsors/opengraph-image",
+  "/contributors/opengraph-image",
 ]) {
   test(`renders the 1200x630 social card at ${imagePath}`, async ({
     request,

@@ -9,6 +9,7 @@ import {
   ListChecks,
   MagnifyingGlass,
   Sparkle,
+  UsersThree,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -179,6 +180,15 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
               >
                 <ClockCounterClockwise weight="bold" />
                 Changelog
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/contributors");
+                }}
+              >
+                <UsersThree weight="bold" />
+                Contributors
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="CLI">
