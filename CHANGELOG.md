@@ -6,6 +6,12 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- App Router rules now discover route boundaries and metadata exports on
+  Windows, where native path separators previously prevented glob and source
+  directory matching.
+
 ## 0.2.0 - 2026-07-24
 
 ### Added

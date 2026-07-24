@@ -326,9 +326,10 @@ const getAppRelativePatterns = (
   }
 
   const relativeAppDir = path.relative(context.project.rootDir, appDir);
+  const globAppDir = relativeAppDir.split(path.sep).join("/");
   return [
-    path.join(relativeAppDir, fileName),
-    path.join(relativeAppDir, "**", fileName),
+    path.posix.join(globAppDir, fileName),
+    path.posix.join(globAppDir, "**", fileName),
   ];
 };
 
