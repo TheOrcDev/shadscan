@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-24
+
 ### Added
 
 - A `tanstack-start` framework adapter (ruleset `2026.07.35`): TanStack
