@@ -27,6 +27,7 @@ const SOURCE_PATTERNS = [
   "*.{js,jsx,ts,tsx}",
   "app/**/*.{js,jsx,ts,tsx}",
   "pages/**/*.{js,jsx,ts,tsx}",
+  "resources/js/**/*.{js,jsx,ts,tsx}",
   "src/**/*.{js,jsx,ts,tsx}",
   "components/**/*.{js,jsx,ts,tsx}",
   "lib/**/*.{js,jsx,ts,tsx}",
@@ -37,6 +38,7 @@ const STYLE_PATTERNS = [
   "*.css",
   "app/**/*.css",
   "components/**/*.css",
+  "resources/css/**/*.css",
   "src/**/*.css",
   "styles/**/*.css",
 ];
@@ -55,6 +57,7 @@ const PROJECT_IGNORES = [
   "**/generated/**",
   "**/node_modules/**",
   "**/routeTree.gen.ts",
+  "**/vendor/**",
   "**/*.{spec,test}.{js,jsx,ts,tsx}",
   "**/*.stories.{js,jsx,ts,tsx}",
   "**/*.generated.{js,jsx,ts,tsx}",

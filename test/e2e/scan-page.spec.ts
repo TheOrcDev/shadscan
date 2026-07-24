@@ -3,6 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { test } from "next/experimental/testmode/playwright.js";
 import {
   createGitHubFetchHandler,
+  createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,
   createReactProjectArchive,
   createTanstackStartProjectArchive,
@@ -230,6 +231,26 @@ test("scans a TanStack Start repository and reports its adapter", async ({
     page.getByRole("heading", { level: 2, name: "Scan complete" })
   ).toBeFocused();
   await expect(page.getByText("TanStack Start", { exact: true })).toBeVisible();
+});
+
+test("scans a Laravel Inertia repository and reports its adapter", async ({
+  next,
+  page,
+}) => {
+  const archive = await createLaravelInertiaProjectArchive();
+  const repository = "e2e/laravel-adapter";
+  next.onFetch(createGitHubFetchHandler({ archive, repository }));
+  await visitScanPage(page, "203.0.113.21");
+  const input = page.getByLabel("GitHub repository");
+  await input.fill(repository);
+  await input.press("Enter");
+
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Scan complete" })
+  ).toBeFocused();
+  await expect(
+    page.getByText("Laravel + Inertia", { exact: true })
+  ).toBeVisible();
 });
 
 test("selects and scans one project from an ambiguous monorepo", async ({

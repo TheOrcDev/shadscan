@@ -64,6 +64,9 @@ const TANSTACK_FAVICON_LINK_PATTERN =
   /\brel\s*:\s*["'](?:icon|shortcut icon)["']/;
 const TANSTACK_NOT_FOUND_PATTERN =
   /\b(?:defaultNotFoundComponent|notFoundComponent)\s*:/;
+const INERTIA_HEAD_TITLE_ATTRIBUTE_PATTERN = /<Head\b[^>]*\btitle\s*=/;
+const INERTIA_HEAD_TITLE_CHILD_PATTERN = /<Head\b[\s\S]{0,600}?<title[\s>]/;
+const BLADE_INERTIA_TITLE_PATTERN = /<title\b[^>]*\binertia\b/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
 interface ImportedHelper {
@@ -524,6 +527,49 @@ const themeHotkeyPresentRule: AuditRule = {
   title: "dark-mode shortcut present",
 };
 
+const evaluateInertiaDocumentTitle = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const attributeMatch = await findSourceMatch(
+    context.project,
+    INERTIA_HEAD_TITLE_ATTRIBUTE_PATTERN
+  );
+  const childMatch =
+    attributeMatch ??
+    (await findSourceMatch(context.project, INERTIA_HEAD_TITLE_CHILD_PATTERN));
+
+  if (childMatch) {
+    return pass(
+      "Inertia Head metadata with a title found.",
+      childMatch.file.path,
+      childMatch.line
+    );
+  }
+
+  const bladeRootView = context.project.paths.bladeRootView;
+  const bladeDocument = bladeRootView
+    ? await readProjectSourceFile(context.project, bladeRootView)
+    : null;
+
+  if (
+    bladeDocument &&
+    (BLADE_INERTIA_TITLE_PATTERN.test(bladeDocument.content) ||
+      HTML_TITLE_PATTERN.test(bladeDocument.content))
+  ) {
+    return pass(
+      "Blade root view provides the document title.",
+      bladeDocument.path,
+      getTextLineNumber(bladeDocument.content, HTML_TITLE_PATTERN) ??
+        getTextLineNumber(bladeDocument.content, BLADE_INERTIA_TITLE_PATTERN)
+    );
+  }
+
+  return fail(
+    "No Inertia Head title or Blade root view title was found.",
+    'Render Inertia\'s `<Head title="…">` in your pages or add a title element to `resources/views/app.blade.php`.'
+  );
+};
+
 const metadataConfiguredRule: AuditRule = {
   adapters: ["core"],
   category: "foundation",
@@ -534,6 +580,13 @@ const metadataConfiguredRule: AuditRule = {
   run: async (context) => {
     const { appDir, pagesDir, routesDir } = context.project.paths;
     let firstMatch: { filePath: string; line: number } | null = null;
+
+    if (
+      context.project.versions.inertia &&
+      context.project.paths.inertiaPagesDir
+    ) {
+      return evaluateInertiaDocumentTitle(context);
+    }
 
     if (context.project.versions.tanstackStart && routesDir) {
       const match = await findSourceMatchInDirectory(context, routesDir, [
@@ -616,7 +669,7 @@ const faviconPresentRule: AuditRule = {
       "app/icon.*",
       "src/app/favicon.ico",
       "src/app/icon.*",
-      "public/favicon.ico",
+      "public/favicon.*",
       "public/icon.*",
     ]);
 
@@ -657,6 +710,23 @@ const faviconPresentRule: AuditRule = {
       }
     }
 
+    const bladeRootView = context.project.paths.bladeRootView;
+
+    if (bladeRootView) {
+      const bladeDocument = await readProjectSourceFile(
+        context.project,
+        bladeRootView
+      );
+
+      if (bladeDocument && FAVICON_LINK_PATTERN.test(bladeDocument.content)) {
+        return pass(
+          "Favicon link found in the Blade root view.",
+          bladeRootView,
+          getTextLineNumber(bladeDocument.content, FAVICON_LINK_PATTERN)
+        );
+      }
+    }
+
     return fail(
       "No favicon or app icon was found.",
       "Add `app/favicon.ico`, `app/icon.*`, `public/favicon.ico`, or an equivalent icon link."
@@ -668,6 +738,7 @@ const faviconPresentRule: AuditRule = {
 
 const notFoundRoutePresentRule: AuditRule = {
   adapters: [
+    "laravel-inertia-react",
     "next-app-router",
     "next-hybrid-router",
     "next-pages-router",
@@ -676,11 +747,28 @@ const notFoundRoutePresentRule: AuditRule = {
   category: "foundation",
   confidence: "high",
   description:
-    "Checks for a Next not-found boundary, 404 page, or TanStack Start not-found component.",
+    "Checks for a Next not-found boundary, 404 page, TanStack Start not-found component, or Laravel error page.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
     const foundPaths: string[] = [];
+
+    if (context.project.versions.inertia && context.project.versions.laravel) {
+      const errorSurface = await hasAnyFile(context.project.rootDir, [
+        "resources/views/errors/404.blade.php",
+        "resources/js/pages/{error,Error}*.{jsx,tsx}",
+        "resources/js/Pages/{error,Error}*.{jsx,tsx}",
+      ]);
+
+      if (!errorSurface) {
+        return fail(
+          "No Laravel 404 error view or Inertia error page was found.",
+          "Add `resources/views/errors/404.blade.php` or render an Inertia error page component so missing routes have a designed state."
+        );
+      }
+
+      return pass("Laravel not-found error surface found.", errorSurface);
+    }
 
     if (context.project.versions.tanstackStart) {
       const notFoundMatch = await findSourceMatch(

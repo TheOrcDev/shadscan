@@ -714,6 +714,8 @@ describe("createAuditReport", () => {
       packageName: null,
       paths: {
         appDir: null,
+        bladeRootView: null,
+        inertiaPagesDir: null,
         packageJson: "/tmp/package.json",
         pagesDir: null,
         routesDir: null,
@@ -733,6 +735,8 @@ describe("createAuditReport", () => {
       },
       sourceCoverage: "complete",
       versions: {
+        inertia: null,
+        laravel: null,
         next: null,
         react: null,
         tanstackStart: null,

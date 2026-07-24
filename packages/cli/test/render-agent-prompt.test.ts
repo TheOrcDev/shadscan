@@ -21,6 +21,8 @@ const createProject = (): ProjectDiscovery => ({
   packageName: "prompt-fixture",
   paths: {
     appDir: null,
+    bladeRootView: null,
+    inertiaPagesDir: null,
     packageJson: path.join(PROJECT_ROOT, "package.json"),
     pagesDir: null,
     routesDir: null,
@@ -43,6 +45,8 @@ const createProject = (): ProjectDiscovery => ({
   },
   sourceCoverage: "complete",
   versions: {
+    inertia: null,
+    laravel: null,
     next: null,
     react: "19.2.4",
     tanstackStart: null,

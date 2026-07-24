@@ -44,6 +44,19 @@ const getShellCandidateGroups = (
     });
   }
 
+  if (project.versions.inertia && project.paths.inertiaPagesDir) {
+    groups.push({
+      label: "Inertia app shell",
+      paths: [
+        "resources/js/app.tsx",
+        "resources/js/app.jsx",
+        "resources/js/ssr.tsx",
+        "resources/js/layouts/app-layout.tsx",
+        "resources/js/Layouts/AppLayout.tsx",
+      ].map((fileName) => path.join(project.rootDir, fileName)),
+    });
+  }
+
   if (groups.length > 0) {
     return groups;
   }

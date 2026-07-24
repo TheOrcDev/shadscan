@@ -186,8 +186,8 @@ Low-confidence checks stay visible as score-neutral advisories instead of
 pretending static analysis can prove rendered behavior.
 
 Rules only run where they apply. Shadscan supports Next.js App Router, Pages
-Router, hybrid Next.js projects, TanStack Start, Vite React, and generic
-React applications.
+Router, hybrid Next.js projects, TanStack Start, Laravel with Inertia and
+React, Vite React, and generic React applications.
 
 ## Web Scanner And Hosted API
 

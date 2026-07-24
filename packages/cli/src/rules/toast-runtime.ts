@@ -425,6 +425,18 @@ const getShellPaths = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.versions.inertia && project.paths.inertiaPagesDir) {
+    shellPaths.push(
+      ...[
+        "resources/js/app.tsx",
+        "resources/js/app.jsx",
+        "resources/js/ssr.tsx",
+        "resources/js/layouts/app-layout.tsx",
+        "resources/js/Layouts/AppLayout.tsx",
+      ].map((fileName) => path.join(project.rootDir, fileName))
+    );
+  }
+
   if (shellPaths.length > 0) {
     return shellPaths;
   }

@@ -100,6 +100,69 @@ const evaluatePagesRouterSocialPreview = async (
   );
 };
 
+const evaluateTanstackStartSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const files = await getProjectSourceFiles(project);
+
+  for (const file of files) {
+    if (
+      TANSTACK_SOCIAL_IMAGE_PATTERN.test(file.content) &&
+      TANSTACK_SOCIAL_CONTENT_PATTERN.test(file.content)
+    ) {
+      return pass(
+        "Social preview image metadata found in head() meta entries.",
+        file.path,
+        getTextLineNumber(file.content, TANSTACK_SOCIAL_IMAGE_PATTERN)
+      );
+    }
+  }
+
+  return fail(
+    "No Open Graph or Twitter image metadata was found.",
+    "Add an og:image or twitter:image meta entry with a public image URL to the root route's head() option."
+  );
+};
+
+const evaluateInertiaSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const files = await getProjectSourceFiles(project);
+
+  for (const file of files) {
+    const line = getTextLineNumber(file.content, HTML_SOCIAL_IMAGE_PATTERN);
+
+    if (line !== undefined) {
+      return pass(
+        "Social preview image metadata found in Inertia Head markup.",
+        file.path,
+        line
+      );
+    }
+  }
+
+  const bladeRootView = project.paths.bladeRootView;
+  const bladeDocument = bladeRootView
+    ? await readProjectSourceFile(project, bladeRootView)
+    : null;
+  const bladeLine = bladeDocument
+    ? getTextLineNumber(bladeDocument.content, HTML_SOCIAL_IMAGE_PATTERN)
+    : undefined;
+
+  if (bladeDocument && bladeLine !== undefined) {
+    return pass(
+      "Social preview image metadata found in the Blade root view.",
+      bladeDocument.path,
+      bladeLine
+    );
+  }
+
+  return fail(
+    "No Open Graph or Twitter image metadata was found.",
+    "Add an og:image or twitter:image meta tag through Inertia's `<Head>` or the Blade root view."
+  );
+};
+
 const socialPreviewPresentRule: AuditRule = {
   adapters: ["core"],
   category: "production-polish",
@@ -133,26 +196,12 @@ const socialPreviewPresentRule: AuditRule = {
       return evaluatePagesRouterSocialPreview(project);
     }
 
+    if (project.versions.inertia && project.paths.inertiaPagesDir) {
+      return evaluateInertiaSocialPreview(project);
+    }
+
     if (project.versions.tanstackStart && project.paths.routesDir) {
-      const files = await getProjectSourceFiles(project);
-
-      for (const file of files) {
-        if (
-          TANSTACK_SOCIAL_IMAGE_PATTERN.test(file.content) &&
-          TANSTACK_SOCIAL_CONTENT_PATTERN.test(file.content)
-        ) {
-          return pass(
-            "Social preview image metadata found in head() meta entries.",
-            file.path,
-            getTextLineNumber(file.content, TANSTACK_SOCIAL_IMAGE_PATTERN)
-          );
-        }
-      }
-
-      return fail(
-        "No Open Graph or Twitter image metadata was found.",
-        "Add an og:image or twitter:image meta entry with a public image URL to the root route's head() option."
-      );
+      return evaluateTanstackStartSocialPreview(project);
     }
 
     const indexPath = path.join(project.rootDir, "index.html");

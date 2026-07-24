@@ -88,6 +88,7 @@
     },
     {
       "adapters": [
+        "laravel-inertia-react",
         "next-app-router",
         "next-hybrid-router",
         "next-pages-router",
@@ -95,7 +96,7 @@
       ],
       "category": "foundation",
       "confidence": "high",
-      "description": "Checks for a Next not-found boundary, 404 page, or TanStack Start not-found component.",
+      "description": "Checks for a Next not-found boundary, 404 page, TanStack Start not-found component, or Laravel error page.",
       "id": "not-found-route-present",
       "maxScore": 3,
       "severity": "warning",
@@ -273,13 +274,14 @@
     },
     {
       "adapters": [
+        "laravel-inertia-react",
         "next-app-router",
         "next-hybrid-router",
         "tanstack-start"
       ],
       "category": "states",
       "confidence": "medium",
-      "description": "Checks runtime-dynamic Next pages and loader-backed TanStack Start routes for loading coverage.",
+      "description": "Checks runtime-dynamic Next pages, loader-backed TanStack Start routes, and Inertia navigation for loading coverage.",
       "id": "route-loading-boundary-present",
       "maxScore": 4,
       "severity": "warning",
@@ -625,6 +627,7 @@
     },
     {
       "adapters": [
+        "laravel-inertia-react",
         "next-app-router",
         "next-hybrid-router",
         "next-pages-router",
@@ -748,5 +751,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.35"
+  "rulesetVersion": "2026.07.36"
 }
