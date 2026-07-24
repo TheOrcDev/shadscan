@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { AuditRule } from "../audit";
+import type { ProjectDiscovery } from "../discovery";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   findSourceMatch,
@@ -12,46 +13,57 @@ const HTML_HYDRATION_PATTERN = /<html\b[^>]*\bsuppressHydrationWarning\b/;
 const CLASS_THEME_PROVIDER_PATTERN =
   /<(?:ThemeProvider|NextThemesProvider)\b[^>]*\battribute=["'{]+class["'}]+/;
 
+const findDocumentShell = async (
+  project: ProjectDiscovery
+): Promise<SourceFile | null> => {
+  const shellCandidates: string[] = [];
+  const { appDir, routesDir } = project.paths;
+
+  if (project.versions.next && appDir) {
+    shellCandidates.push(
+      path.join(appDir, "layout.tsx"),
+      path.join(appDir, "layout.jsx")
+    );
+  }
+
+  if (project.versions.tanstackStart && routesDir) {
+    shellCandidates.push(
+      path.join(routesDir, "__root.tsx"),
+      path.join(routesDir, "__root.jsx")
+    );
+  }
+
+  for (const candidate of shellCandidates) {
+    const shell = await readProjectSourceFile(project, candidate);
+
+    if (shell) {
+      return shell;
+    }
+  }
+
+  return null;
+};
+
 const themeHydrationSafeRule: AuditRule = {
-  adapters: ["next-app-router", "next-hybrid-router"],
+  adapters: ["next-app-router", "next-hybrid-router", "tanstack-start"],
   category: "foundation",
   confidence: "high",
   description:
-    "Checks next-themes hydration safeguards in a Next App Router shell.",
+    "Checks next-themes hydration safeguards in a Next App Router or TanStack Start document shell.",
   id: "theme-hydration-safe",
   maxScore: 2,
   run: async ({ project }) => {
     if (!project.dependencies["next-themes"]) {
-      return notApplicable("next-themes is not installed in this Next app.");
+      return notApplicable("next-themes is not installed in this app.");
     }
 
-    const appDir = project.paths.appDir;
+    const shell = await findDocumentShell(project);
 
-    if (!appDir) {
-      return notApplicable("No Next App Router directory was found.");
+    if (!shell) {
+      return notApplicable("No root document shell file was found.");
     }
 
-    const layoutCandidates = ["layout.tsx", "layout.jsx"].map((fileName) =>
-      path.join(appDir, fileName)
-    );
-    let layout: SourceFile | null = null;
-    let hasHydrationSuppression = false;
-
-    for (const candidate of layoutCandidates) {
-      layout = await readProjectSourceFile(project, candidate);
-
-      if (!layout) {
-        continue;
-      }
-
-      hasHydrationSuppression = HTML_HYDRATION_PATTERN.test(layout.content);
-      break;
-    }
-
-    if (!layout) {
-      return notApplicable("No root Next layout file was found.");
-    }
-
+    const hasHydrationSuppression = HTML_HYDRATION_PATTERN.test(shell.content);
     const providerMatch = await findSourceMatch(
       project,
       CLASS_THEME_PROVIDER_PATTERN
@@ -60,8 +72,8 @@ const themeHydrationSafeRule: AuditRule = {
     if (hasHydrationSuppression && providerMatch) {
       return pass(
         "Root HTML suppresses expected theme hydration differences and the provider targets the class attribute.",
-        layout.path,
-        getTextLineNumber(layout.content, HTML_HYDRATION_PATTERN)
+        shell.path,
+        getTextLineNumber(shell.content, HTML_HYDRATION_PATTERN)
       );
     }
 
@@ -73,7 +85,7 @@ const themeHydrationSafeRule: AuditRule = {
     return fail(
       `Unsafe theme hydration setup; missing ${missing.join(" and ")}.`,
       'Add suppressHydrationWarning to the root html element and configure next-themes with attribute="class".',
-      { filePath: layout.path }
+      { filePath: shell.path }
     );
   },
   severity: "warning",

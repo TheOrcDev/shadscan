@@ -13,6 +13,9 @@ const NEXT_SOCIAL_METADATA_PATTERN =
   /(?:openGraph|twitter)\s*:\s*\{[\s\S]*?images?\s*:/;
 const HTML_SOCIAL_IMAGE_PATTERN =
   /<meta(?=[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
+const TANSTACK_SOCIAL_IMAGE_PATTERN =
+  /(?:property|name)\s*:\s*["'](?:og:image|twitter:image)["']/;
+const TANSTACK_SOCIAL_CONTENT_PATTERN = /\bcontent\s*:\s*["'`][^"'`]+["'`]/;
 
 const evaluateAppRouterSocialPreview = async (
   project: ProjectDiscovery
@@ -128,6 +131,28 @@ const socialPreviewPresentRule: AuditRule = {
 
     if (project.versions.next && project.paths.pagesDir) {
       return evaluatePagesRouterSocialPreview(project);
+    }
+
+    if (project.versions.tanstackStart && project.paths.routesDir) {
+      const files = await getProjectSourceFiles(project);
+
+      for (const file of files) {
+        if (
+          TANSTACK_SOCIAL_IMAGE_PATTERN.test(file.content) &&
+          TANSTACK_SOCIAL_CONTENT_PATTERN.test(file.content)
+        ) {
+          return pass(
+            "Social preview image metadata found in head() meta entries.",
+            file.path,
+            getTextLineNumber(file.content, TANSTACK_SOCIAL_IMAGE_PATTERN)
+          );
+        }
+      }
+
+      return fail(
+        "No Open Graph or Twitter image metadata was found.",
+        "Add an og:image or twitter:image meta entry with a public image URL to the root route's head() option."
+      );
     }
 
     const indexPath = path.join(project.rootDir, "index.html");

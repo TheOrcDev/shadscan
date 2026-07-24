@@ -192,6 +192,96 @@ describe("discoverProject", () => {
     expect(project.versions.vite).toBe("7.2.0");
   });
 
+  it("detects a TanStack Start shadcn app", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@tanstack/react-router": "1.130.2",
+        "@tanstack/react-start": "1.131.7",
+        react: "19.2.4",
+      },
+      devDependencies: {
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/routes/__root.tsx",
+      "export const Route = createRootRoute({});\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("tanstack-start");
+    expect(project.framework.evidence).toContain(
+      "tanstack start dependency found"
+    );
+    expect(project.paths.routesDir).toBe(path.join(rootDir, "src", "routes"));
+    expect(project.versions.tanstackStart).toBe("1.131.7");
+  });
+
+  it("prefers tanstack-start over vite-react when both signals exist", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@tanstack/react-start": "1.131.7",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+    await writeFixtureFile(
+      rootDir,
+      "app/routes/__root.tsx",
+      "export const Route = createRootRoute({});\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("tanstack-start");
+    expect(project.paths.routesDir).toBe(path.join(rootDir, "app", "routes"));
+  });
+
+  it("keeps a router-only tanstack app on the vite adapter with evidence", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@tanstack/react-router": "1.130.2",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+    expect(project.framework.evidence).toContain(
+      "tanstack router dependency found; router-only projects use the vite or generic adapter"
+    );
+  });
+
+  it("falls through with evidence when the start dependency has no routes directory", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@tanstack/react-start": "1.131.7",
+        react: "19.2.4",
+      },
+    });
+    await writeComponentsJson(rootDir);
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("generic-react");
+    expect(project.framework.evidence).toContain(
+      "tanstack start dependency found but no routes directory (src/routes or app/routes) exists"
+    );
+  });
+
   it("discovers the package manager and selected app from a bounded monorepo", async () => {
     const sourceRoot = await createFixture();
     const projectRoot = path.join(sourceRoot, "apps", "web");

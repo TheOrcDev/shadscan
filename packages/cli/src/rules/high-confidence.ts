@@ -58,6 +58,12 @@ const HTML_TITLE_PATTERN = /<title>\s*[^<\s][^<]*<\/title>/i;
 const HTML_DESCRIPTION_PATTERN =
   /<meta(?=[^>]*name=["']description["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
 const FAVICON_LINK_PATTERN = /<link\s+rel=["'](?:icon|shortcut icon)["']/;
+const TANSTACK_HEAD_OPTION_PATTERN = /\bhead\s*:\s*(?:\(|[\w$]+\s*=>)/;
+const TANSTACK_HEAD_TITLE_PATTERN = /\btitle\s*:\s*["'`][^"'`]+["'`]/;
+const TANSTACK_FAVICON_LINK_PATTERN =
+  /\brel\s*:\s*["'](?:icon|shortcut icon)["']/;
+const TANSTACK_NOT_FOUND_PATTERN =
+  /\b(?:defaultNotFoundComponent|notFoundComponent)\s*:/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
 interface ImportedHelper {
@@ -526,8 +532,28 @@ const metadataConfiguredRule: AuditRule = {
   id: "metadata-configured",
   maxScore: 3,
   run: async (context) => {
-    const { appDir, pagesDir } = context.project.paths;
+    const { appDir, pagesDir, routesDir } = context.project.paths;
     let firstMatch: { filePath: string; line: number } | null = null;
+
+    if (context.project.versions.tanstackStart && routesDir) {
+      const match = await findSourceMatchInDirectory(context, routesDir, [
+        TANSTACK_HEAD_OPTION_PATTERN,
+        TANSTACK_HEAD_TITLE_PATTERN,
+      ]);
+
+      if (!match) {
+        return fail(
+          "No TanStack Start head() metadata with a title was found.",
+          "Return `meta` entries with a title and description from the root route's `head()` option."
+        );
+      }
+
+      return pass(
+        "TanStack Start head() metadata found.",
+        match.filePath,
+        match.line
+      );
+    }
 
     if (context.project.versions.next && appDir) {
       const match = await findSourceMatchInDirectory(context, appDir, [
@@ -615,6 +641,22 @@ const faviconPresentRule: AuditRule = {
       }
     }
 
+    const routesDir = context.project.paths.routesDir;
+
+    if (context.project.versions.tanstackStart && routesDir) {
+      const linkMatch = await findSourceMatchInDirectory(context, routesDir, [
+        TANSTACK_FAVICON_LINK_PATTERN,
+      ]);
+
+      if (linkMatch) {
+        return pass(
+          "Favicon link found in a TanStack Start head() links entry.",
+          linkMatch.filePath,
+          linkMatch.line
+        );
+      }
+    }
+
     return fail(
       "No favicon or app icon was found.",
       "Add `app/favicon.ico`, `app/icon.*`, `public/favicon.ico`, or an equivalent icon link."
@@ -625,14 +667,40 @@ const faviconPresentRule: AuditRule = {
 };
 
 const notFoundRoutePresentRule: AuditRule = {
-  adapters: ["next-app-router", "next-hybrid-router", "next-pages-router"],
+  adapters: [
+    "next-app-router",
+    "next-hybrid-router",
+    "next-pages-router",
+    "tanstack-start",
+  ],
   category: "foundation",
   confidence: "high",
-  description: "Checks for a Next not-found boundary or 404 page.",
+  description:
+    "Checks for a Next not-found boundary, 404 page, or TanStack Start not-found component.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
     const foundPaths: string[] = [];
+
+    if (context.project.versions.tanstackStart) {
+      const notFoundMatch = await findSourceMatch(
+        context.project,
+        TANSTACK_NOT_FOUND_PATTERN
+      );
+
+      if (!notFoundMatch) {
+        return fail(
+          "No TanStack Start not-found component was found.",
+          "Add `notFoundComponent` to the root route or `defaultNotFoundComponent` to `createRouter` so missing routes have a designed state."
+        );
+      }
+
+      return pass(
+        "TanStack Start not-found component found.",
+        notFoundMatch.file.path,
+        notFoundMatch.line
+      );
+    }
 
     if (context.project.versions.next && context.project.paths.appDir) {
       const appNotFound = await hasAnyFile(

@@ -54,6 +54,7 @@ const PROJECT_IGNORES = [
   "**/fixtures/**",
   "**/generated/**",
   "**/node_modules/**",
+  "**/routeTree.gen.ts",
   "**/*.{spec,test}.{js,jsx,ts,tsx}",
   "**/*.stories.{js,jsx,ts,tsx}",
   "**/*.generated.{js,jsx,ts,tsx}",

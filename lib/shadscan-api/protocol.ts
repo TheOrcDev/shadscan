@@ -14,7 +14,7 @@ const JSON_MEDIA_TYPE = "application/json";
 
 const PUBLIC_CONTRACT_VERSIONS = {
   prompt: 5,
-  report: 4,
+  report: 5,
   scan: HOSTED_SCAN_SCHEMA_VERSION,
 } as const;
 

@@ -5,6 +5,7 @@ import {
   addNextConfigBoundary,
   addPagesSurfacePlans,
 } from "./next-surface-planning";
+import { addStartSurfacePlans } from "./start-surface-planning";
 import type { GraphBuildState, SurfacePlan } from "./types";
 
 const createSurfacePlans = (state: GraphBuildState): SurfacePlan[] => {
@@ -21,6 +22,10 @@ const createSurfacePlans = (state: GraphBuildState): SurfacePlan[] => {
 
   if (adapter === "next-pages-router" || adapter === "next-hybrid-router") {
     addPagesSurfacePlans(state, plans);
+  }
+
+  if (adapter === "tanstack-start") {
+    addStartSurfacePlans(state, plans);
   }
 
   addClientSurfacePlan(state, plans);

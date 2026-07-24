@@ -23,6 +23,7 @@ const createProject = (): ProjectDiscovery => ({
     appDir: null,
     packageJson: path.join(PROJECT_ROOT, "package.json"),
     pagesDir: null,
+    routesDir: null,
     srcDir: path.join(PROJECT_ROOT, "src"),
     tailwindCss: null,
     tsconfig: null,
@@ -44,6 +45,7 @@ const createProject = (): ProjectDiscovery => ({
   versions: {
     next: null,
     react: "19.2.4",
+    tanstackStart: null,
     vite: null,
   },
   warnings: [],

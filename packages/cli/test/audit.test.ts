@@ -716,6 +716,7 @@ describe("createAuditReport", () => {
         appDir: null,
         packageJson: "/tmp/package.json",
         pagesDir: null,
+        routesDir: null,
         srcDir: null,
         tailwindCss: null,
         tsconfig: null,
@@ -734,6 +735,7 @@ describe("createAuditReport", () => {
       versions: {
         next: null,
         react: null,
+        tanstackStart: null,
         vite: null,
       },
       warnings: [],
