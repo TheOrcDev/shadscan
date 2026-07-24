@@ -122,25 +122,29 @@ repository is public.
 
 ## Stable Release
 
-1. Set the package version to `0.1.0`, finalize the changelog, and run the
+1. Set the package version to `<version>`, finalize the changelog, and run the
    `latest` release gates.
-2. Commit, push, and create the signed `v0.1.0` tag.
+2. Commit, push, and create the signed `v<version>` tag.
 3. Create the matching GitHub release. The publish workflow stages the npm
    artifact rather than publishing it immediately.
 4. Download and inspect the staged tarball, then approve it on npm with 2FA.
-5. Confirm `npm view @shadscan/cli@latest version` returns `0.1.0`.
-6. Run `npx --yes @shadscan/cli@0.1.0 --version` and representative audits from
-   a clean directory.
+5. Confirm `npm view @shadscan/cli@latest version` returns `<version>`.
+6. Run `npx --yes @shadscan/cli@<version> --version` and representative audits
+   from a clean directory.
 7. Only after those checks pass, replace source-preview commands in public
    documentation and product UI with `npx @shadscan/cli` or
    `pnpm dlx @shadscan/cli` examples.
+8. Bump every exact pin that advertises a version to the new one. These go
+   stale silently because nothing else references them: the CI example and
+   GitHub Action `version:` input in `README.md`, the Action input in
+   `app/docs/page.tsx`, and the Consumer Guidance line below.
 
 ## Consumer Guidance
 
 - npm one-off: `npx --yes @shadscan/cli`
 - pnpm one-off: `pnpm dlx @shadscan/cli`
 - Monorepo target: `pnpm dlx @shadscan/cli ./apps/web`
-- Reproducible CI: `pnpm dlx @shadscan/cli@0.1.0 --fail-under 80`
+- Reproducible CI: `pnpm dlx @shadscan/cli@0.2.0 --fail-under 80`
 - Lockfile-managed CI: install with
   `npm install --save-dev @shadscan/cli` or `pnpm add --save-dev @shadscan/cli`,
   then run the installed `shadscan` binary through a package script or
