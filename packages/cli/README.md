@@ -170,7 +170,7 @@ analysis can prove rendered behavior.
 
 Rules only run where they apply. Shadscan supports Next.js App Router, Pages
 Router, hybrid Next.js projects, TanStack Start, Laravel with Inertia and
-React, Vite React, and generic React applications.
+React, Astro with React islands, Vite React, and generic React applications.
 
 ## Privacy And Exit Status
 

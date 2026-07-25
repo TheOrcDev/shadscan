@@ -34,6 +34,7 @@ import {
   type ConfinedTypeScriptHost,
   createConfinedTypeScriptHost,
 } from "../typescript-host";
+import { findAstroDocumentShells, getAstroSourceFiles } from "./astro-mounts";
 import {
   fileExists,
   findFiles,
@@ -527,6 +528,28 @@ const themeHotkeyPresentRule: AuditRule = {
   title: "dark-mode shortcut present",
 };
 
+const evaluateAstroDocumentTitle = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const astroFiles = await getAstroSourceFiles(context.project);
+  const titled = astroFiles.find((file) =>
+    HTML_TITLE_PATTERN.test(file.content)
+  );
+
+  if (!titled) {
+    return fail(
+      "No Astro page or layout provides a document title.",
+      "Add a non-empty title element to the layout's head, or per page."
+    );
+  }
+
+  return pass(
+    "Astro document title found.",
+    titled.path,
+    getTextLineNumber(titled.content, HTML_TITLE_PATTERN)
+  );
+};
+
 const evaluateInertiaDocumentTitle = async (
   context: AuditContext
 ): Promise<AuditRuleResult> => {
@@ -580,6 +603,10 @@ const metadataConfiguredRule: AuditRule = {
   run: async (context) => {
     const { appDir, pagesDir, routesDir } = context.project.paths;
     let firstMatch: { filePath: string; line: number } | null = null;
+
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      return evaluateAstroDocumentTitle(context);
+    }
 
     if (
       context.project.versions.inertia &&
@@ -727,6 +754,21 @@ const faviconPresentRule: AuditRule = {
       }
     }
 
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      const shells = await findAstroDocumentShells(context.project);
+      const linked = shells.find((shell) =>
+        FAVICON_LINK_PATTERN.test(shell.content)
+      );
+
+      if (linked) {
+        return pass(
+          "Favicon link found in the Astro document shell.",
+          linked.path,
+          getTextLineNumber(linked.content, FAVICON_LINK_PATTERN)
+        );
+      }
+    }
+
     return fail(
       "No favicon or app icon was found.",
       "Add `app/favicon.ico`, `app/icon.*`, `public/favicon.ico`, or an equivalent icon link."
@@ -736,8 +778,26 @@ const faviconPresentRule: AuditRule = {
   title: "favicon present",
 };
 
+const evaluateAstroNotFoundPage = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const astroNotFound = await hasAnyFile(context.project.rootDir, [
+    "src/pages/404.{astro,md,mdx}",
+  ]);
+
+  if (!astroNotFound) {
+    return fail(
+      "No Astro 404 page was found.",
+      "Add `src/pages/404.astro` so missing routes have a designed state."
+    );
+  }
+
+  return pass("Astro 404 page found.", astroNotFound);
+};
+
 const notFoundRoutePresentRule: AuditRule = {
   adapters: [
+    "astro-react",
     "laravel-inertia-react",
     "next-app-router",
     "next-hybrid-router",
@@ -747,11 +807,15 @@ const notFoundRoutePresentRule: AuditRule = {
   category: "foundation",
   confidence: "high",
   description:
-    "Checks for a Next not-found boundary, 404 page, TanStack Start not-found component, or Laravel error page.",
+    "Checks for a framework-appropriate not-found surface: a Next boundary or 404 page, a TanStack Start not-found component, a Laravel error page, or an Astro 404 page.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
     const foundPaths: string[] = [];
+
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      return evaluateAstroNotFoundPage(context);
+    }
 
     if (context.project.versions.inertia && context.project.versions.laravel) {
       const errorSurface = await hasAnyFile(context.project.rootDir, [

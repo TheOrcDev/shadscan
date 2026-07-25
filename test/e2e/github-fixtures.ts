@@ -176,6 +176,48 @@ const createLaravelInertiaProjectArchive = (): Promise<Buffer> =>
     },
   ]);
 
+const createAstroProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            "@astrojs/react": "4.4.0",
+            astro: "5.16.2",
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+          },
+          name: "shadscan-e2e-astro-fixture",
+          packageManager: "pnpm@10.16.0",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: { components: "@/components", ui: "@/components/ui" },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        '---\nimport Counter from "../components/counter";\n---\n<html lang="en">\n  <head>\n    <title>Astro fixture</title>\n  </head>\n  <body>\n    <Counter client:load />\n  </body>\n</html>\n',
+      header: { name: "shadscan-e2e/src/pages/index.astro", type: "file" },
+    },
+    {
+      contents:
+        'export default function Counter() {\n  return (\n    <main>\n      <h1>Astro fixture</h1>\n      <button type="button">Add</button>\n    </main>\n  );\n}\n',
+      header: { name: "shadscan-e2e/src/components/counter.tsx", type: "file" },
+    },
+  ]);
+
 const MONOREPO_PROJECT_TREE = [
   "package.json",
   "apps/admin/package.json",
@@ -278,6 +320,7 @@ const createGitHubFetchHandler = ({
 };
 
 export {
+  createAstroProjectArchive,
   createGitHubFetchHandler,
   createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,

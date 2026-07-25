@@ -6,6 +6,29 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- An `astro-react` framework adapter (ruleset `2026.07.37`): Astro sites
+  with React islands — the setup shadcn/ui officially documents for
+  Astro — are detected from the `astro` and `@astrojs/react`
+  dependencies plus `.astro` pages under `src/pages`. `.astro` files are
+  read as text for document-shell checks (language, title, description,
+  favicon, social preview, `404.astro`), their frontmatter is parsed as
+  the TypeScript it is to discover which React components each page and
+  layout renders, and the component render graph seeds one surface per
+  `.astro` page or layout from those islands — server-rendered or
+  `client:*` hydrated alike. Toast and theme-provider mounts are traced
+  from `.astro` shells into their island components. Astro's `.astro`
+  codegen cache is excluded from scanning, Markdown/MDX pages record an
+  explicit graph boundary, and Astro sites without React get an error
+  naming their UI stack.
+
+### Changed
+
+- The JSON report schema version is now 7: `framework.adapter` accepts
+  `astro-react` and `versions` includes `astro`. The GitHub Action
+  (which reads `score` and `grade`) is unaffected.
+
 ## 0.3.0 - 2026-07-24
 
 ### Added

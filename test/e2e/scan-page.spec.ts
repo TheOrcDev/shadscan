@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
 import { test } from "next/experimental/testmode/playwright.js";
 import {
+  createAstroProjectArchive,
   createGitHubFetchHandler,
   createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,
@@ -231,6 +232,24 @@ test("scans a TanStack Start repository and reports its adapter", async ({
     page.getByRole("heading", { level: 2, name: "Scan complete" })
   ).toBeFocused();
   await expect(page.getByText("TanStack Start", { exact: true })).toBeVisible();
+});
+
+test("scans an Astro repository and reports its adapter", async ({
+  next,
+  page,
+}) => {
+  const archive = await createAstroProjectArchive();
+  const repository = "e2e/astro-adapter";
+  next.onFetch(createGitHubFetchHandler({ archive, repository }));
+  await visitScanPage(page, "203.0.113.22");
+  const input = page.getByLabel("GitHub repository");
+  await input.fill(repository);
+  await input.press("Enter");
+
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Scan complete" })
+  ).toBeFocused();
+  await expect(page.getByText("Astro", { exact: true })).toBeVisible();
 });
 
 test("scans a Laravel Inertia repository and reports its adapter", async ({

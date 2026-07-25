@@ -88,6 +88,7 @@
     },
     {
       "adapters": [
+        "astro-react",
         "laravel-inertia-react",
         "next-app-router",
         "next-hybrid-router",
@@ -96,7 +97,7 @@
       ],
       "category": "foundation",
       "confidence": "high",
-      "description": "Checks for a Next not-found boundary, 404 page, TanStack Start not-found component, or Laravel error page.",
+      "description": "Checks for a framework-appropriate not-found surface: a Next boundary or 404 page, a TanStack Start not-found component, a Laravel error page, or an Astro 404 page.",
       "id": "not-found-route-present",
       "maxScore": 3,
       "severity": "warning",
@@ -627,6 +628,7 @@
     },
     {
       "adapters": [
+        "astro-react",
         "laravel-inertia-react",
         "next-app-router",
         "next-hybrid-router",
@@ -751,5 +753,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.36"
+  "rulesetVersion": "2026.07.37"
 }

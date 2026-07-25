@@ -1,6 +1,7 @@
 import path from "node:path";
-import type { AuditRule } from "../audit";
+import type { AuditRule, AuditRuleResult } from "../audit";
 import type { ProjectDiscovery } from "../discovery";
+import { findAstroDocumentShells } from "./astro-mounts";
 import { fail, notApplicable, pass } from "./rule-result";
 import { getTextLineNumber, readProjectSourceFile } from "./source-files";
 
@@ -63,6 +64,39 @@ const getDocumentCandidateGroups = (
       ];
 };
 
+const evaluateAstroDocumentLanguage = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult | null> => {
+  const shells = await findAstroDocumentShells(project);
+
+  if (shells.length === 0) {
+    return null;
+  }
+
+  for (const shell of shells) {
+    const line = getTextLineNumber(shell.content, HTML_LANG_PATTERN);
+
+    if (line === undefined) {
+      return fail(
+        "The Astro document shell does not declare a language.",
+        "Add a non-empty lang attribute to the root html element.",
+        { filePath: shell.path }
+      );
+    }
+  }
+
+  const firstShell = shells[0];
+  return pass(
+    shells.length > 1
+      ? "Every Astro document shell declares a language."
+      : "The Astro document shell declares a language.",
+    firstShell?.path,
+    firstShell
+      ? getTextLineNumber(firstShell.content, HTML_LANG_PATTERN)
+      : undefined
+  );
+};
+
 const htmlLangPresentRule: AuditRule = {
   adapters: ["core"],
   category: "accessibility",
@@ -71,6 +105,14 @@ const htmlLangPresentRule: AuditRule = {
   id: "html-lang-present",
   maxScore: 2,
   run: async ({ project }) => {
+    if (project.versions.astro && project.paths.astroPagesDir) {
+      const astroResult = await evaluateAstroDocumentLanguage(project);
+
+      if (astroResult) {
+        return astroResult;
+      }
+    }
+
     const groups = getDocumentCandidateGroups(project);
     let inspectedDocuments = 0;
     let passingPath: string | null = null;

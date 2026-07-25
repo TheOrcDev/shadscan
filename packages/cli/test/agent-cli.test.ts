@@ -97,6 +97,7 @@ const createProject = (projectRoot: string): ProjectDiscovery => ({
   packageName: "agent-fixture",
   paths: {
     appDir: null,
+    astroPagesDir: null,
     bladeRootView: null,
     inertiaPagesDir: null,
     packageJson: path.join(projectRoot, "package.json"),
@@ -118,6 +119,7 @@ const createProject = (projectRoot: string): ProjectDiscovery => ({
   },
   sourceCoverage: "complete",
   versions: {
+    astro: null,
     inertia: null,
     laravel: null,
     next: null,

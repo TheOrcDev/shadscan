@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { AuditRule, AuditRuleResult } from "../audit";
 import type { ProjectDiscovery } from "../discovery";
+import { getAstroSourceFiles } from "./astro-mounts";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   findFiles,
@@ -13,6 +14,9 @@ const NEXT_SOCIAL_METADATA_PATTERN =
   /(?:openGraph|twitter)\s*:\s*\{[\s\S]*?images?\s*:/;
 const HTML_SOCIAL_IMAGE_PATTERN =
   /<meta(?=[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
+// Astro templates pass values as expressions: content={ogImage}.
+const ASTRO_SOCIAL_IMAGE_PATTERN =
+  /<meta(?=[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'])(?=[^>]*content=(?:["'][^"']+["']|\{[^}]+\}))[^>]*>/i;
 const TANSTACK_SOCIAL_IMAGE_PATTERN =
   /(?:property|name)\s*:\s*["'](?:og:image|twitter:image)["']/;
 const TANSTACK_SOCIAL_CONTENT_PATTERN = /\bcontent\s*:\s*["'`][^"'`]+["'`]/;
@@ -97,6 +101,29 @@ const evaluatePagesRouterSocialPreview = async (
   return fail(
     "No Pages Router social preview metadata was found.",
     "Add an og:image or twitter:image meta tag through `next/head`."
+  );
+};
+
+const evaluateAstroSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const astroFiles = await getAstroSourceFiles(project);
+
+  for (const file of astroFiles) {
+    const line = getTextLineNumber(file.content, ASTRO_SOCIAL_IMAGE_PATTERN);
+
+    if (line !== undefined) {
+      return pass(
+        "Social preview image metadata found in an Astro head.",
+        file.path,
+        line
+      );
+    }
+  }
+
+  return fail(
+    "No Open Graph or Twitter image metadata was found.",
+    "Add an og:image or twitter:image meta tag with a public image URL to the layout's head."
   );
 };
 
@@ -194,6 +221,10 @@ const socialPreviewPresentRule: AuditRule = {
 
     if (project.versions.next && project.paths.pagesDir) {
       return evaluatePagesRouterSocialPreview(project);
+    }
+
+    if (project.versions.astro && project.paths.astroPagesDir) {
+      return evaluateAstroSocialPreview(project);
     }
 
     if (project.versions.inertia && project.paths.inertiaPagesDir) {

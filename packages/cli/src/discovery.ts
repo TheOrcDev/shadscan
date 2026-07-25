@@ -6,6 +6,7 @@ import { glob } from "tinyglobby";
 type JsonObject = Record<string, unknown>;
 
 type FrameworkAdapter =
+  | "astro-react"
   | "laravel-inertia-react"
   | "next-app-router"
   | "next-hybrid-router"
@@ -37,6 +38,7 @@ interface ShadcnDiscovery {
 
 interface ProjectPaths {
   appDir: string | null;
+  astroPagesDir: string | null;
   bladeRootView: string | null;
   inertiaPagesDir: string | null;
   packageJson: string;
@@ -49,6 +51,7 @@ interface ProjectPaths {
 }
 
 interface ProjectVersions {
+  astro: string | null;
   inertia: string | null;
   laravel: string | null;
   next: string | null;
@@ -306,6 +309,17 @@ const detectPagesDir = async (rootDir: string): Promise<string | null> => {
   return null;
 };
 
+const detectAstroPagesDir = async (rootDir: string): Promise<string | null> => {
+  const astroPages = await glob("src/pages/**/*.astro", {
+    cwd: rootDir,
+    deep: 6,
+    followSymbolicLinks: false,
+    onlyFiles: true,
+  });
+
+  return astroPages.length > 0 ? path.join(rootDir, "src", "pages") : null;
+};
+
 const detectInertiaPagesDir = async (
   rootDir: string
 ): Promise<string | null> => {
@@ -421,6 +435,7 @@ const detectTailwindCss = async (
 
 interface DetectFrameworkOptions {
   appDir: string | null;
+  astroPagesDir: string | null;
   dependencies: Record<string, string>;
   hasArtisan: boolean;
   inertiaPagesDir: string | null;
@@ -528,6 +543,33 @@ const detectTanstackStartFramework = (
   return null;
 };
 
+const detectAstroFramework = (
+  { astroPagesDir, dependencies, rootDir }: DetectFrameworkOptions,
+  fallthroughEvidence: string[]
+): FrameworkDiscovery | null => {
+  if (!dependencies.astro) {
+    return null;
+  }
+
+  if (dependencies["@astrojs/react"] && astroPagesDir) {
+    return {
+      adapter: "astro-react",
+      evidence: [
+        "astro dependency found",
+        "astro react integration found",
+        `astro pages directory found at ${path.relative(rootDir, astroPagesDir)}`,
+      ],
+    };
+  }
+
+  fallthroughEvidence.push(
+    dependencies["@astrojs/react"]
+      ? "astro dependency found but no .astro pages exist under src/pages"
+      : "astro dependency found without the @astrojs/react integration; only react islands are audited"
+  );
+  return null;
+};
+
 const detectFramework = (
   options: DetectFrameworkOptions
 ): FrameworkDiscovery => {
@@ -537,7 +579,8 @@ const detectFramework = (
   const framework =
     detectNextFramework(options) ??
     detectLaravelInertiaFramework(options, evidence) ??
-    detectTanstackStartFramework(options, evidence);
+    detectTanstackStartFramework(options, evidence) ??
+    detectAstroFramework(options, evidence);
 
   if (framework) {
     return framework;
@@ -565,6 +608,29 @@ const detectFramework = (
   };
 };
 
+const assertReactDependency = async (
+  dependencies: Record<string, string>,
+  rootDir: string
+): Promise<void> => {
+  if (dependencies.react) {
+    return;
+  }
+
+  const laravelVersion = await getLaravelFrameworkVersion(rootDir);
+  let unsupportedMessage =
+    "The nearest package does not declare React; run shadscan from a React application package.";
+
+  if (laravelVersion) {
+    unsupportedMessage =
+      "This Laravel application has no React dependency, so its UI stack is Blade or Livewire. Shadscan audits React shadcn UIs; on Laravel that means Inertia with React.";
+  } else if (dependencies.astro) {
+    unsupportedMessage =
+      "This Astro site has no React dependency, so its UI lives in Astro templates or a non-React island framework. Shadscan audits React shadcn UIs; on Astro that means islands via @astrojs/react.";
+  }
+
+  throw new ProjectDiscoveryError(unsupportedMessage, "UNSUPPORTED_PROJECT");
+};
+
 const discoverProject = async (
   cwd: string,
   options: DiscoverProjectOptions = {}
@@ -574,16 +640,7 @@ const discoverProject = async (
   const packageJson = await readJson(packageJsonPath);
   const dependencies = getDependencies(packageJson);
 
-  if (!dependencies.react) {
-    const laravelVersion = await getLaravelFrameworkVersion(rootDir);
-
-    throw new ProjectDiscoveryError(
-      laravelVersion
-        ? "This Laravel application has no React dependency, so its UI stack is Blade or Livewire. Shadscan audits React shadcn UIs; on Laravel that means Inertia with React."
-        : "The nearest package does not declare React; run shadscan from a React application package.",
-      "UNSUPPORTED_PROJECT"
-    );
-  }
+  await assertReactDependency(dependencies, rootDir);
 
   const warnings: string[] = [];
   const componentsJsonPath = path.join(rootDir, "components.json");
@@ -606,6 +663,7 @@ const discoverProject = async (
   }
 
   const appDir = await detectAppDir(rootDir);
+  const astroPagesDir = await detectAstroPagesDir(rootDir);
   const bladeRootView = await detectBladeRootView(rootDir);
   const hasArtisan = await fileExists(path.join(rootDir, "artisan"));
   const inertiaPagesDir = await detectInertiaPagesDir(rootDir);
@@ -615,6 +673,7 @@ const discoverProject = async (
   const viteEntry = await detectViteEntry(rootDir);
   const framework = detectFramework({
     appDir,
+    astroPagesDir,
     dependencies,
     hasArtisan,
     inertiaPagesDir,
@@ -646,6 +705,7 @@ const discoverProject = async (
     packageName,
     paths: {
       appDir,
+      astroPagesDir,
       bladeRootView,
       inertiaPagesDir,
       packageJson: packageJsonPath,
@@ -668,6 +728,7 @@ const discoverProject = async (
     },
     sourceCoverage: "complete",
     versions: {
+      astro: dependencies.astro ?? null,
       inertia: dependencies["@inertiajs/react"] ?? null,
       laravel: laravelVersion,
       next: dependencies.next ?? null,
