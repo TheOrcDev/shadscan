@@ -29,7 +29,7 @@ function SupportedFrameworks({ className }: SupportedFrameworksProps) {
                 <TooltipTrigger className="flex cursor-default items-center rounded-none text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-4">
                   <svg
                     aria-hidden="true"
-                    className="size-5"
+                    className="h-5 w-auto"
                     fill="currentColor"
                     viewBox={mark.viewBox}
                   >
