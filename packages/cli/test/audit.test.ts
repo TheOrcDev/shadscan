@@ -42,6 +42,7 @@ const createReactFixture = async (
       {
         dependencies: {
           react: "19.2.4",
+          reactRouter: null,
         },
         name: "audit-fixture",
         scripts: {
@@ -719,6 +720,8 @@ describe("createAuditReport", () => {
         inertiaPagesDir: null,
         packageJson: "/tmp/package.json",
         pagesDir: null,
+        reactRouterAppDir: null,
+        reactRouterRoot: null,
         routesDir: null,
         srcDir: null,
         tailwindCss: null,
@@ -741,6 +744,7 @@ describe("createAuditReport", () => {
         laravel: null,
         next: null,
         react: null,
+        reactRouter: null,
         tanstackStart: null,
         vite: null,
       },

@@ -45,6 +45,13 @@ const getShellCandidateGroups = (
     });
   }
 
+  if (project.paths.reactRouterRoot) {
+    groups.push({
+      label: "React Router root module",
+      paths: [project.paths.reactRouterRoot],
+    });
+  }
+
   if (project.versions.inertia && project.paths.inertiaPagesDir) {
     groups.push({
       label: "Inertia app shell",

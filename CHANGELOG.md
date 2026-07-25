@@ -6,6 +6,30 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A `react-router-framework` adapter (ruleset `2026.07.38`): React Router
+  v7 applications running in framework mode — one of the official shadcn
+  templates — are detected from the `react-router` dependency plus a
+  framework marker (`@react-router/dev` or `react-router.config.*`) and
+  an `app/root` module. Declarative and data-mode routers keep using the
+  Vite or generic adapter, since `react-router` alone is a plain SPA
+  router. Document rules read `app/root.tsx`; metadata comes from the
+  `meta` export; not-found coverage accepts an `ErrorBoundary` handling
+  `isRouteErrorResponse` or a splat route; `error-boundary-present`
+  understands the `ErrorBoundary` export convention; loader-backed route
+  modules need `HydrateFallback`, `useNavigation` pending UI, or a
+  Suspense fallback. The render graph seeds one surface per route module
+  — read from literal `routes.ts` entries when possible, otherwise from
+  directory discovery with a boundary reason — and treats `ErrorBoundary`
+  and `HydrateFallback` exports as rendered surfaces in their own right.
+
+### Changed
+
+- The JSON report schema version is now 8: `framework.adapter` accepts
+  `react-router-framework` and `versions` includes `reactRouter`. The
+  GitHub Action (which reads `score` and `grade`) is unaffected.
+
 ## 0.4.0 - 2026-07-25
 
 ### Added

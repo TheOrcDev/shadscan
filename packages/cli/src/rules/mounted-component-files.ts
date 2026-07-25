@@ -237,6 +237,10 @@ const getShellCandidates = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.paths.reactRouterRoot) {
+    candidates.push(project.paths.reactRouterRoot);
+  }
+
   if (project.versions.inertia && project.paths.inertiaPagesDir) {
     candidates.push(
       ...[

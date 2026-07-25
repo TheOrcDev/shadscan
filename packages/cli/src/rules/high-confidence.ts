@@ -36,6 +36,13 @@ import {
 } from "../typescript-host";
 import { findAstroDocumentShells, getAstroSourceFiles } from "./astro-mounts";
 import {
+  ERROR_BOUNDARY_EXPORT_PATTERN,
+  getReactRouterAppFiles,
+  isReactRouterFramework,
+  META_EXPORT_PATTERN,
+  ROUTE_ERROR_RESPONSE_PATTERN,
+} from "./react-router-modules";
+import {
   fileExists,
   findFiles,
   findSourceMatch,
@@ -528,6 +535,109 @@ const themeHotkeyPresentRule: AuditRule = {
   title: "dark-mode shortcut present",
 };
 
+const evaluateTanstackDocumentTitle = async (
+  context: AuditContext,
+  routesDir: string
+): Promise<AuditRuleResult> => {
+  const match = await findSourceMatchInDirectory(context, routesDir, [
+    TANSTACK_HEAD_OPTION_PATTERN,
+    TANSTACK_HEAD_TITLE_PATTERN,
+  ]);
+
+  if (!match) {
+    return fail(
+      "No TanStack Start head() metadata with a title was found.",
+      "Return `meta` entries with a title and description from the root route's `head()` option."
+    );
+  }
+
+  return pass(
+    "TanStack Start head() metadata found.",
+    match.filePath,
+    match.line
+  );
+};
+
+const evaluateReactRouterMeta = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const modules = await getReactRouterAppFiles(context.project);
+  const withMeta = modules.find((file) =>
+    META_EXPORT_PATTERN.test(file.content)
+  );
+
+  if (!withMeta) {
+    return fail(
+      "No React Router `meta` export was found.",
+      "Export `meta` from the root or a route module returning a title and description."
+    );
+  }
+
+  return pass(
+    "React Router meta export found.",
+    withMeta.path,
+    getTextLineNumber(withMeta.content, META_EXPORT_PATTERN)
+  );
+};
+
+const evaluateTanstackNotFound = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const notFoundMatch = await findSourceMatch(
+    context.project,
+    TANSTACK_NOT_FOUND_PATTERN
+  );
+
+  if (!notFoundMatch) {
+    return fail(
+      "No TanStack Start not-found component was found.",
+      "Add `notFoundComponent` to the root route or `defaultNotFoundComponent` to `createRouter` so missing routes have a designed state."
+    );
+  }
+
+  return pass(
+    "TanStack Start not-found component found.",
+    notFoundMatch.file.path,
+    notFoundMatch.line
+  );
+};
+
+const evaluateReactRouterNotFound = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const appDir = context.project.paths.reactRouterAppDir;
+  const splatRoute = appDir
+    ? await hasAnyFile(context.project.rootDir, [
+        "app/routes/$.{js,jsx,ts,tsx}",
+        "app/routes/**/$.{js,jsx,ts,tsx}",
+      ])
+    : null;
+
+  if (splatRoute) {
+    return pass("React Router splat route found.", splatRoute);
+  }
+
+  const modules = await getReactRouterAppFiles(context.project);
+  const boundary = modules.find(
+    (file) =>
+      ERROR_BOUNDARY_EXPORT_PATTERN.test(file.content) &&
+      ROUTE_ERROR_RESPONSE_PATTERN.test(file.content)
+  );
+
+  if (boundary) {
+    return pass(
+      "React Router ErrorBoundary handles route error responses.",
+      boundary.path,
+      getTextLineNumber(boundary.content, ERROR_BOUNDARY_EXPORT_PATTERN)
+    );
+  }
+
+  return fail(
+    "No React Router not-found handling was found.",
+    "Handle `isRouteErrorResponse` in an `ErrorBoundary` export, or add a splat route at `app/routes/$.tsx`."
+  );
+};
+
 const evaluateAstroDocumentTitle = async (
   context: AuditContext
 ): Promise<AuditRuleResult> => {
@@ -604,6 +714,10 @@ const metadataConfiguredRule: AuditRule = {
     const { appDir, pagesDir, routesDir } = context.project.paths;
     let firstMatch: { filePath: string; line: number } | null = null;
 
+    if (isReactRouterFramework(context.project)) {
+      return evaluateReactRouterMeta(context);
+    }
+
     if (context.project.versions.astro && context.project.paths.astroPagesDir) {
       return evaluateAstroDocumentTitle(context);
     }
@@ -616,23 +730,7 @@ const metadataConfiguredRule: AuditRule = {
     }
 
     if (context.project.versions.tanstackStart && routesDir) {
-      const match = await findSourceMatchInDirectory(context, routesDir, [
-        TANSTACK_HEAD_OPTION_PATTERN,
-        TANSTACK_HEAD_TITLE_PATTERN,
-      ]);
-
-      if (!match) {
-        return fail(
-          "No TanStack Start head() metadata with a title was found.",
-          "Return `meta` entries with a title and description from the root route's `head()` option."
-        );
-      }
-
-      return pass(
-        "TanStack Start head() metadata found.",
-        match.filePath,
-        match.line
-      );
+      return evaluateTanstackDocumentTitle(context, routesDir);
     }
 
     if (context.project.versions.next && appDir) {
@@ -802,16 +900,21 @@ const notFoundRoutePresentRule: AuditRule = {
     "next-app-router",
     "next-hybrid-router",
     "next-pages-router",
+    "react-router-framework",
     "tanstack-start",
   ],
   category: "foundation",
   confidence: "high",
   description:
-    "Checks for a framework-appropriate not-found surface: a Next boundary or 404 page, a TanStack Start not-found component, a Laravel error page, or an Astro 404 page.",
+    "Checks for a framework-appropriate not-found surface: a Next boundary or 404 page, a TanStack Start not-found component, a Laravel error page, an Astro 404 page, or React Router route-error handling.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
     const foundPaths: string[] = [];
+
+    if (isReactRouterFramework(context.project)) {
+      return evaluateReactRouterNotFound(context);
+    }
 
     if (context.project.versions.astro && context.project.paths.astroPagesDir) {
       return evaluateAstroNotFoundPage(context);
@@ -835,23 +938,7 @@ const notFoundRoutePresentRule: AuditRule = {
     }
 
     if (context.project.versions.tanstackStart) {
-      const notFoundMatch = await findSourceMatch(
-        context.project,
-        TANSTACK_NOT_FOUND_PATTERN
-      );
-
-      if (!notFoundMatch) {
-        return fail(
-          "No TanStack Start not-found component was found.",
-          "Add `notFoundComponent` to the root route or `defaultNotFoundComponent` to `createRouter` so missing routes have a designed state."
-        );
-      }
-
-      return pass(
-        "TanStack Start not-found component found.",
-        notFoundMatch.file.path,
-        notFoundMatch.line
-      );
+      return evaluateTanstackNotFound(context);
     }
 
     if (context.project.versions.next && context.project.paths.appDir) {
@@ -914,6 +1001,26 @@ const errorBoundaryPresentRule: AuditRule = {
   run: async (context) => {
     const foundPaths: string[] = [];
     const missingBoundaries: string[] = [];
+
+    if (isReactRouterFramework(context.project)) {
+      const modules = await getReactRouterAppFiles(context.project);
+      const boundary = modules.find((file) =>
+        ERROR_BOUNDARY_EXPORT_PATTERN.test(file.content)
+      );
+
+      if (boundary) {
+        return pass(
+          "React Router ErrorBoundary export found.",
+          boundary.path,
+          getTextLineNumber(boundary.content, ERROR_BOUNDARY_EXPORT_PATTERN)
+        );
+      }
+
+      return fail(
+        "No React Router `ErrorBoundary` export was found.",
+        "Export an `ErrorBoundary` from `app/root.tsx` so render and loader errors have a designed state."
+      );
+    }
 
     if (context.project.versions.next && context.project.paths.appDir) {
       const appError = await hasAnyFile(

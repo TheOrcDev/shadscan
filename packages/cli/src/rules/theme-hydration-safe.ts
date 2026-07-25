@@ -33,6 +33,10 @@ const findDocumentShell = async (
     );
   }
 
+  if (project.paths.reactRouterRoot) {
+    shellCandidates.push(project.paths.reactRouterRoot);
+  }
+
   for (const candidate of shellCandidates) {
     const shell = await readProjectSourceFile(project, candidate);
 
@@ -45,7 +49,12 @@ const findDocumentShell = async (
 };
 
 const themeHydrationSafeRule: AuditRule = {
-  adapters: ["next-app-router", "next-hybrid-router", "tanstack-start"],
+  adapters: [
+    "next-app-router",
+    "next-hybrid-router",
+    "react-router-framework",
+    "tanstack-start",
+  ],
   category: "foundation",
   confidence: "high",
   description:

@@ -7,6 +7,7 @@ import {
   createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,
   createReactProjectArchive,
+  createReactRouterProjectArchive,
   createTanstackStartProjectArchive,
   MONOREPO_PROJECT_TREE,
 } from "./github-fixtures";
@@ -232,6 +233,24 @@ test("scans a TanStack Start repository and reports its adapter", async ({
     page.getByRole("heading", { level: 2, name: "Scan complete" })
   ).toBeFocused();
   await expect(page.getByText("TanStack Start", { exact: true })).toBeVisible();
+});
+
+test("scans a React Router repository and reports its adapter", async ({
+  next,
+  page,
+}) => {
+  const archive = await createReactRouterProjectArchive();
+  const repository = "e2e/react-router-adapter";
+  next.onFetch(createGitHubFetchHandler({ archive, repository }));
+  await visitScanPage(page, "203.0.113.23");
+  const input = page.getByLabel("GitHub repository");
+  await input.fill(repository);
+  await input.press("Enter");
+
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Scan complete" })
+  ).toBeFocused();
+  await expect(page.getByText("React Router", { exact: true })).toBeVisible();
 });
 
 test("scans an Astro repository and reports its adapter", async ({

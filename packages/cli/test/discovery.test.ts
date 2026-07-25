@@ -194,6 +194,157 @@ describe("discoverProject", () => {
     expect(project.versions.vite).toBe("7.2.0");
   });
 
+  it("detects a React Router framework mode app", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4", "react-router": "7.9.1" },
+      devDependencies: { "@react-router/dev": "7.9.1", vite: "7.2.0" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "react-router.config.ts",
+      "export default { ssr: true };\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/root.tsx",
+      'export default function App() { return <html lang="en" />; }\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("react-router-framework");
+    expect(project.framework.evidence).toContain(
+      "react router dev plugin found"
+    );
+    expect(project.paths.reactRouterRoot).toBe(
+      path.join(rootDir, "app", "root.tsx")
+    );
+    expect(project.paths.reactRouterAppDir).toBe(path.join(rootDir, "app"));
+    expect(project.versions.reactRouter).toBe("7.9.1");
+  });
+
+  it("detects framework mode from the config file alone", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4", "react-router": "7.9.1" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "react-router.config.ts",
+      "export default { ssr: true };\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/root.tsx",
+      'export default function App() { return <html lang="en" />; }\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("react-router-framework");
+    expect(project.framework.evidence).toContain(
+      "react-router.config file found"
+    );
+  });
+
+  it("keeps a declarative react-router SPA on the vite adapter", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        react: "19.2.4",
+        "react-router": "7.9.1",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "index.html", '<div id="root"></div>\n');
+    await writeFixtureFile(
+      rootDir,
+      "src/main.tsx",
+      'import { BrowserRouter } from "react-router";\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+    expect(project.framework.evidence).toContain(
+      "react router dependency found without framework mode; declarative and data-mode routers use the vite or generic adapter"
+    );
+    expect(project.paths.reactRouterAppDir).toBeNull();
+  });
+
+  it("keeps a data-mode react-router SPA on the vite adapter", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        react: "19.2.4",
+        "react-router": "7.9.1",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/main.tsx",
+      'import { createBrowserRouter } from "react-router";\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+  });
+
+  it("falls through when framework mode has no app root module", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4", "react-router": "7.9.1" },
+      devDependencies: { "@react-router/dev": "7.9.1" },
+    });
+    await writeComponentsJson(rootDir);
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("generic-react");
+    expect(project.framework.evidence).toContain(
+      "react router framework marker found but no app/root module exists"
+    );
+  });
+
+  it("keeps a Next app with an app directory on the next adapter", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        next: "16.2.6",
+        react: "19.2.4",
+        "react-router": "7.9.1",
+      },
+      devDependencies: { "@react-router/dev": "7.9.1" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/page.tsx",
+      "export default function Page() { return null }\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/root.tsx",
+      'export default function App() { return <html lang="en" />; }\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("next-app-router");
+    // The Next App Router path stays authoritative; the React Router paths
+    // must not be populated for a Next project sharing the directory name.
+    expect(project.paths.appDir).toBe(path.join(rootDir, "app"));
+    expect(project.paths.reactRouterAppDir).toBeNull();
+    expect(project.paths.reactRouterRoot).toBeNull();
+  });
+
   it("detects an Astro React islands shadcn app", async () => {
     const rootDir = await createFixture();
     await writePackageJson(rootDir, {

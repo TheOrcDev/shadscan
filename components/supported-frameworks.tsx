@@ -29,8 +29,9 @@ function SupportedFrameworks({ className }: SupportedFrameworksProps) {
                 <TooltipTrigger className="flex cursor-default items-center rounded-none text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-4">
                   <svg
                     aria-hidden="true"
-                    className="h-5 w-auto"
+                    className="w-auto"
                     fill="currentColor"
+                    style={{ height: mark.opticalHeight ?? 20 }}
                     viewBox={mark.viewBox}
                   >
                     <path d={mark.d} />

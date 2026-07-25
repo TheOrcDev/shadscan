@@ -54,6 +54,13 @@ const getDocumentCandidateGroups = (
     });
   }
 
+  if (project.paths.reactRouterRoot) {
+    groups.push({
+      label: "React Router root module",
+      paths: [project.paths.reactRouterRoot],
+    });
+  }
+
   return groups.length > 0
     ? groups
     : [
