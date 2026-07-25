@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-25
+
 ### Added
 
 - A `react-router-framework` adapter (ruleset `2026.07.38`): React Router
