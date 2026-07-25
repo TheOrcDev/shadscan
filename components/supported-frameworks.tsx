@@ -16,14 +16,9 @@ interface SupportedFrameworksProps {
 function SupportedFrameworks({ className }: SupportedFrameworksProps) {
   return (
     <TooltipProvider>
-      <div
-        className={cn(
-          "flex flex-wrap items-center justify-center gap-x-4 gap-y-2",
-          className
-        )}
-      >
+      <div className={cn("flex flex-col items-center gap-3", className)}>
         <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
-          Supporting:
+          Supporting
         </span>
         <ul className="flex items-center gap-4">
           {FRAMEWORK_MARKS.map((mark) => (
