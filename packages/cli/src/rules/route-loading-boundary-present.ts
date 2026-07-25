@@ -26,6 +26,13 @@ import {
 } from "typescript";
 import type { AuditRule } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
+import {
+  getReactRouterAppFiles,
+  getReactRouterRouteModules,
+  HYDRATE_FALLBACK_EXPORT_PATTERN,
+  LOADER_EXPORT_PATTERN,
+  USE_NAVIGATION_PATTERN,
+} from "./react-router-modules";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   fileExists,
@@ -486,11 +493,57 @@ const runInertiaCheck = async (
   );
 };
 
+const runReactRouterCheck = async (
+  project: Parameters<AuditRule["run"]>[0]["project"]
+): Promise<ReturnType<AuditRule["run"]>> => {
+  const modules = await getReactRouterRouteModules(project);
+  const loaderModules = modules.filter((file) =>
+    LOADER_EXPORT_PATTERN.test(file.content)
+  );
+
+  if (loaderModules.length === 0) {
+    return notApplicable(
+      "No React Router route modules export loaders that would need pending coverage."
+    );
+  }
+
+  // Pending UI can live anywhere in the app: a HydrateFallback export, a
+  // useNavigation() consumer, or a Suspense fallback around async content.
+  const appFiles = await getReactRouterAppFiles(project);
+  const coverage = appFiles.find(
+    (file) =>
+      HYDRATE_FALLBACK_EXPORT_PATTERN.test(file.content) ||
+      USE_NAVIGATION_PATTERN.test(file.content) ||
+      SUSPENSE_FALLBACK_PATTERN.test(file.content)
+  );
+
+  if (coverage) {
+    return pass(
+      `All ${loaderModules.length} loader-backed route modules have pending coverage.`,
+      coverage.path
+    );
+  }
+
+  const firstLoader = loaderModules[0];
+  return fail(
+    "Route modules declare loaders but the app has no pending coverage.",
+    "Export `HydrateFallback` from a route module, or render pending UI from `useNavigation()` state.",
+    {
+      filePath: firstLoader?.path,
+      line: firstLoader
+        ? getTextLineNumber(firstLoader.content, LOADER_EXPORT_PATTERN)
+        : undefined,
+      roast: "A blank screen is not suspense. It is a hostage situation.",
+    }
+  );
+};
+
 const routeLoadingBoundaryPresentRule: AuditRule = {
   adapters: [
     "laravel-inertia-react",
     "next-app-router",
     "next-hybrid-router",
+    "react-router-framework",
     "tanstack-start",
   ],
   category: "states",
@@ -500,6 +553,10 @@ const routeLoadingBoundaryPresentRule: AuditRule = {
   id: "route-loading-boundary-present",
   maxScore: 4,
   run: async ({ project }) => {
+    if (project.framework.adapter === "react-router-framework") {
+      return runReactRouterCheck(project);
+    }
+
     if (project.framework.adapter === "laravel-inertia-react") {
       return runInertiaCheck(project);
     }

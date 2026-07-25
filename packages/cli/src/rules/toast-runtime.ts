@@ -427,6 +427,10 @@ const getShellPaths = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.paths.reactRouterRoot) {
+    shellPaths.push(project.paths.reactRouterRoot);
+  }
+
   if (project.versions.inertia && project.paths.inertiaPagesDir) {
     shellPaths.push(
       ...[

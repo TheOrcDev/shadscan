@@ -19,7 +19,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 7 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 8 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -329,6 +329,7 @@ const AuditReportSchema = z.object({
       "next-app-router",
       "next-hybrid-router",
       "next-pages-router",
+      "react-router-framework",
       "tanstack-start",
       "vite-react",
     ]),
@@ -360,6 +361,7 @@ const AuditReportSchema = z.object({
     laravel: z.string().nullable(),
     next: z.string().nullable(),
     react: z.string().nullable(),
+    reactRouter: z.string().nullable(),
     tanstackStart: z.string().nullable(),
     vite: z.string().nullable(),
   }),

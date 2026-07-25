@@ -218,6 +218,57 @@ const createAstroProjectArchive = (): Promise<Buffer> =>
     },
   ]);
 
+const createReactRouterProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+            "react-router": "7.9.1",
+          },
+          devDependencies: { "@react-router/dev": "7.9.1", vite: "7.2.0" },
+          name: "shadscan-e2e-react-router-fixture",
+          packageManager: "pnpm@10.16.0",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: "export default { ssr: true };\n",
+      header: { name: "shadscan-e2e/react-router.config.ts", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: { components: "~/components", ui: "~/components/ui" },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        'import { Links, Meta, Outlet, Scripts } from "react-router";\n\nexport function meta() {\n  return [{ title: "Router fixture" }];\n}\n\nexport function Layout({ children }: { children: React.ReactNode }) {\n  return (\n    <html lang="en">\n      <head>\n        <Meta />\n        <Links />\n      </head>\n      <body>\n        {children}\n        <Scripts />\n      </body>\n    </html>\n  );\n}\n\nexport default function App() {\n  return <Outlet />;\n}\n',
+      header: { name: "shadscan-e2e/app/root.tsx", type: "file" },
+    },
+    {
+      contents:
+        'import { index } from "@react-router/dev/routes";\n\nexport default [index("routes/home.tsx")];\n',
+      header: { name: "shadscan-e2e/app/routes.ts", type: "file" },
+    },
+    {
+      contents:
+        'export default function Home() {\n  return (\n    <main>\n      <h1>Router fixture</h1>\n      <button type="button">Save</button>\n    </main>\n  );\n}\n',
+      header: { name: "shadscan-e2e/app/routes/home.tsx", type: "file" },
+    },
+  ]);
+
 const MONOREPO_PROJECT_TREE = [
   "package.json",
   "apps/admin/package.json",
@@ -325,6 +376,7 @@ export {
   createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,
   createReactProjectArchive,
+  createReactRouterProjectArchive,
   createTanstackStartProjectArchive,
   MONOREPO_PROJECT_TREE,
 };

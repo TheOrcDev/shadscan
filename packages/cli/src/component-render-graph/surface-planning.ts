@@ -7,6 +7,7 @@ import {
   addNextConfigBoundary,
   addPagesSurfacePlans,
 } from "./next-surface-planning";
+import { addReactRouterSurfacePlans } from "./react-router-surface-planning";
 import { addStartSurfacePlans } from "./start-surface-planning";
 import type { GraphBuildState, SurfacePlan } from "./types";
 
@@ -38,6 +39,10 @@ const createSurfacePlans = async (
 
   if (adapter === "astro-react") {
     await addAstroSurfacePlans(state, plans);
+  }
+
+  if (adapter === "react-router-framework") {
+    addReactRouterSurfacePlans(state, plans);
   }
 
   addClientSurfacePlan(state, plans);
