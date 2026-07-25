@@ -15,6 +15,7 @@ the executor. Each plan is marked DONE with its landing commit when complete.
 | [009](009-tanstack-start-adapter.md) | TanStack Start framework adapter | P1 | L | - | DONE (`935ef41`) |
 | [010](010-laravel-inertia-react-adapter.md) | Laravel (Inertia + React) framework adapter | P1 | XL | - | DONE (`973d979`) |
 | [011](011-astro-react-adapter.md) | Astro (React islands) framework adapter | P1 | XL | - | DONE (`0edefab`) |
+| [012](012-react-router-framework-adapter.md) | React Router (framework mode) adapter | P1 | L | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
