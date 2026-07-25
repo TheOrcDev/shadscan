@@ -46,13 +46,18 @@ for (const legalPage of LEGAL_PAGES) {
       page.getByRole("link", { name: "orc@orcdev.com" })
     ).toHaveAttribute("href", "mailto:orc@orcdev.com");
 
-    const legalNavigation = page.getByRole("navigation", { name: "Legal" });
+    const footerNavigation = page.getByRole("navigation", {
+      name: "Secondary",
+    });
     await expect(
-      legalNavigation.getByRole("link", { name: "Privacy" })
+      footerNavigation.getByRole("link", { name: "Privacy" })
     ).toHaveAttribute("href", "/privacy");
     await expect(
-      legalNavigation.getByRole("link", { name: "Terms" })
+      footerNavigation.getByRole("link", { name: "Terms" })
     ).toHaveAttribute("href", "/terms");
+    await expect(
+      footerNavigation.getByRole("link", { name: "Contributors" })
+    ).toHaveAttribute("href", "/contributors");
 
     const results = await new AxeBuilder({ page }).analyze();
     const severeViolations = results.violations.filter(
