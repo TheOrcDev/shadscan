@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-24
+
 ### Added
 
 - A `laravel-inertia-react` framework adapter (ruleset `2026.07.36`):
