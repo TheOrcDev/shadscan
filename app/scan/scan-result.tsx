@@ -17,6 +17,7 @@ interface ScanResultProps {
 }
 
 const FRAMEWORK_LABELS = {
+  "astro-react": "Astro",
   "generic-react": "React",
   "laravel-inertia-react": "Laravel + Inertia",
   "next-app-router": "Next.js App Router",

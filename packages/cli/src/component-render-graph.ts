@@ -55,7 +55,7 @@ const buildComponentRenderGraph = async (
     graphBoundaryReasons
   );
   buildTemplates(buildState);
-  const plans = createSurfacePlans(buildState);
+  const plans = await createSurfacePlans(buildState);
 
   if (plans.length === 0) {
     graphBoundaryReasons.add("No recognizable render surfaces were found.");

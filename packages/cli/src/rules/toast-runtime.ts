@@ -22,8 +22,10 @@ import {
   type ConfinedTypeScriptHost,
   createConfinedTypeScriptHost,
 } from "../typescript-host";
+import { getAstroMountedBindings } from "./astro-mounts";
 import {
   getProjectSourceFiles,
+  getTextLineNumber,
   readProjectSourceFile,
   type SourceFile,
 } from "./source-files";
@@ -545,6 +547,100 @@ const analyzeToastShell = (
   return null;
 };
 
+const analyzeAstroToastMount = async (
+  project: ProjectDiscovery,
+  context: {
+    compilerOptions: CompilerOptions;
+    filesByPath: Map<string, ParsedProjectFile>;
+    hasDependency: boolean;
+    host: ConfinedTypeScriptHost;
+    project: ProjectDiscovery;
+  },
+  sourceFiles: SourceFile[]
+): Promise<ToastRuntimeAnalysis | null> => {
+  const mountedBindings = await getAstroMountedBindings(project);
+
+  for (const binding of mountedBindings) {
+    if (
+      !(
+        TOAST_NAME_PATTERN.test(binding.localName) ||
+        TOAST_NAME_PATTERN.test(binding.moduleSpecifier)
+      )
+    ) {
+      continue;
+    }
+
+    // An island imported straight from a toast package (`import { Toaster }
+    // from "sonner"` in .astro frontmatter) is mount and runtime at once.
+    if (project.dependencies[binding.moduleSpecifier]) {
+      const astroSource =
+        sourceFiles.find((file) => file.path === binding.astroFilePath) ?? null;
+      const line = astroSource
+        ? (getTextLineNumber(
+            astroSource.content,
+            new RegExp(`<${binding.localName}\\b`)
+          ) ?? 1)
+        : 1;
+
+      return {
+        hasDependency: context.hasDependency,
+        mount: {
+          componentName: binding.localName,
+          filePath: binding.astroFilePath,
+          line,
+        },
+        runtime: {
+          filePath: binding.astroFilePath,
+          line,
+          moduleName: binding.moduleSpecifier,
+        },
+        shell: astroSource,
+      };
+    }
+
+    const resolved = resolveLocalImport(
+      binding.moduleSpecifier,
+      binding.astroFilePath,
+      project,
+      context.compilerOptions,
+      context.host,
+      context.filesByPath
+    );
+
+    if (!resolved) {
+      continue;
+    }
+
+    const componentAnalysis = analyzeToastShell(resolved.file, context);
+
+    if (!componentAnalysis?.runtime) {
+      continue;
+    }
+
+    const astroSource =
+      sourceFiles.find((file) => file.path === binding.astroFilePath) ?? null;
+    const line = astroSource
+      ? (getTextLineNumber(
+          astroSource.content,
+          new RegExp(`<${binding.localName}\\b`)
+        ) ?? 1)
+      : 1;
+
+    return {
+      hasDependency: context.hasDependency,
+      mount: {
+        componentName: binding.localName,
+        filePath: binding.astroFilePath,
+        line,
+      },
+      runtime: componentAnalysis.runtime,
+      shell: astroSource,
+    };
+  }
+
+  return null;
+};
+
 const runToastRuntimeAnalysis = async (
   project: ProjectDiscovery,
   filesystemRoot: string
@@ -555,8 +651,11 @@ const runToastRuntimeAnalysis = async (
   );
   const shells = await readShells(project);
   const firstShell = shells[0] ?? null;
+  const isAstro = Boolean(
+    project.versions.astro && project.paths.astroPagesDir
+  );
 
-  if (!(hasDependency && firstShell)) {
+  if (!(hasDependency && (firstShell || isAstro))) {
     return { hasDependency, mount: null, runtime: null, shell: firstShell };
   }
 
@@ -575,6 +674,18 @@ const runToastRuntimeAnalysis = async (
     host,
     project,
   };
+
+  if (isAstro) {
+    const astroAnalysis = await analyzeAstroToastMount(
+      project,
+      context,
+      sourceFiles
+    );
+
+    if (astroAnalysis) {
+      return astroAnalysis;
+    }
+  }
 
   for (const shell of shells) {
     if (!SCRIPT_FILE_PATTERN.test(shell.path)) {

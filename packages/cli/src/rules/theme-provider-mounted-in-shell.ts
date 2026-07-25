@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { AuditContext, AuditRule } from "../audit";
+import { findAstroDocumentShells } from "./astro-mounts";
 import { fail, notApplicable, pass } from "./rule-result";
 import { getTextLineNumber, readProjectSourceFile } from "./source-files";
 
@@ -91,6 +92,33 @@ const themeProviderMountedInShellRule: AuditRule = {
   id: "theme-provider-mounted-in-shell",
   maxScore: 3,
   run: async (context) => {
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      const shells = await findAstroDocumentShells(context.project);
+      const mountedShell = shells.find((shell) =>
+        THEME_PROVIDER_JSX_PATTERN.test(shell.content)
+      );
+
+      if (mountedShell) {
+        return pass(
+          "Theme provider is mounted in the Astro document shell.",
+          mountedShell.path,
+          getTextLineNumber(mountedShell.content, THEME_PROVIDER_JSX_PATTERN)
+        );
+      }
+
+      if (shells[0]) {
+        return fail(
+          "The Astro document shell does not render a theme provider.",
+          "Render ThemeProvider as an island near the document root so every page receives consistent theme state.",
+          {
+            filePath: shells[0].path,
+            roast:
+              "The theme provider exists spiritually. The component tree remains unconvinced.",
+          }
+        );
+      }
+    }
+
     const shellGroups = getShellCandidateGroups(context);
     let inspectedShells = 0;
     let passingPath: string | null = null;

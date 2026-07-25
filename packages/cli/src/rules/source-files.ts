@@ -29,6 +29,9 @@ const SOURCE_PATTERNS = [
   "pages/**/*.{js,jsx,ts,tsx}",
   "resources/js/**/*.{js,jsx,ts,tsx}",
   "src/**/*.{js,jsx,ts,tsx}",
+  // Astro templates are read as text for document-shell and island checks;
+  // the AST loader's script filter keeps them out of the TypeScript parser.
+  "src/**/*.astro",
   "components/**/*.{js,jsx,ts,tsx}",
   "lib/**/*.{js,jsx,ts,tsx}",
   "hooks/**/*.{js,jsx,ts,tsx}",
@@ -47,6 +50,7 @@ const APP_NON_PAGE_SOURCE_PATTERN =
 const PAGES_API_SOURCE_PATTERN =
   /(?:^|[/\\])(?:src[/\\])?pages[/\\]api[/\\].+\.[cm]?[jt]sx?$/i;
 const PROJECT_IGNORES = [
+  "**/.astro/**",
   "**/.next/**",
   "**/__fixtures__/**",
   "**/__mocks__/**",
