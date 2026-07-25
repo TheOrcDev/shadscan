@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-25
+
 ### Added
 
 - An `astro-react` framework adapter (ruleset `2026.07.37`): Astro sites
@@ -22,6 +24,14 @@ stable releases published under `latest`.
   codegen cache is excluded from scanning, Markdown/MDX pages record an
   explicit graph boundary, and Astro sites without React get an error
   naming their UI stack.
+
+### Fixed
+
+- Hosted web scans now retain the files their adapters need. `.astro`
+  templates, Laravel's `resources/views/**/*.blade.php` views, and the
+  `artisan` marker were dropped during archive extraction, so scanning a
+  Laravel or Astro repository through the web scanner or hosted API
+  reported it as generic React. Local CLI scans were unaffected.
 
 ### Changed
 
