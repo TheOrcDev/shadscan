@@ -20,6 +20,7 @@ const FRAMEWORK_LABELS = {
   "astro-react": "Astro",
   "generic-react": "React",
   "laravel-inertia-react": "Laravel + Inertia",
+  mixed: "Multiple frameworks",
   "next-app-router": "Next.js App Router",
   "next-hybrid-router": "Next.js App + Pages Router",
   "next-pages-router": "Next.js Pages Router",

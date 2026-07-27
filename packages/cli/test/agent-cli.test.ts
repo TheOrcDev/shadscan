@@ -146,6 +146,7 @@ const createFinding = (projectRoot: string): AuditFinding => ({
   ],
   id: "button-has-name",
   impactsScore: true,
+  packageDir: null,
   maxScore: 4,
   remediation: "Give the button an accessible name.",
   roast: "Roast copy must never enter the agent prompt.",

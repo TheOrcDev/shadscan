@@ -75,6 +75,7 @@ const createFinding = (
   ],
   id: "button-has-name",
   impactsScore: true,
+  packageDir: null,
   maxScore: 4,
   remediation: "Give the button an accessible name.",
   roast: "This must not enter the prompt.",

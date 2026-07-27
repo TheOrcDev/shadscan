@@ -45,7 +45,9 @@ import {
   stripRoasts,
 } from "./render-human";
 import { scanProject } from "./scan";
+import { scanWorkspace } from "./scan-workspace";
 import { resolveTerminalCapabilities } from "./terminal-capabilities";
+import { discoverWorkspace } from "./workspace";
 
 const VERSION = packageJson.version;
 
@@ -57,6 +59,8 @@ interface CliOptions {
   format?: OutputFormat;
   interactive: boolean;
   json?: boolean;
+  listProjects?: boolean;
+  project?: string;
   prompt?: boolean;
   roast?: boolean;
 }
@@ -445,11 +449,104 @@ const validateScanActionOptions = (
   }
 };
 
+/**
+ * The classification heuristic decides which packages feed the score, so it
+ * needs to be inspectable without running a full audit.
+ */
+const runListProjectsAction = async (
+  projectPath: string,
+  options: CliOptions
+): Promise<void> => {
+  const resolvedProjectPath = await resolveProjectPath(projectPath);
+  const workspace = await discoverWorkspace(resolvedProjectPath);
+
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(workspace, null, 2)}\n`);
+    return;
+  }
+
+  const lines = [
+    `Workspace: ${workspace.kind}`,
+    `Projects: ${workspace.projects.length}`,
+    "",
+  ];
+
+  for (const project of workspace.projects) {
+    lines.push(
+      `  ${project.packageDir}  [${project.kind}]  ${project.adapter}`,
+      `    ${project.kindReason}`
+    );
+  }
+
+  if (workspace.skipped.length > 0) {
+    lines.push("", "Skipped:");
+    for (const skip of workspace.skipped) {
+      lines.push(`  ${skip.packageDir} — ${skip.reason}`);
+    }
+  }
+
+  if (workspace.truncated > 0) {
+    lines.push(
+      "",
+      `${workspace.truncated} application package(s) exceeded the scan cap and were not listed.`
+    );
+  }
+
+  process.stdout.write(`${lines.join("\n")}\n`);
+};
+
+/** Output and exit-code handling shared by single-package and workspace scans. */
+const emitScanReport = ({
+  includeRoast,
+  options,
+  outputFormat,
+  report,
+}: {
+  includeRoast: boolean;
+  options: CliOptions;
+  outputFormat: OutputFormat;
+  report: Awaited<ReturnType<typeof scanProject>>;
+}): void => {
+  const outputReport = includeRoast ? report : stripRoasts(report);
+
+  if (outputFormat === "json") {
+    process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
+  } else if (outputFormat === "prompt") {
+    process.stdout.write(renderAgentPrompt(outputReport));
+  } else {
+    const terminal = resolveTerminalCapabilities({
+      columns: process.stdout.columns,
+      env: {
+        CI: process.env.CI,
+        FORCE_COLOR: process.env.FORCE_COLOR,
+        NO_COLOR: process.env.NO_COLOR,
+        TERM: process.env.TERM,
+      },
+      isTTY: process.stdout.isTTY === true,
+    });
+    process.stdout.write(
+      renderHumanReport(outputReport, { includeRoast, terminal })
+    );
+  }
+
+  if (
+    options.failUnder !== undefined &&
+    scoreFailsThreshold(report.score, options.failUnder, report.coverage.source)
+  ) {
+    process.exitCode = 1;
+  }
+};
+
 const runScanAction = async (
   projectPath: string,
   options: CliOptions,
   command: Command
 ): Promise<void> => {
+  if (options.listProjects) {
+    await runListProjectsAction(projectPath, options);
+    return;
+  }
+
   const outputFormat = resolveOutputFormat(options);
   validateScanActionOptions(options, outputFormat);
   const roastWasSpecified = command.getOptionValueSource("roast") === "cli";
@@ -459,7 +556,36 @@ const runScanAction = async (
       ? options.roast !== false
       : outputFormat === "human" && !process.env.CI);
   const resolvedProjectPath = await resolveProjectPath(projectPath);
-  const project = await discoverProject(resolvedProjectPath);
+  const workspace = options.project
+    ? null
+    : await discoverWorkspace(resolvedProjectPath);
+  /**
+   * Only a lone package at the repository root takes the single-package path,
+   * which keeps plain projects byte-identical. Counting applications instead
+   * broke the very common "one app under apps/, libraries beside it" layout:
+   * it fell through to scanning the root, which declares no React.
+   */
+  const onlyProject =
+    workspace?.projects.length === 1 ? workspace.projects[0] : null;
+  const scanAsWorkspace =
+    workspace !== null &&
+    workspace.projects.length > 0 &&
+    onlyProject?.packageDir !== ".";
+  const selectedPath = options.project
+    ? await resolveProjectPath(
+        path.resolve(resolvedProjectPath, options.project)
+      )
+    : resolvedProjectPath;
+
+  if (scanAsWorkspace) {
+    const report = await scanWorkspace(resolvedProjectPath, {
+      category: options.category,
+    });
+    emitScanReport({ includeRoast, options, outputFormat, report });
+    return;
+  }
+
+  const project = await discoverProject(selectedPath);
   const report = await scanProject(project.rootDir, {
     category: options.category,
   });
@@ -603,6 +729,14 @@ const createProgram = (): Command => {
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
     .option("--no-interactive", "Disable Shadscan follow-up prompts.")
+    .option(
+      "--list-projects",
+      "List the workspace packages shadscan found, without scanning."
+    )
+    .option(
+      "--project <path>",
+      "Scan one workspace package instead of pooling every application."
+    )
     .action(runScanAction);
 
   program
