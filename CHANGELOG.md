@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.6.0 - 2026-07-27
+
 ### Fixed
 
 - Three false negatives reported in
