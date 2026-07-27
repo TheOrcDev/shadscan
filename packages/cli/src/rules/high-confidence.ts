@@ -35,6 +35,7 @@ import {
   createConfinedTypeScriptHost,
 } from "../typescript-host";
 import { findAstroDocumentShells, getAstroSourceFiles } from "./astro-mounts";
+import { findDeclarativeHotkeyScopes } from "./declarative-hotkeys";
 import {
   ERROR_BOUNDARY_EXPORT_PATTERN,
   getReactRouterAppFiles,
@@ -501,27 +502,51 @@ const themeHotkeyPresentRule: AuditRule = {
     );
     const host = createConfinedTypeScriptHost(context.filesystemRoot);
     const compilerOptions = getCompilerOptions(context.project, host);
+    const togglesTheme = (scope: SourceScope): boolean =>
+      DIRECT_THEME_TOGGLE_PATTERN.test(scope.content) ||
+      sourceScopeCallsVerifiedThemeToggle(
+        scope,
+        context.project,
+        compilerOptions,
+        host,
+        filesByPath
+      );
 
     for (const scope of hotkeyScopes) {
       const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(scope.content);
-      const togglesTheme =
-        DIRECT_THEME_TOGGLE_PATTERN.test(scope.content) ||
-        sourceScopeCallsVerifiedThemeToggle(
-          scope,
-          context.project,
-          compilerOptions,
-          host,
-          filesByPath
-        );
       const checksDKey = D_KEY_PATTERN.test(scope.content);
       const ignoresTypingTargets = sourceScopeHasTypingTargetGuard(scope);
 
-      if (hasKeyHandler && togglesTheme && checksDKey && ignoresTypingTargets) {
+      if (
+        hasKeyHandler &&
+        togglesTheme(scope) &&
+        checksDKey &&
+        ignoresTypingTargets
+      ) {
         return pass(
           "Dark-mode keyboard shortcut found and typing targets are guarded.",
           scope.file.filePath,
           getSourceScopeMatchLine(scope, D_KEY_PATTERN)
         );
+      }
+    }
+
+    // A declarative registration never contains a keydown listener of its
+    // own, so it is discovered separately. The library's own option
+    // semantics stand in for the manual typing-target guard.
+    for (const file of parsedFiles) {
+      for (const { hotkey, scope } of findDeclarativeHotkeyScopes(file)) {
+        if (
+          hotkey.targetsDKey &&
+          hotkey.guardsTypingTargets &&
+          togglesTheme(scope)
+        ) {
+          return pass(
+            "Dark-mode keyboard shortcut registered through a hotkey library that ignores typing targets.",
+            file.filePath,
+            hotkey.line
+          );
+        }
       }
     }
 
