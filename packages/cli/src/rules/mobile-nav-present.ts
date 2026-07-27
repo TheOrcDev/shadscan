@@ -89,7 +89,9 @@ const SHADCN_SIDEBAR_RUNTIME_FILE_PATTERN =
 const SHADCN_SIDEBAR_RUNTIME_PATTERN =
   /useIsMobile\s*\([\s\S]*?openMobile[\s\S]*?<Sheet\b[\s\S]*?<SheetContent\b/;
 const SHADCN_SIDEBAR_PROVIDER_PATTERN = /<SidebarProvider\b/;
+const SHADCN_SIDEBAR_ELEMENT_PATTERN = /<Sidebar\b/;
 const SHADCN_SIDEBAR_COMPOSITION_PATTERN = /<Sidebar\b[\s\S]*?<(?:a|Link)\b/;
+const SIDEBAR_LINK_PATTERN = /<(?:a|Link)\b/;
 const INTRINSIC_TAG_PATTERN = /^[a-z]/;
 const SHADCN_SIDEBAR_TRIGGER_PATTERN = /<SidebarTrigger(?:\s|>)/;
 const USE_SIDEBAR_PATTERN = /useSidebar\s*\(/;
@@ -632,7 +634,10 @@ const getFileImports = (file: SourceFile): Map<string, string> => {
  * provider actually mounts the file that composes the sidebar, rather than
  * accepting any project that merely contains both somewhere.
  */
-const getTagsRenderedInsideProvider = (file: SourceFile): string[] => {
+const getTagsRenderedInside = (
+  file: SourceFile,
+  containerTagName: string
+): string[] => {
   const sourceFile = createSourceFile(
     file.path,
     file.content,
@@ -646,7 +651,7 @@ const getTagsRenderedInsideProvider = (file: SourceFile): string[] => {
     if (
       !(
         isJsxElement(node) &&
-        getJsxTagName(node.openingElement) === "SidebarProvider"
+        getJsxTagName(node.openingElement) === containerTagName
       )
     ) {
       return;
@@ -666,6 +671,48 @@ const getTagsRenderedInsideProvider = (file: SourceFile): string[] => {
   });
 
   return tags;
+};
+
+/**
+ * Whether a sidebar composition actually contains navigation. Real sidebars
+ * usually delegate their links to a nav sub-component, so a literal link in
+ * the same file is not required — but the component that owns the links must
+ * still resolve to a file in the project.
+ */
+const sidebarRendersNavigation = (
+  sidebarFile: SourceFile,
+  authoredFiles: Map<string, SourceFile>,
+  project: ProjectDiscovery,
+  resolver: ProjectModuleResolver
+): boolean => {
+  if (SHADCN_SIDEBAR_COMPOSITION_PATTERN.test(sidebarFile.content)) {
+    return true;
+  }
+
+  const imports = getFileImports(sidebarFile);
+
+  for (const tagName of getTagsRenderedInside(sidebarFile, "Sidebar")) {
+    const moduleName = imports.get(tagName);
+
+    if (!moduleName) {
+      continue;
+    }
+
+    const resolvedPath = resolveProjectModulePath({
+      containingFile: sidebarFile.path,
+      hasCandidate: (candidate) => authoredFiles.has(candidate),
+      moduleName,
+      project,
+      resolver,
+    });
+    const navFile = resolvedPath ? authoredFiles.get(resolvedPath) : null;
+
+    if (navFile && SIDEBAR_LINK_PATTERN.test(navFile.content)) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 /**
@@ -696,7 +743,10 @@ const findLinkedSidebarComposition = (
 
     const imports = getFileImports(providerFile);
 
-    for (const tagName of getTagsRenderedInsideProvider(providerFile)) {
+    for (const tagName of getTagsRenderedInside(
+      providerFile,
+      "SidebarProvider"
+    )) {
       const moduleName = imports.get(tagName);
 
       if (!moduleName) {
@@ -755,12 +805,22 @@ const findShadcnSidebarMobileNavigation = (
     return null;
   }
 
+  // Nav sub-components need not import the sidebar module, so the link hop
+  // is searched against every authored file.
+  const authoredFilesByPath = new Map(
+    files
+      .filter((file) => !GENERATED_UI_PATH_PATTERN.test(file.path))
+      .map((file) => [path.resolve(file.path), file])
+  );
+
   return findLinkedSidebarComposition(
     authoredSidebarFiles.filter((file) =>
       SHADCN_SIDEBAR_PROVIDER_PATTERN.test(file.content)
     ),
-    authoredSidebarFiles.filter((file) =>
-      SHADCN_SIDEBAR_COMPOSITION_PATTERN.test(file.content)
+    authoredSidebarFiles.filter(
+      (file) =>
+        SHADCN_SIDEBAR_ELEMENT_PATTERN.test(file.content) &&
+        sidebarRendersNavigation(file, authoredFilesByPath, project, resolver)
     ),
     project,
     resolver

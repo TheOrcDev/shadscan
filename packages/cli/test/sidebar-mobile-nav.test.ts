@@ -238,6 +238,106 @@ export default function Layout({ children }) {
     expect(await getStatus(rootDir)).toBe("pass");
   });
 
+  // Real sidebars delegate their links to a nav sub-component, so the link
+  // is one hop below <Sidebar> rather than in the same file.
+  it("passes when the sidebar delegates its links to a nav component", async () => {
+    const rootDir = await createFixture();
+    await writeBaseProject(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/components/nav-group.tsx",
+      `export function NavGroup({ items }) {
+  return (
+    <ul>
+      {items.map((item) => (
+        <li key={item.title}>
+          <a href={item.url}>{item.title}</a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+`
+    );
+    await writeFixtureFile(
+      rootDir,
+      "src/components/app-sidebar.tsx",
+      `import { NavGroup } from "@/components/nav-group";
+import { Sidebar } from "@/components/ui/sidebar";
+
+export function AppSidebar() {
+  return (
+    <Sidebar>
+      <NavGroup items={[]} />
+    </Sidebar>
+  );
+}
+`
+    );
+    await writeFixtureFile(
+      rootDir,
+      "src/app/layout.tsx",
+      `import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+
+export default function Layout({ children }) {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <main>
+        <SidebarTrigger />
+        {children}
+      </main>
+    </SidebarProvider>
+  );
+}
+`
+    );
+
+    expect(await getStatus(rootDir)).toBe("pass");
+  });
+
+  // An empty shell is not navigation, however it is mounted.
+  it("fails when the sidebar contains no links at any hop", async () => {
+    const rootDir = await createFixture();
+    await writeBaseProject(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/components/app-sidebar.tsx",
+      `import { Sidebar } from "@/components/ui/sidebar";
+
+export function AppSidebar() {
+  return (
+    <Sidebar>
+      <p>No navigation here</p>
+    </Sidebar>
+  );
+}
+`
+    );
+    await writeFixtureFile(
+      rootDir,
+      "src/app/layout.tsx",
+      `import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+
+export default function Layout({ children }) {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <main>
+        <SidebarTrigger />
+        {children}
+      </main>
+    </SidebarProvider>
+  );
+}
+`
+    );
+
+    expect(await getStatus(rootDir)).toBe("fail");
+  });
+
   // The false-pass guard: both halves exist, but nothing mounts the sidebar.
   it("fails when the sidebar module is never rendered by the provider", async () => {
     const rootDir = await createFixture();
