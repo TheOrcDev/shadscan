@@ -46,6 +46,7 @@ import {
 } from "./render-human";
 import { scanProject } from "./scan";
 import { resolveTerminalCapabilities } from "./terminal-capabilities";
+import { discoverWorkspace } from "./workspace";
 
 const VERSION = packageJson.version;
 
@@ -57,6 +58,7 @@ interface CliOptions {
   format?: OutputFormat;
   interactive: boolean;
   json?: boolean;
+  listProjects?: boolean;
   prompt?: boolean;
   roast?: boolean;
 }
@@ -445,11 +447,62 @@ const validateScanActionOptions = (
   }
 };
 
+/**
+ * The classification heuristic decides which packages feed the score, so it
+ * needs to be inspectable without running a full audit.
+ */
+const runListProjectsAction = async (
+  projectPath: string,
+  options: CliOptions
+): Promise<void> => {
+  const resolvedProjectPath = await resolveProjectPath(projectPath);
+  const workspace = await discoverWorkspace(resolvedProjectPath);
+
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(workspace, null, 2)}\n`);
+    return;
+  }
+
+  const lines = [
+    `Workspace: ${workspace.kind}`,
+    `Projects: ${workspace.projects.length}`,
+    "",
+  ];
+
+  for (const project of workspace.projects) {
+    lines.push(
+      `  ${project.packageDir}  [${project.kind}]  ${project.adapter}`,
+      `    ${project.kindReason}`
+    );
+  }
+
+  if (workspace.skipped.length > 0) {
+    lines.push("", "Skipped:");
+    for (const skip of workspace.skipped) {
+      lines.push(`  ${skip.packageDir} — ${skip.reason}`);
+    }
+  }
+
+  if (workspace.truncated > 0) {
+    lines.push(
+      "",
+      `${workspace.truncated} application package(s) exceeded the scan cap and were not listed.`
+    );
+  }
+
+  process.stdout.write(`${lines.join("\n")}\n`);
+};
+
 const runScanAction = async (
   projectPath: string,
   options: CliOptions,
   command: Command
 ): Promise<void> => {
+  if (options.listProjects) {
+    await runListProjectsAction(projectPath, options);
+    return;
+  }
+
   const outputFormat = resolveOutputFormat(options);
   validateScanActionOptions(options, outputFormat);
   const roastWasSpecified = command.getOptionValueSource("roast") === "cli";
@@ -603,6 +656,10 @@ const createProgram = (): Command => {
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
     .option("--no-interactive", "Disable Shadscan follow-up prompts.")
+    .option(
+      "--list-projects",
+      "List the workspace packages shadscan found, without scanning."
+    )
     .action(runScanAction);
 
   program
