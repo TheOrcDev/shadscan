@@ -163,6 +163,8 @@ interface AgentActionable {
   disposition: ActionableDisposition;
   evidence: AuditEvidence[];
   findingId: string;
+  /** Workspace-relative package to work in; null outside a workspace scan. */
+  packageDir: string | null;
   priority: ActionablePriority;
   scoreImpact: number;
   severity: AuditSeverity;
@@ -293,6 +295,7 @@ const AgentActionableSchema = z.object({
   disposition: ActionableDispositionSchema,
   evidence: z.array(AuditEvidenceSchema),
   findingId: z.string(),
+  packageDir: z.string().nullable(),
   priority: ActionablePrioritySchema,
   scoreImpact: z.number(),
   severity: SeveritySchema,
@@ -1014,51 +1017,84 @@ const createWorkItem = ({
   };
 };
 
-const createWorkItems = (
+/**
+ * Pooled reports contain the same rule once per package, so an unqualified
+ * title produces work items an agent cannot tell apart or act on.
+ */
+const qualifyWorkItemTitle = (
+  title: string,
+  packageDir: string | null
+): string => (packageDir ? `${title} (${packageDir})` : title);
+
+const createGroupedWorkItems = (
+  group: (typeof WORK_ITEM_GROUPS)[number],
   actionables: AgentActionable[],
-  projectGates: string[]
+  projectGates: string[],
+  packageDir: string | null
+): AgentWorkItem[] => {
+  const matchingActionables = group.findingIds.flatMap((findingId) => {
+    const actionable = actionables.find(
+      (candidate) => candidate.findingId === findingId
+    );
+    return actionable ? [actionable] : [];
+  });
+
+  if (matchingActionables.length < 2) {
+    return [];
+  }
+
+  const dispositions = new Set(
+    matchingActionables.map(({ disposition }) => disposition)
+  );
+  const workItems: AgentWorkItem[] = [];
+
+  for (const disposition of dispositions) {
+    const groupedActionables = matchingActionables.filter(
+      (actionable) => actionable.disposition === disposition
+    );
+
+    if (groupedActionables.length < 2) {
+      continue;
+    }
+
+    const groupId =
+      dispositions.size === 1 ? group.id : `${group.id}-${disposition}`;
+    workItems.push(
+      createWorkItem({
+        actionables: groupedActionables,
+        id: packageDir ? `${packageDir}:${groupId}` : groupId,
+        projectGates,
+        summary: group.summary,
+        title: qualifyWorkItemTitle(group.title, packageDir),
+      })
+    );
+  }
+
+  return workItems;
+};
+
+const createScopedWorkItems = (
+  actionables: AgentActionable[],
+  projectGates: string[],
+  packageDir: string | null
 ): AgentWorkItem[] => {
   const groupedFindingIds = new Set<string>();
   const workItems: AgentWorkItem[] = [];
 
   for (const group of WORK_ITEM_GROUPS) {
-    const matchingActionables = group.findingIds.flatMap((findingId) => {
-      const actionable = actionables.find(
-        (candidate) => candidate.findingId === findingId
-      );
-      return actionable ? [actionable] : [];
-    });
-
-    if (matchingActionables.length < 2) {
-      continue;
-    }
-
-    const dispositions = new Set(
-      matchingActionables.map(({ disposition }) => disposition)
+    const grouped = createGroupedWorkItems(
+      group,
+      actionables,
+      projectGates,
+      packageDir
     );
 
-    for (const disposition of dispositions) {
-      const groupedActionables = matchingActionables.filter(
-        (actionable) => actionable.disposition === disposition
-      );
-
-      if (groupedActionables.length < 2) {
-        continue;
+    for (const workItem of grouped) {
+      for (const findingId of workItem.findingIds) {
+        groupedFindingIds.add(findingId);
       }
-
-      for (const actionable of groupedActionables) {
-        groupedFindingIds.add(actionable.findingId);
-      }
-      workItems.push(
-        createWorkItem({
-          actionables: groupedActionables,
-          id: dispositions.size === 1 ? group.id : `${group.id}-${disposition}`,
-          projectGates,
-          summary: group.summary,
-          title: group.title,
-        })
-      );
     }
+    workItems.push(...grouped);
   }
 
   for (const actionable of actionables) {
@@ -1069,10 +1105,12 @@ const createWorkItems = (
     workItems.push(
       createWorkItem({
         actionables: [actionable],
-        id: actionable.findingId,
+        id: packageDir
+          ? `${packageDir}:${actionable.findingId}`
+          : actionable.findingId,
         projectGates,
         summary: actionable.summary,
-        title: actionable.title,
+        title: qualifyWorkItemTitle(actionable.title, packageDir),
       })
     );
   }
@@ -1085,6 +1123,43 @@ const createWorkItems = (
       right.rawScoreImpact - left.rawScoreImpact ||
       compareCodeUnits(left.id, right.id)
   );
+};
+
+/**
+ * Work-item grouping matches one actionable per rule, so a pooled report must
+ * be partitioned by package first — otherwise every package after the first
+ * silently loses its grouped items.
+ */
+const createWorkItems = (
+  actionables: AgentActionable[],
+  projectGates: string[]
+): AgentWorkItem[] => {
+  const byPackage = new Map<string | null, AgentActionable[]>();
+
+  for (const actionable of actionables) {
+    const existing = byPackage.get(actionable.packageDir);
+
+    if (existing) {
+      existing.push(actionable);
+    } else {
+      byPackage.set(actionable.packageDir, [actionable]);
+    }
+  }
+
+  const [onlyPackage] = [...byPackage.keys()];
+
+  if (
+    byPackage.size <= 1 &&
+    (onlyPackage === null || onlyPackage === undefined)
+  ) {
+    return createScopedWorkItems(actionables, projectGates, null);
+  }
+
+  return [...byPackage.entries()]
+    .sort(([left], [right]) => compareCodeUnits(left ?? "", right ?? ""))
+    .flatMap(([packageDir, scoped]) =>
+      createScopedWorkItems(scoped, projectGates, packageDir)
+    );
 };
 
 const getSuggestedSkills = ({
@@ -1151,6 +1226,7 @@ const createAgentHandoff = ({
         disposition,
         evidence: finding.evidence,
         findingId: finding.id,
+        packageDir: finding.packageDir,
         priority: getActionablePriority(finding),
         scoreImpact: finding.impactsScore
           ? finding.maxScore - finding.score

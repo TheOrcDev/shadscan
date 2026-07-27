@@ -1,5 +1,10 @@
 import picocolors from "picocolors";
-import type { AuditFinding, AuditReport } from "./audit";
+import type {
+  AuditFinding,
+  AuditReport,
+  WorkspaceReportProject,
+} from "./audit";
+import { compareCodeUnits } from "./deterministic-order";
 import { getBannerWidth, renderBannerRows } from "./grade-banner";
 import type { TerminalCapabilities } from "./terminal-capabilities";
 
@@ -291,10 +296,20 @@ const renderGradeBanner = (
       ? null
       : renderBannerRows(bannerText);
 
+  /** A pooled grade must say what it covers, or it reads as one app's score. */
+  const coverage = report.workspace
+    ? [
+        `${RICH_SCORE_BAR_INDENT}across ${report.workspace.applicationCount} application${
+          report.workspace.applicationCount === 1 ? "" : "s"
+        } in this workspace`,
+      ]
+    : [];
+
   if (bannerRows === null) {
     return [
       "",
       `${colors.bold("Final grade:")} ${colorizeByScore(bannerText, score, colors)}`,
+      ...coverage,
     ];
   }
 
@@ -303,7 +318,101 @@ const renderGradeBanner = (
     ...bannerRows.map(
       (row) => `${RICH_SCORE_BAR_INDENT}${colorizeByScore(row, score, colors)}`
     ),
+    ...coverage,
   ];
+};
+
+/** Worst-first, so the package needing attention is read first. */
+const compareWorkspaceProjects = (
+  left: { packageDir: string; score: number | null },
+  right: { packageDir: string; score: number | null }
+): number =>
+  (left.score ?? Number.POSITIVE_INFINITY) -
+    (right.score ?? Number.POSITIVE_INFINITY) ||
+  compareCodeUnits(left.packageDir, right.packageDir);
+
+const renderWorkspaceProjectRow = (
+  project: WorkspaceReportProject,
+  colors: TerminalColors,
+  pad: number
+): string => {
+  const score =
+    project.score === null
+      ? "unassessed"
+      : colorizeByScore(
+          `${project.score}/100 ${project.grade ?? "n/a"}`,
+          project.score,
+          colors
+        );
+
+  return `  ${sanitizeTerminalText(project.packageDir).padEnd(pad)}  ${score}  ${project.adapter}`;
+};
+
+/**
+ * A pooled number that silently means something new is worse than no number,
+ * so the packages behind it — and the ones deliberately left out — are shown
+ * before the score itself.
+ */
+const renderWorkspaceSummary = (
+  report: AuditReport,
+  terminal: TerminalCapabilities
+): string[] => {
+  const { workspace } = report;
+
+  if (!workspace) {
+    return [];
+  }
+
+  const colors = picocolors.createColors(terminal.color);
+  const applications = workspace.projects
+    .filter((project) => project.poolsIntoScore)
+    .sort(compareWorkspaceProjects);
+  const libraries = workspace.projects
+    .filter((project) => !project.poolsIntoScore)
+    .sort(compareWorkspaceProjects);
+  const pad = Math.max(
+    ...workspace.projects.map((project) => project.packageDir.length),
+    7
+  );
+  const lines = [
+    "",
+    `${colors.bold("Workspace:")} ${workspace.kind} — ${workspace.applicationCount} application${
+      workspace.applicationCount === 1 ? "" : "s"
+    } pooled into this score`,
+    "",
+  ];
+
+  for (const project of applications) {
+    lines.push(renderWorkspaceProjectRow(project, colors, pad));
+  }
+
+  if (libraries.length > 0) {
+    lines.push(
+      "",
+      `  ${colors.dim("Libraries (reported, not counted toward the score):")}`
+    );
+    for (const project of libraries) {
+      lines.push(renderWorkspaceProjectRow(project, colors, pad));
+    }
+  }
+
+  if (workspace.skipped.length > 0) {
+    lines.push("", `  ${colors.dim("Skipped:")}`);
+    for (const skip of workspace.skipped) {
+      lines.push(
+        `  ${sanitizeTerminalText(skip.packageDir)} — ${sanitizeTerminalText(skip.reason)}`
+      );
+    }
+  }
+
+  if (workspace.truncated > 0) {
+    lines.push(
+      "",
+      `  ${workspace.truncated} application package(s) exceeded the scan cap and were not audited.`
+    );
+  }
+
+  return lines;
 };
 
 const stripRoasts = (report: AuditReport): AuditReport => ({
@@ -323,13 +432,16 @@ const renderHumanReport = (
     "shadscan has entered the chat.",
     "",
     `Adapter: ${report.framework.adapter}`,
-    `Package: ${sanitizeTerminalText(report.packageName ?? "unknown")}`,
+    report.workspace
+      ? `Packages: ${report.workspace.projects.length} discovered`
+      : `Package: ${sanitizeTerminalText(report.packageName ?? "unknown")}`,
     "",
     "Categories:",
     ...renderCategories(report),
     ...renderFindings(report, options),
     ...renderAgentHandoff(report),
     ...renderWarnings(report),
+    ...renderWorkspaceSummary(report, options.terminal),
     ...renderGradeBanner(report, options.terminal),
   ];
 

@@ -34,6 +34,7 @@ const createReport = (): AuditReport => ({
           },
         ],
         findingId: "metadata-configured",
+        packageDir: null,
         priority: "P1",
         scoreImpact: 3,
         severity: "warning",

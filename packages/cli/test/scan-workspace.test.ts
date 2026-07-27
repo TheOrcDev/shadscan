@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { renderHumanReport } from "../src/render-human";
+import { scanProject } from "../src/scan";
 import { scanWorkspace } from "../src/scan-workspace";
 import {
   cleanupWorkspaceFixtures,
   createWorkspaceFixture,
 } from "./workspace-fixture";
 
+const APP_ROW_PATTERN = /^ {2}apps\//;
+const QUALIFIED_TITLE_PATTERN = /\((apps\/web|apps\/admin)\)$/;
 const APP_EVIDENCE_PATH_PATTERN = /^apps\/(admin|web)\//;
 
 const getProject = (
@@ -175,5 +179,100 @@ describe("workspace scanning", () => {
     expect(JSON.stringify({ ...second, durationMs: 0 })).toBe(
       JSON.stringify({ ...first, durationMs: 0 })
     );
+  });
+});
+
+describe("workspace human output", () => {
+  const terminal = {
+    color: false,
+    columns: 120,
+    unicode: true,
+  } as const;
+
+  it("shows applications, labels libraries, and lists skips", async () => {
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "apps/web", preset: "next" },
+        { path: "apps/admin", preset: "vite" },
+        { path: "packages/ui", preset: "library" },
+        {
+          files: { "src/index.ts": "export const noop = () => {};\n" },
+          path: "packages/utils",
+          preset: "none",
+        },
+      ],
+    });
+
+    const report = await scanWorkspace(rootDir);
+    const output = renderHumanReport(report, { includeRoast: false, terminal });
+
+    expect(output).toContain("Workspace: pnpm");
+    expect(output).toContain("2 applications pooled into this score");
+    expect(output).toContain(
+      "Libraries (reported, not counted toward the score)"
+    );
+    expect(output).toContain("packages/ui");
+    expect(output).toContain("packages/utils");
+    expect(output).toContain("across 2 applications in this workspace");
+  });
+
+  it("orders applications worst-first", async () => {
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "apps/web", preset: "next" },
+        { path: "apps/admin", preset: "vite" },
+      ],
+    });
+
+    const report = await scanWorkspace(rootDir);
+    const output = renderHumanReport(report, { includeRoast: false, terminal });
+    const scores = new Map(
+      (report.workspace?.projects ?? []).map((project) => [
+        project.packageDir,
+        project.score ?? 0,
+      ])
+    );
+    const [worst] = [...scores.entries()].sort(
+      ([, left], [, right]) => left - right
+    );
+    const rows = output
+      .split("\n")
+      .filter((line) => APP_ROW_PATTERN.test(line));
+
+    expect(rows[0]).toContain(worst?.[0]);
+  });
+
+  it("names the package on every work item so duplicates stay actionable", async () => {
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "apps/web", preset: "next" },
+        { path: "apps/admin", preset: "vite" },
+      ],
+    });
+
+    const report = await scanWorkspace(rootDir);
+    const titles = report.agentHandoff.workItems.map((item) => item.title);
+
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.every((title) => QUALIFIED_TITLE_PATTERN.test(title))).toBe(
+      true
+    );
+    expect(new Set(titles).size).toBe(titles.length);
+  });
+
+  it("leaves single-package output unqualified", async () => {
+    const rootDir = await createWorkspaceFixture({
+      kind: "none",
+      packages: [{ path: ".", preset: "next" }],
+    });
+
+    const report = await scanProject(rootDir);
+    const output = renderHumanReport(report, { includeRoast: false, terminal });
+
+    expect(report.workspace).toBeNull();
+    expect(output).not.toContain("Workspace:");
+    expect(
+      report.agentHandoff.workItems.every((item) => !item.title.includes("("))
+    ).toBe(true);
   });
 });
