@@ -6,11 +6,16 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.6.1 - 2026-07-27
+
 ### Fixed
 
 - App Router rules now discover route boundaries and metadata exports on
   Windows, where native path separators previously prevented glob and source
-  directory matching.
+  directory matching (ruleset `2026.07.40`). Contributed by
+  [@robert-dudley-p1](https://github.com/robert-dudley-p1) in
+  [#8](https://github.com/TheOrcDev/shadscan/pull/8).
+
 ## 0.6.0 - 2026-07-27
 
 ### Fixed

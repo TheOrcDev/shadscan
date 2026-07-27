@@ -9,7 +9,7 @@ interface ScanOptions {
   source?: ScanSource;
 }
 
-const BUNDLED_RULESET_VERSION = "2026.07.39";
+const BUNDLED_RULESET_VERSION = "2026.07.40";
 
 const scanProject = async (
   rootDir: string,
