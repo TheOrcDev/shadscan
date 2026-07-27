@@ -280,8 +280,12 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
         revision: "0123456789abcdef0123456789abcdef01234567",
       },
       versions: {
+        astro: null,
+        inertia: null,
+        laravel: null,
         next: "16.2.10",
         react: "19.2.4",
+        reactRouter: null,
         tanstackStart: null,
         vite: null,
       },

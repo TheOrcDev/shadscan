@@ -97,7 +97,7 @@ pnpm dlx @shadscan/cli --prompt
 pnpm dlx @shadscan/cli --apply --agent codex
 
 # Fail CI when the complete assessed score is below the floor
-pnpm dlx @shadscan/cli@0.2.0 --fail-under 80 --no-interactive --no-roast
+pnpm dlx @shadscan/cli@0.6.0 --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
@@ -133,7 +133,7 @@ jobs:
       - uses: TheOrcDev/shadscan@main
         with:
           path: .
-          version: 0.2.0 # pin an exact CLI version in CI
+          version: 0.6.0 # pin an exact CLI version in CI
           fail-under: "80"
           create-issue: "true"
 ```
@@ -186,8 +186,9 @@ Low-confidence checks stay visible as score-neutral advisories instead of
 pretending static analysis can prove rendered behavior.
 
 Rules only run where they apply. Shadscan supports Next.js App Router, Pages
-Router, hybrid Next.js projects, TanStack Start, Vite React, and generic
-React applications.
+Router, hybrid Next.js projects, React Router framework mode, TanStack Start,
+Laravel with Inertia and React, Astro with React islands, Vite React, and
+generic React applications.
 
 ## Web Scanner And Hosted API
 

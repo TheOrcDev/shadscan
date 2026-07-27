@@ -16,7 +16,13 @@ function SiteFooter() {
           </a>{" "}
           with <span aria-hidden="true">🪓</span>
         </p>
-        <nav aria-label="Legal" className="flex items-center gap-4 text-sm">
+        <nav aria-label="Secondary" className="flex items-center gap-4 text-sm">
+          <Link
+            className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            href="/contributors"
+          >
+            Contributors
+          </Link>
           <Link
             className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             href="/privacy"

@@ -1,4 +1,5 @@
 const CONTENT_EXTENSIONS = new Set([
+  ".astro",
   ".cjs",
   ".css",
   ".cts",
@@ -16,6 +17,9 @@ const CONTENT_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
 ]);
+// Laravel's Blade root view and error pages are read as text by document
+// rules; retaining only resources/views keeps arbitrary PHP out of scope.
+const BLADE_VIEW_PATTERN = /(?:^|\/)resources\/views\/.+\.blade\.php$/i;
 const SCAN_SOURCE_LIMITS = {
   maxFileBytes: 2 * 1024 * 1024,
   maxFiles: 10_000,
@@ -53,7 +57,11 @@ const classifyScanInputPath = (
     return "content";
   }
 
-  if (PRESENCE_FILE_PATTERN.test(normalizedPath)) {
+  if (BLADE_VIEW_PATTERN.test(normalizedPath)) {
+    return "content";
+  }
+
+  if (PRESENCE_FILE_PATTERN.test(normalizedPath) || fileName === "artisan") {
     return "presence";
   }
 

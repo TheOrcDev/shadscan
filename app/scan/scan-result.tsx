@@ -17,10 +17,13 @@ interface ScanResultProps {
 }
 
 const FRAMEWORK_LABELS = {
+  "astro-react": "Astro",
   "generic-react": "React",
+  "laravel-inertia-react": "Laravel + Inertia",
   "next-app-router": "Next.js App Router",
   "next-hybrid-router": "Next.js App + Pages Router",
   "next-pages-router": "Next.js Pages Router",
+  "react-router-framework": "React Router",
   "tanstack-start": "TanStack Start",
   "vite-react": "Vite React",
 } as const satisfies Record<

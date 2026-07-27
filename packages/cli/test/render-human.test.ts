@@ -155,8 +155,12 @@ const createReport = (): AuditReport => ({
     revision: null,
   },
   versions: {
+    astro: null,
+    inertia: null,
+    laravel: null,
     next: "16.2.6",
     react: "19.2.4",
+    reactRouter: null,
     tanstackStart: null,
     vite: null,
   },

@@ -17,6 +17,9 @@ const SITEMAP_PATTERNS = [
 
 const publicAppSeoFilesPresentRule: AuditRule = {
   adapters: [
+    "astro-react",
+    "laravel-inertia-react",
+    "react-router-framework",
     "next-app-router",
     "next-hybrid-router",
     "next-pages-router",

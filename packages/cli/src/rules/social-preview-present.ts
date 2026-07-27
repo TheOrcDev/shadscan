@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { AuditRule, AuditRuleResult } from "../audit";
 import type { ProjectDiscovery } from "../discovery";
+import { getAstroSourceFiles } from "./astro-mounts";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   findFiles,
@@ -13,6 +14,9 @@ const NEXT_SOCIAL_METADATA_PATTERN =
   /(?:openGraph|twitter)\s*:\s*\{[\s\S]*?images?\s*:/;
 const HTML_SOCIAL_IMAGE_PATTERN =
   /<meta(?=[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
+// Astro templates pass values as expressions: content={ogImage}.
+const ASTRO_SOCIAL_IMAGE_PATTERN =
+  /<meta(?=[^>]*(?:property|name)=["'](?:og:image|twitter:image)["'])(?=[^>]*content=(?:["'][^"']+["']|\{[^}]+\}))[^>]*>/i;
 const TANSTACK_SOCIAL_IMAGE_PATTERN =
   /(?:property|name)\s*:\s*["'](?:og:image|twitter:image)["']/;
 const TANSTACK_SOCIAL_CONTENT_PATTERN = /\bcontent\s*:\s*["'`][^"'`]+["'`]/;
@@ -100,6 +104,92 @@ const evaluatePagesRouterSocialPreview = async (
   );
 };
 
+const evaluateAstroSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const astroFiles = await getAstroSourceFiles(project);
+
+  for (const file of astroFiles) {
+    const line = getTextLineNumber(file.content, ASTRO_SOCIAL_IMAGE_PATTERN);
+
+    if (line !== undefined) {
+      return pass(
+        "Social preview image metadata found in an Astro head.",
+        file.path,
+        line
+      );
+    }
+  }
+
+  return fail(
+    "No Open Graph or Twitter image metadata was found.",
+    "Add an og:image or twitter:image meta tag with a public image URL to the layout's head."
+  );
+};
+
+const evaluateTanstackStartSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const files = await getProjectSourceFiles(project);
+
+  for (const file of files) {
+    if (
+      TANSTACK_SOCIAL_IMAGE_PATTERN.test(file.content) &&
+      TANSTACK_SOCIAL_CONTENT_PATTERN.test(file.content)
+    ) {
+      return pass(
+        "Social preview image metadata found in head() meta entries.",
+        file.path,
+        getTextLineNumber(file.content, TANSTACK_SOCIAL_IMAGE_PATTERN)
+      );
+    }
+  }
+
+  return fail(
+    "No Open Graph or Twitter image metadata was found.",
+    "Add an og:image or twitter:image meta entry with a public image URL to the root route's head() option."
+  );
+};
+
+const evaluateInertiaSocialPreview = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const files = await getProjectSourceFiles(project);
+
+  for (const file of files) {
+    const line = getTextLineNumber(file.content, HTML_SOCIAL_IMAGE_PATTERN);
+
+    if (line !== undefined) {
+      return pass(
+        "Social preview image metadata found in Inertia Head markup.",
+        file.path,
+        line
+      );
+    }
+  }
+
+  const bladeRootView = project.paths.bladeRootView;
+  const bladeDocument = bladeRootView
+    ? await readProjectSourceFile(project, bladeRootView)
+    : null;
+  const bladeLine = bladeDocument
+    ? getTextLineNumber(bladeDocument.content, HTML_SOCIAL_IMAGE_PATTERN)
+    : undefined;
+
+  if (bladeDocument && bladeLine !== undefined) {
+    return pass(
+      "Social preview image metadata found in the Blade root view.",
+      bladeDocument.path,
+      bladeLine
+    );
+  }
+
+  return fail(
+    "No Open Graph or Twitter image metadata was found.",
+    "Add an og:image or twitter:image meta tag through Inertia's `<Head>` or the Blade root view."
+  );
+};
+
 const socialPreviewPresentRule: AuditRule = {
   adapters: ["core"],
   category: "production-polish",
@@ -133,26 +223,16 @@ const socialPreviewPresentRule: AuditRule = {
       return evaluatePagesRouterSocialPreview(project);
     }
 
+    if (project.versions.astro && project.paths.astroPagesDir) {
+      return evaluateAstroSocialPreview(project);
+    }
+
+    if (project.versions.inertia && project.paths.inertiaPagesDir) {
+      return evaluateInertiaSocialPreview(project);
+    }
+
     if (project.versions.tanstackStart && project.paths.routesDir) {
-      const files = await getProjectSourceFiles(project);
-
-      for (const file of files) {
-        if (
-          TANSTACK_SOCIAL_IMAGE_PATTERN.test(file.content) &&
-          TANSTACK_SOCIAL_CONTENT_PATTERN.test(file.content)
-        ) {
-          return pass(
-            "Social preview image metadata found in head() meta entries.",
-            file.path,
-            getTextLineNumber(file.content, TANSTACK_SOCIAL_IMAGE_PATTERN)
-          );
-        }
-      }
-
-      return fail(
-        "No Open Graph or Twitter image metadata was found.",
-        "Add an og:image or twitter:image meta entry with a public image URL to the root route's head() option."
-      );
+      return evaluateTanstackStartSocialPreview(project);
     }
 
     const indexPath = path.join(project.rootDir, "index.html");

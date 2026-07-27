@@ -34,6 +34,15 @@ import {
   type ConfinedTypeScriptHost,
   createConfinedTypeScriptHost,
 } from "../typescript-host";
+import { findAstroDocumentShells, getAstroSourceFiles } from "./astro-mounts";
+import { findDeclarativeHotkeyScopes } from "./declarative-hotkeys";
+import {
+  ERROR_BOUNDARY_EXPORT_PATTERN,
+  getReactRouterAppFiles,
+  isReactRouterFramework,
+  META_EXPORT_PATTERN,
+  ROUTE_ERROR_RESPONSE_PATTERN,
+} from "./react-router-modules";
 import {
   fileExists,
   findFiles,
@@ -65,6 +74,9 @@ const TANSTACK_FAVICON_LINK_PATTERN =
   /\brel\s*:\s*["'](?:icon|shortcut icon)["']/;
 const TANSTACK_NOT_FOUND_PATTERN =
   /\b(?:defaultNotFoundComponent|notFoundComponent)\s*:/;
+const INERTIA_HEAD_TITLE_ATTRIBUTE_PATTERN = /<Head\b[^>]*\btitle\s*=/;
+const INERTIA_HEAD_TITLE_CHILD_PATTERN = /<Head\b[\s\S]{0,600}?<title[\s>]/;
+const BLADE_INERTIA_TITLE_PATTERN = /<title\b[^>]*\binertia\b/;
 const ERROR_BOUNDARY_PATTERN =
   /(class\s+\w*ErrorBoundary|function\s+\w*ErrorBoundary|<ErrorBoundary\b|react-error-boundary)/;
 interface ImportedHelper {
@@ -475,27 +487,51 @@ const themeHotkeyPresentRule: AuditRule = {
     );
     const host = createConfinedTypeScriptHost(context.filesystemRoot);
     const compilerOptions = getCompilerOptions(context.project, host);
+    const togglesTheme = (scope: SourceScope): boolean =>
+      DIRECT_THEME_TOGGLE_PATTERN.test(scope.content) ||
+      sourceScopeCallsVerifiedThemeToggle(
+        scope,
+        context.project,
+        compilerOptions,
+        host,
+        filesByPath
+      );
 
     for (const scope of hotkeyScopes) {
       const hasKeyHandler = KEYDOWN_HANDLER_PATTERN.test(scope.content);
-      const togglesTheme =
-        DIRECT_THEME_TOGGLE_PATTERN.test(scope.content) ||
-        sourceScopeCallsVerifiedThemeToggle(
-          scope,
-          context.project,
-          compilerOptions,
-          host,
-          filesByPath
-        );
       const checksDKey = D_KEY_PATTERN.test(scope.content);
       const ignoresTypingTargets = sourceScopeHasTypingTargetGuard(scope);
 
-      if (hasKeyHandler && togglesTheme && checksDKey && ignoresTypingTargets) {
+      if (
+        hasKeyHandler &&
+        togglesTheme(scope) &&
+        checksDKey &&
+        ignoresTypingTargets
+      ) {
         return pass(
           "Dark-mode keyboard shortcut found and typing targets are guarded.",
           scope.file.filePath,
           getSourceScopeMatchLine(scope, D_KEY_PATTERN)
         );
+      }
+    }
+
+    // A declarative registration never contains a keydown listener of its
+    // own, so it is discovered separately. The library's own option
+    // semantics stand in for the manual typing-target guard.
+    for (const file of parsedFiles) {
+      for (const { hotkey, scope } of findDeclarativeHotkeyScopes(file)) {
+        if (
+          hotkey.targetsDKey &&
+          hotkey.guardsTypingTargets &&
+          togglesTheme(scope)
+        ) {
+          return pass(
+            "Dark-mode keyboard shortcut registered through a hotkey library that ignores typing targets.",
+            file.filePath,
+            hotkey.line
+          );
+        }
       }
     }
 
@@ -509,6 +545,174 @@ const themeHotkeyPresentRule: AuditRule = {
   title: "dark-mode shortcut present",
 };
 
+const evaluateTanstackDocumentTitle = async (
+  context: AuditContext,
+  routesDir: string
+): Promise<AuditRuleResult> => {
+  const match = await findSourceMatchInDirectory(context, routesDir, [
+    TANSTACK_HEAD_OPTION_PATTERN,
+    TANSTACK_HEAD_TITLE_PATTERN,
+  ]);
+
+  if (!match) {
+    return fail(
+      "No TanStack Start head() metadata with a title was found.",
+      "Return `meta` entries with a title and description from the root route's `head()` option."
+    );
+  }
+
+  return pass(
+    "TanStack Start head() metadata found.",
+    match.filePath,
+    match.line
+  );
+};
+
+const evaluateReactRouterMeta = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const modules = await getReactRouterAppFiles(context.project);
+  const withMeta = modules.find((file) =>
+    META_EXPORT_PATTERN.test(file.content)
+  );
+
+  if (!withMeta) {
+    return fail(
+      "No React Router `meta` export was found.",
+      "Export `meta` from the root or a route module returning a title and description."
+    );
+  }
+
+  return pass(
+    "React Router meta export found.",
+    withMeta.path,
+    getTextLineNumber(withMeta.content, META_EXPORT_PATTERN)
+  );
+};
+
+const evaluateTanstackNotFound = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const notFoundMatch = await findSourceMatch(
+    context.project,
+    TANSTACK_NOT_FOUND_PATTERN
+  );
+
+  if (!notFoundMatch) {
+    return fail(
+      "No TanStack Start not-found component was found.",
+      "Add `notFoundComponent` to the root route or `defaultNotFoundComponent` to `createRouter` so missing routes have a designed state."
+    );
+  }
+
+  return pass(
+    "TanStack Start not-found component found.",
+    notFoundMatch.file.path,
+    notFoundMatch.line
+  );
+};
+
+const evaluateReactRouterNotFound = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const appDir = context.project.paths.reactRouterAppDir;
+  const splatRoute = appDir
+    ? await hasAnyFile(context.project.rootDir, [
+        "app/routes/$.{js,jsx,ts,tsx}",
+        "app/routes/**/$.{js,jsx,ts,tsx}",
+      ])
+    : null;
+
+  if (splatRoute) {
+    return pass("React Router splat route found.", splatRoute);
+  }
+
+  const modules = await getReactRouterAppFiles(context.project);
+  const boundary = modules.find(
+    (file) =>
+      ERROR_BOUNDARY_EXPORT_PATTERN.test(file.content) &&
+      ROUTE_ERROR_RESPONSE_PATTERN.test(file.content)
+  );
+
+  if (boundary) {
+    return pass(
+      "React Router ErrorBoundary handles route error responses.",
+      boundary.path,
+      getTextLineNumber(boundary.content, ERROR_BOUNDARY_EXPORT_PATTERN)
+    );
+  }
+
+  return fail(
+    "No React Router not-found handling was found.",
+    "Handle `isRouteErrorResponse` in an `ErrorBoundary` export, or add a splat route at `app/routes/$.tsx`."
+  );
+};
+
+const evaluateAstroDocumentTitle = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const astroFiles = await getAstroSourceFiles(context.project);
+  const titled = astroFiles.find((file) =>
+    HTML_TITLE_PATTERN.test(file.content)
+  );
+
+  if (!titled) {
+    return fail(
+      "No Astro page or layout provides a document title.",
+      "Add a non-empty title element to the layout's head, or per page."
+    );
+  }
+
+  return pass(
+    "Astro document title found.",
+    titled.path,
+    getTextLineNumber(titled.content, HTML_TITLE_PATTERN)
+  );
+};
+
+const evaluateInertiaDocumentTitle = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const attributeMatch = await findSourceMatch(
+    context.project,
+    INERTIA_HEAD_TITLE_ATTRIBUTE_PATTERN
+  );
+  const childMatch =
+    attributeMatch ??
+    (await findSourceMatch(context.project, INERTIA_HEAD_TITLE_CHILD_PATTERN));
+
+  if (childMatch) {
+    return pass(
+      "Inertia Head metadata with a title found.",
+      childMatch.file.path,
+      childMatch.line
+    );
+  }
+
+  const bladeRootView = context.project.paths.bladeRootView;
+  const bladeDocument = bladeRootView
+    ? await readProjectSourceFile(context.project, bladeRootView)
+    : null;
+
+  if (
+    bladeDocument &&
+    (BLADE_INERTIA_TITLE_PATTERN.test(bladeDocument.content) ||
+      HTML_TITLE_PATTERN.test(bladeDocument.content))
+  ) {
+    return pass(
+      "Blade root view provides the document title.",
+      bladeDocument.path,
+      getTextLineNumber(bladeDocument.content, HTML_TITLE_PATTERN) ??
+        getTextLineNumber(bladeDocument.content, BLADE_INERTIA_TITLE_PATTERN)
+    );
+  }
+
+  return fail(
+    "No Inertia Head title or Blade root view title was found.",
+    'Render Inertia\'s `<Head title="…">` in your pages or add a title element to `resources/views/app.blade.php`.'
+  );
+};
+
 const metadataConfiguredRule: AuditRule = {
   adapters: ["core"],
   category: "foundation",
@@ -520,24 +724,23 @@ const metadataConfiguredRule: AuditRule = {
     const { appDir, pagesDir, routesDir } = context.project.paths;
     let firstMatch: { filePath: string; line: number } | null = null;
 
+    if (isReactRouterFramework(context.project)) {
+      return evaluateReactRouterMeta(context);
+    }
+
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      return evaluateAstroDocumentTitle(context);
+    }
+
+    if (
+      context.project.versions.inertia &&
+      context.project.paths.inertiaPagesDir
+    ) {
+      return evaluateInertiaDocumentTitle(context);
+    }
+
     if (context.project.versions.tanstackStart && routesDir) {
-      const match = await findSourceMatchInDirectory(context, routesDir, [
-        TANSTACK_HEAD_OPTION_PATTERN,
-        TANSTACK_HEAD_TITLE_PATTERN,
-      ]);
-
-      if (!match) {
-        return fail(
-          "No TanStack Start head() metadata with a title was found.",
-          "Return `meta` entries with a title and description from the root route's `head()` option."
-        );
-      }
-
-      return pass(
-        "TanStack Start head() metadata found.",
-        match.filePath,
-        match.line
-      );
+      return evaluateTanstackDocumentTitle(context, routesDir);
     }
 
     if (context.project.versions.next && appDir) {
@@ -601,7 +804,7 @@ const faviconPresentRule: AuditRule = {
       "app/icon.*",
       "src/app/favicon.ico",
       "src/app/icon.*",
-      "public/favicon.ico",
+      "public/favicon.*",
       "public/icon.*",
     ]);
 
@@ -642,6 +845,38 @@ const faviconPresentRule: AuditRule = {
       }
     }
 
+    const bladeRootView = context.project.paths.bladeRootView;
+
+    if (bladeRootView) {
+      const bladeDocument = await readProjectSourceFile(
+        context.project,
+        bladeRootView
+      );
+
+      if (bladeDocument && FAVICON_LINK_PATTERN.test(bladeDocument.content)) {
+        return pass(
+          "Favicon link found in the Blade root view.",
+          bladeRootView,
+          getTextLineNumber(bladeDocument.content, FAVICON_LINK_PATTERN)
+        );
+      }
+    }
+
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      const shells = await findAstroDocumentShells(context.project);
+      const linked = shells.find((shell) =>
+        FAVICON_LINK_PATTERN.test(shell.content)
+      );
+
+      if (linked) {
+        return pass(
+          "Favicon link found in the Astro document shell.",
+          linked.path,
+          getTextLineNumber(linked.content, FAVICON_LINK_PATTERN)
+        );
+      }
+    }
+
     return fail(
       "No favicon or app icon was found.",
       "Add `app/favicon.ico`, `app/icon.*`, `public/favicon.ico`, or an equivalent icon link."
@@ -651,40 +886,69 @@ const faviconPresentRule: AuditRule = {
   title: "favicon present",
 };
 
+const evaluateAstroNotFoundPage = async (
+  context: AuditContext
+): Promise<AuditRuleResult> => {
+  const astroNotFound = await hasAnyFile(context.project.rootDir, [
+    "src/pages/404.{astro,md,mdx}",
+  ]);
+
+  if (!astroNotFound) {
+    return fail(
+      "No Astro 404 page was found.",
+      "Add `src/pages/404.astro` so missing routes have a designed state."
+    );
+  }
+
+  return pass("Astro 404 page found.", astroNotFound);
+};
+
 const notFoundRoutePresentRule: AuditRule = {
   adapters: [
+    "astro-react",
+    "laravel-inertia-react",
     "next-app-router",
     "next-hybrid-router",
     "next-pages-router",
+    "react-router-framework",
     "tanstack-start",
   ],
   category: "foundation",
   confidence: "high",
   description:
-    "Checks for a Next not-found boundary, 404 page, or TanStack Start not-found component.",
+    "Checks for a framework-appropriate not-found surface: a Next boundary or 404 page, a TanStack Start not-found component, a Laravel error page, an Astro 404 page, or React Router route-error handling.",
   id: "not-found-route-present",
   maxScore: 3,
   run: async (context) => {
     const foundPaths: string[] = [];
 
-    if (context.project.versions.tanstackStart) {
-      const notFoundMatch = await findSourceMatch(
-        context.project,
-        TANSTACK_NOT_FOUND_PATTERN
-      );
+    if (isReactRouterFramework(context.project)) {
+      return evaluateReactRouterNotFound(context);
+    }
 
-      if (!notFoundMatch) {
+    if (context.project.versions.astro && context.project.paths.astroPagesDir) {
+      return evaluateAstroNotFoundPage(context);
+    }
+
+    if (context.project.versions.inertia && context.project.versions.laravel) {
+      const errorSurface = await hasAnyFile(context.project.rootDir, [
+        "resources/views/errors/404.blade.php",
+        "resources/js/pages/{error,Error}*.{jsx,tsx}",
+        "resources/js/Pages/{error,Error}*.{jsx,tsx}",
+      ]);
+
+      if (!errorSurface) {
         return fail(
-          "No TanStack Start not-found component was found.",
-          "Add `notFoundComponent` to the root route or `defaultNotFoundComponent` to `createRouter` so missing routes have a designed state."
+          "No Laravel 404 error view or Inertia error page was found.",
+          "Add `resources/views/errors/404.blade.php` or render an Inertia error page component so missing routes have a designed state."
         );
       }
 
-      return pass(
-        "TanStack Start not-found component found.",
-        notFoundMatch.file.path,
-        notFoundMatch.line
-      );
+      return pass("Laravel not-found error surface found.", errorSurface);
+    }
+
+    if (context.project.versions.tanstackStart) {
+      return evaluateTanstackNotFound(context);
     }
 
     if (context.project.versions.next && context.project.paths.appDir) {
@@ -747,6 +1011,26 @@ const errorBoundaryPresentRule: AuditRule = {
   run: async (context) => {
     const foundPaths: string[] = [];
     const missingBoundaries: string[] = [];
+
+    if (isReactRouterFramework(context.project)) {
+      const modules = await getReactRouterAppFiles(context.project);
+      const boundary = modules.find((file) =>
+        ERROR_BOUNDARY_EXPORT_PATTERN.test(file.content)
+      );
+
+      if (boundary) {
+        return pass(
+          "React Router ErrorBoundary export found.",
+          boundary.path,
+          getTextLineNumber(boundary.content, ERROR_BOUNDARY_EXPORT_PATTERN)
+        );
+      }
+
+      return fail(
+        "No React Router `ErrorBoundary` export was found.",
+        "Export an `ErrorBoundary` from `app/root.tsx` so render and loader errors have a designed state."
+      );
+    }
 
     if (context.project.versions.next && context.project.paths.appDir) {
       const appError = await hasAnyFile(

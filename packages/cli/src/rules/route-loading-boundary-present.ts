@@ -26,12 +26,21 @@ import {
 } from "typescript";
 import type { AuditRule } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
+import {
+  getReactRouterAppFiles,
+  getReactRouterRouteModules,
+  HYDRATE_FALLBACK_EXPORT_PATTERN,
+  LOADER_EXPORT_PATTERN,
+  USE_NAVIGATION_PATTERN,
+} from "./react-router-modules";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   fileExists,
   findFiles,
+  findSourceMatch,
   getProjectSourceFiles,
   getTextLineNumber,
+  readProjectSourceFile,
 } from "./source-files";
 
 interface DynamicRouteEvidence {
@@ -419,15 +428,139 @@ const runTanstackStartCheck = async (
   );
 };
 
+const INERTIA_PROGRESS_DISABLED_PATTERN = /\bprogress\s*:\s*false\b/;
+const INERTIA_ROUTER_START_PATTERN = /router\.on\(\s*["']start["']/;
+const INERTIA_APP_ENTRY_CANDIDATES = [
+  "resources/js/app.tsx",
+  "resources/js/app.jsx",
+  "resources/js/app.ts",
+  "resources/js/app.js",
+];
+
+const runInertiaCheck = async (
+  project: Parameters<AuditRule["run"]>[0]["project"]
+): Promise<ReturnType<AuditRule["run"]>> => {
+  let appEntry: Awaited<ReturnType<typeof readProjectSourceFile>> = null;
+
+  for (const candidate of INERTIA_APP_ENTRY_CANDIDATES) {
+    appEntry = await readProjectSourceFile(
+      project,
+      path.join(project.rootDir, candidate)
+    );
+
+    if (appEntry) {
+      break;
+    }
+  }
+
+  if (!appEntry) {
+    return notApplicable(
+      "No Inertia app entry (resources/js/app.tsx) was found."
+    );
+  }
+
+  if (!INERTIA_PROGRESS_DISABLED_PATTERN.test(appEntry.content)) {
+    return pass(
+      "Inertia's navigation progress indicator is active.",
+      appEntry.path
+    );
+  }
+
+  const startHandler = await findSourceMatch(
+    project,
+    INERTIA_ROUTER_START_PATTERN
+  );
+
+  if (startHandler) {
+    return pass(
+      "Inertia progress is disabled but a custom router start handler provides loading feedback.",
+      startHandler.file.path,
+      startHandler.line
+    );
+  }
+
+  return fail(
+    "Inertia progress is disabled and no custom loading indicator was found.",
+    'Re-enable the `progress` option in `createInertiaApp` or show loading feedback from a `router.on("start")` handler.',
+    {
+      filePath: appEntry.path,
+      line: getTextLineNumber(
+        appEntry.content,
+        INERTIA_PROGRESS_DISABLED_PATTERN
+      ),
+      roast: "A blank screen is not suspense. It is a hostage situation.",
+    }
+  );
+};
+
+const runReactRouterCheck = async (
+  project: Parameters<AuditRule["run"]>[0]["project"]
+): Promise<ReturnType<AuditRule["run"]>> => {
+  const modules = await getReactRouterRouteModules(project);
+  const loaderModules = modules.filter((file) =>
+    LOADER_EXPORT_PATTERN.test(file.content)
+  );
+
+  if (loaderModules.length === 0) {
+    return notApplicable(
+      "No React Router route modules export loaders that would need pending coverage."
+    );
+  }
+
+  // Pending UI can live anywhere in the app: a HydrateFallback export, a
+  // useNavigation() consumer, or a Suspense fallback around async content.
+  const appFiles = await getReactRouterAppFiles(project);
+  const coverage = appFiles.find(
+    (file) =>
+      HYDRATE_FALLBACK_EXPORT_PATTERN.test(file.content) ||
+      USE_NAVIGATION_PATTERN.test(file.content) ||
+      SUSPENSE_FALLBACK_PATTERN.test(file.content)
+  );
+
+  if (coverage) {
+    return pass(
+      `All ${loaderModules.length} loader-backed route modules have pending coverage.`,
+      coverage.path
+    );
+  }
+
+  const firstLoader = loaderModules[0];
+  return fail(
+    "Route modules declare loaders but the app has no pending coverage.",
+    "Export `HydrateFallback` from a route module, or render pending UI from `useNavigation()` state.",
+    {
+      filePath: firstLoader?.path,
+      line: firstLoader
+        ? getTextLineNumber(firstLoader.content, LOADER_EXPORT_PATTERN)
+        : undefined,
+      roast: "A blank screen is not suspense. It is a hostage situation.",
+    }
+  );
+};
+
 const routeLoadingBoundaryPresentRule: AuditRule = {
-  adapters: ["next-app-router", "next-hybrid-router", "tanstack-start"],
+  adapters: [
+    "laravel-inertia-react",
+    "next-app-router",
+    "next-hybrid-router",
+    "react-router-framework",
+    "tanstack-start",
+  ],
   category: "states",
   confidence: "medium",
   description:
-    "Checks runtime-dynamic Next pages and loader-backed TanStack Start routes for loading coverage.",
+    "Checks runtime-dynamic Next pages, loader-backed TanStack Start routes, and Inertia navigation for loading coverage.",
   id: "route-loading-boundary-present",
   maxScore: 4,
   run: async ({ project }) => {
+    if (project.framework.adapter === "react-router-framework") {
+      return runReactRouterCheck(project);
+    }
+
+    if (project.framework.adapter === "laravel-inertia-react") {
+      return runInertiaCheck(project);
+    }
+
     if (project.framework.adapter === "tanstack-start") {
       return runTanstackStartCheck(project);
     }

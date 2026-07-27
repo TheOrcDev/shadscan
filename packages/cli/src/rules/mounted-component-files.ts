@@ -1,15 +1,12 @@
 import path from "node:path";
 import {
-  type CompilerOptions,
   createSourceFile,
-  getParsedCommandLineOfConfigFile,
   isImportDeclaration,
   isJsxOpeningElement,
   isJsxSelfClosingElement,
   isNamedImports,
   isNamespaceImport,
   isStringLiteral,
-  resolveModuleName,
   ScriptKind,
   ScriptTarget,
   type SourceFile as TypeScriptSourceFile,
@@ -17,9 +14,10 @@ import {
 import { walkNodes } from "../ast";
 import type { ProjectDiscovery } from "../discovery";
 import {
-  type ConfinedTypeScriptHost,
-  createConfinedTypeScriptHost,
-} from "../typescript-host";
+  getProjectModuleResolver,
+  type ProjectModuleResolver,
+  resolveProjectModulePath,
+} from "./module-resolution";
 import { getProjectSourceFiles, type SourceFile } from "./source-files";
 
 interface ImportReference {
@@ -32,21 +30,6 @@ interface ParsedProjectFile {
   sourceFile: TypeScriptSourceFile;
 }
 
-const MODULE_CANDIDATE_SUFFIXES = [
-  "",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".mts",
-  ".cts",
-  ".mjs",
-  ".cjs",
-  "/index.ts",
-  "/index.tsx",
-  "/index.js",
-  "/index.jsx",
-] as const;
 const SCRIPT_FILE_PATTERN = /\.[cm]?[jt]sx?$/;
 const mountedFilesCache = new WeakMap<
   ProjectDiscovery,
@@ -75,20 +58,6 @@ const parseSourceFile = (file: SourceFile): ParsedProjectFile => ({
     getScriptKind(file.path)
   ),
 });
-
-const getCompilerOptions = (
-  project: ProjectDiscovery,
-  host: ConfinedTypeScriptHost
-): CompilerOptions => {
-  if (!project.paths.tsconfig) {
-    return {};
-  }
-
-  return (
-    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
-      ?.options ?? {}
-  );
-};
 
 const getImportReferences = (
   sourceFile: TypeScriptSourceFile
@@ -149,65 +118,22 @@ const getRenderedBindings = (sourceFile: TypeScriptSourceFile): Set<string> => {
   return renderedBindings;
 };
 
-const getSourceCandidate = (
-  candidatePath: string,
-  filesByPath: Map<string, ParsedProjectFile>
-): ParsedProjectFile | null => {
-  for (const suffix of MODULE_CANDIDATE_SUFFIXES) {
-    const candidate = filesByPath.get(
-      path.resolve(`${candidatePath}${suffix}`)
-    );
-
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  return null;
-};
-
 const resolveLocalImport = (
   moduleName: string,
   containingFile: string,
   project: ProjectDiscovery,
-  compilerOptions: CompilerOptions,
-  host: ConfinedTypeScriptHost,
+  resolver: ProjectModuleResolver,
   filesByPath: Map<string, ParsedProjectFile>
 ): ParsedProjectFile | null => {
-  const resolvedFileName = resolveModuleName(
-    moduleName,
+  const resolvedPath = resolveProjectModulePath({
     containingFile,
-    compilerOptions,
-    host
-  ).resolvedModule?.resolvedFileName;
+    hasCandidate: (candidate) => filesByPath.has(candidate),
+    moduleName,
+    project,
+    resolver,
+  });
 
-  if (
-    resolvedFileName &&
-    host.isPathAllowed(resolvedFileName) &&
-    !resolvedFileName.includes(`${path.sep}node_modules${path.sep}`)
-  ) {
-    const resolvedFile = filesByPath.get(path.resolve(resolvedFileName));
-
-    if (resolvedFile) {
-      return resolvedFile;
-    }
-  }
-
-  if (moduleName.startsWith(".")) {
-    return getSourceCandidate(
-      path.resolve(path.dirname(containingFile), moduleName),
-      filesByPath
-    );
-  }
-
-  if (moduleName.startsWith("@/")) {
-    return getSourceCandidate(
-      path.resolve(project.rootDir, moduleName.slice(2)),
-      filesByPath
-    );
-  }
-
-  return null;
+  return resolvedPath ? (filesByPath.get(resolvedPath) ?? null) : null;
 };
 
 const getShellCandidates = (project: ProjectDiscovery): string[] => {
@@ -237,6 +163,22 @@ const getShellCandidates = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.paths.reactRouterRoot) {
+    candidates.push(project.paths.reactRouterRoot);
+  }
+
+  if (project.versions.inertia && project.paths.inertiaPagesDir) {
+    candidates.push(
+      ...[
+        "resources/js/app.tsx",
+        "resources/js/app.jsx",
+        "resources/js/ssr.tsx",
+        "resources/js/layouts/app-layout.tsx",
+        "resources/js/Layouts/AppLayout.tsx",
+      ].map((fileName) => path.join(project.rootDir, fileName))
+    );
+  }
+
   if (candidates.length > 0) {
     return candidates;
   }
@@ -254,7 +196,7 @@ const findMountedComponentFiles = async (
   project: ProjectDiscovery,
   filesystemRoot: string
 ): Promise<Set<string>> => {
-  const host = createConfinedTypeScriptHost(filesystemRoot);
+  const resolver = getProjectModuleResolver(project, filesystemRoot);
   const sourceFiles = await getProjectSourceFiles(project);
   const parsedFiles = sourceFiles
     .filter((file) => SCRIPT_FILE_PATTERN.test(file.path))
@@ -262,7 +204,6 @@ const findMountedComponentFiles = async (
   const filesByPath = new Map(
     parsedFiles.map((file) => [path.resolve(file.file.path), file])
   );
-  const compilerOptions = getCompilerOptions(project, host);
   const pendingFiles = getShellCandidates(project)
     .map((candidate) => filesByPath.get(path.resolve(candidate)))
     .filter((file): file is ParsedProjectFile => Boolean(file));
@@ -297,8 +238,7 @@ const findMountedComponentFiles = async (
         reference.moduleName,
         currentFile.file.path,
         project,
-        compilerOptions,
-        host,
+        resolver,
         filesByPath
       );
 

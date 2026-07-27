@@ -6,9 +6,12 @@ import { glob } from "tinyglobby";
 type JsonObject = Record<string, unknown>;
 
 type FrameworkAdapter =
+  | "astro-react"
+  | "laravel-inertia-react"
   | "next-app-router"
   | "next-hybrid-router"
   | "next-pages-router"
+  | "react-router-framework"
   | "tanstack-start"
   | "vite-react"
   | "generic-react";
@@ -36,8 +39,15 @@ interface ShadcnDiscovery {
 
 interface ProjectPaths {
   appDir: string | null;
+  astroPagesDir: string | null;
+  bladeRootView: string | null;
+  inertiaPagesDir: string | null;
   packageJson: string;
   pagesDir: string | null;
+  // React Router framework mode also lives in `app/`, but `appDir` means
+  // "Next App Router" to every rule that reads it — these stay separate.
+  reactRouterAppDir: string | null;
+  reactRouterRoot: string | null;
   routesDir: string | null;
   srcDir: string | null;
   tailwindCss: string | null;
@@ -46,8 +56,12 @@ interface ProjectPaths {
 }
 
 interface ProjectVersions {
+  astro: string | null;
+  inertia: string | null;
+  laravel: string | null;
   next: string | null;
   react: string | null;
+  reactRouter: string | null;
   tanstackStart: string | null;
   vite: string | null;
 }
@@ -301,6 +315,103 @@ const detectPagesDir = async (rootDir: string): Promise<string | null> => {
   return null;
 };
 
+const detectReactRouterRoot = async (
+  rootDir: string
+): Promise<string | null> => {
+  for (const fileName of ["root.tsx", "root.jsx"]) {
+    const rootModule = path.join(rootDir, "app", fileName);
+
+    if (await fileExists(rootModule)) {
+      return rootModule;
+    }
+  }
+
+  return null;
+};
+
+const hasReactRouterConfig = async (rootDir: string): Promise<boolean> => {
+  for (const fileName of [
+    "react-router.config.ts",
+    "react-router.config.js",
+    "react-router.config.mjs",
+  ]) {
+    if (await fileExists(path.join(rootDir, fileName))) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const detectAstroPagesDir = async (rootDir: string): Promise<string | null> => {
+  const astroPages = await glob("src/pages/**/*.astro", {
+    cwd: rootDir,
+    deep: 6,
+    followSymbolicLinks: false,
+    onlyFiles: true,
+  });
+
+  return astroPages.length > 0 ? path.join(rootDir, "src", "pages") : null;
+};
+
+const detectInertiaPagesDir = async (
+  rootDir: string
+): Promise<string | null> => {
+  // The Laravel React starter kit uses resources/js/pages; years of Inertia
+  // documentation used the capitalized form, and both are common.
+  const pagesDirs = [
+    path.join(rootDir, "resources", "js", "pages"),
+    path.join(rootDir, "resources", "js", "Pages"),
+  ];
+
+  for (const pagesDir of pagesDirs) {
+    if (await fileExists(pagesDir)) {
+      return pagesDir;
+    }
+  }
+
+  return null;
+};
+
+const detectBladeRootView = async (rootDir: string): Promise<string | null> => {
+  const bladeRootView = path.join(
+    rootDir,
+    "resources",
+    "views",
+    "app.blade.php"
+  );
+
+  return (await fileExists(bladeRootView)) ? bladeRootView : null;
+};
+
+const getLaravelFrameworkVersion = async (
+  rootDir: string
+): Promise<string | null> => {
+  const composerJsonPath = path.join(rootDir, "composer.json");
+
+  if (!(await fileExists(composerJsonPath))) {
+    return null;
+  }
+
+  try {
+    const composerJson = await readJson(composerJsonPath);
+    const requirements = composerJson.require;
+
+    if (
+      !requirements ||
+      typeof requirements !== "object" ||
+      Array.isArray(requirements)
+    ) {
+      return null;
+    }
+
+    const laravelVersion = (requirements as JsonObject)["laravel/framework"];
+    return typeof laravelVersion === "string" ? laravelVersion : null;
+  } catch {
+    return null;
+  }
+};
+
 const detectRoutesDir = async (rootDir: string): Promise<string | null> => {
   const routesDirs = [
     path.join(rootDir, "src", "routes"),
@@ -356,82 +467,199 @@ const detectTailwindCss = async (
   return matches[0] ?? null;
 };
 
-const detectFramework = ({
+interface DetectFrameworkOptions {
+  appDir: string | null;
+  astroPagesDir: string | null;
+  dependencies: Record<string, string>;
+  hasArtisan: boolean;
+  hasReactRouterConfig: boolean;
+  inertiaPagesDir: string | null;
+  pagesDir: string | null;
+  reactRouterRoot: string | null;
+  rootDir: string;
+  routesDir: string | null;
+  viteEntry: string | null;
+}
+
+const detectNextFramework = ({
   appDir,
   dependencies,
   pagesDir,
   rootDir,
-  routesDir,
-  viteEntry,
-}: {
-  appDir: string | null;
-  dependencies: Record<string, string>;
-  pagesDir: string | null;
-  rootDir: string;
-  routesDir: string | null;
-  viteEntry: string | null;
-}): FrameworkDiscovery => {
-  const evidence: string[] = [];
+}: DetectFrameworkOptions): FrameworkDiscovery | null => {
+  if (!(dependencies.next && (appDir || pagesDir))) {
+    return null;
+  }
 
-  if (dependencies.next && appDir && pagesDir) {
-    evidence.push("next dependency found");
+  const evidence = ["next dependency found"];
+
+  if (appDir) {
     evidence.push(
       `app router directory found at ${path.relative(rootDir, appDir)}`
     );
+  }
+
+  if (pagesDir) {
     evidence.push(
       `pages router directory found at ${path.relative(rootDir, pagesDir)}`
     );
+  }
 
+  if (appDir && pagesDir) {
+    return { adapter: "next-hybrid-router", evidence };
+  }
+
+  return {
+    adapter: appDir ? "next-app-router" : "next-pages-router",
+    evidence,
+  };
+};
+
+const detectLaravelInertiaFramework = (
+  {
+    dependencies,
+    hasArtisan,
+    inertiaPagesDir,
+    rootDir,
+  }: DetectFrameworkOptions,
+  fallthroughEvidence: string[]
+): FrameworkDiscovery | null => {
+  if (!dependencies["@inertiajs/react"]) {
+    return null;
+  }
+
+  const hasLaravelMarker =
+    hasArtisan || Boolean(dependencies["laravel-vite-plugin"]);
+
+  if (inertiaPagesDir && hasLaravelMarker) {
     return {
-      adapter: "next-hybrid-router",
-      evidence,
+      adapter: "laravel-inertia-react",
+      evidence: [
+        "inertia react dependency found",
+        hasArtisan
+          ? "laravel artisan file found"
+          : "laravel-vite-plugin dependency found",
+        `inertia pages directory found at ${path.relative(rootDir, inertiaPagesDir)}`,
+      ],
     };
   }
 
-  if (dependencies.next && appDir) {
-    evidence.push("next dependency found");
-    evidence.push(
-      `app router directory found at ${path.relative(rootDir, appDir)}`
-    );
+  fallthroughEvidence.push(
+    hasLaravelMarker
+      ? "inertia react dependency found but no resources/js/pages directory exists"
+      : "inertia react dependency found without a laravel marker (artisan or laravel-vite-plugin); non-laravel inertia hosts use the vite or generic adapter"
+  );
+  return null;
+};
 
-    return {
-      adapter: "next-app-router",
-      evidence,
-    };
-  }
-
-  if (dependencies.next && pagesDir) {
-    evidence.push("next dependency found");
-    evidence.push(
-      `pages router directory found at ${path.relative(rootDir, pagesDir)}`
-    );
-
-    return {
-      adapter: "next-pages-router",
-      evidence,
-    };
-  }
-
+const detectTanstackStartFramework = (
+  { dependencies, rootDir, routesDir }: DetectFrameworkOptions,
+  fallthroughEvidence: string[]
+): FrameworkDiscovery | null => {
   if (dependencies["@tanstack/react-start"] && routesDir) {
-    evidence.push("tanstack start dependency found");
-    evidence.push(
-      `route files directory found at ${path.relative(rootDir, routesDir)}`
-    );
-
     return {
       adapter: "tanstack-start",
-      evidence,
+      evidence: [
+        "tanstack start dependency found",
+        `route files directory found at ${path.relative(rootDir, routesDir)}`,
+      ],
     };
   }
 
   if (dependencies["@tanstack/react-start"]) {
-    evidence.push(
+    fallthroughEvidence.push(
       "tanstack start dependency found but no routes directory (src/routes or app/routes) exists"
     );
   } else if (dependencies["@tanstack/react-router"]) {
-    evidence.push(
+    fallthroughEvidence.push(
       "tanstack router dependency found; router-only projects use the vite or generic adapter"
     );
+  }
+
+  return null;
+};
+
+const detectAstroFramework = (
+  { astroPagesDir, dependencies, rootDir }: DetectFrameworkOptions,
+  fallthroughEvidence: string[]
+): FrameworkDiscovery | null => {
+  if (!dependencies.astro) {
+    return null;
+  }
+
+  if (dependencies["@astrojs/react"] && astroPagesDir) {
+    return {
+      adapter: "astro-react",
+      evidence: [
+        "astro dependency found",
+        "astro react integration found",
+        `astro pages directory found at ${path.relative(rootDir, astroPagesDir)}`,
+      ],
+    };
+  }
+
+  fallthroughEvidence.push(
+    dependencies["@astrojs/react"]
+      ? "astro dependency found but no .astro pages exist under src/pages"
+      : "astro dependency found without the @astrojs/react integration; only react islands are audited"
+  );
+  return null;
+};
+
+const detectReactRouterFramework = (
+  {
+    dependencies,
+    hasReactRouterConfig: hasConfig,
+    reactRouterRoot,
+    rootDir,
+  }: DetectFrameworkOptions,
+  fallthroughEvidence: string[]
+): FrameworkDiscovery | null => {
+  if (!dependencies["react-router"]) {
+    return null;
+  }
+
+  // react-router alone is a plain SPA router; framework mode additionally
+  // ships the dev plugin (or its config) and an app/root document module.
+  const hasFrameworkMarker =
+    Boolean(dependencies["@react-router/dev"]) || hasConfig;
+
+  if (hasFrameworkMarker && reactRouterRoot) {
+    return {
+      adapter: "react-router-framework",
+      evidence: [
+        "react router dependency found",
+        dependencies["@react-router/dev"]
+          ? "react router dev plugin found"
+          : "react-router.config file found",
+        `react router root module found at ${path.relative(rootDir, reactRouterRoot)}`,
+      ],
+    };
+  }
+
+  fallthroughEvidence.push(
+    hasFrameworkMarker
+      ? "react router framework marker found but no app/root module exists"
+      : "react router dependency found without framework mode; declarative and data-mode routers use the vite or generic adapter"
+  );
+  return null;
+};
+
+const detectFramework = (
+  options: DetectFrameworkOptions
+): FrameworkDiscovery => {
+  const { dependencies, rootDir, viteEntry } = options;
+  const evidence: string[] = [];
+
+  const framework =
+    detectNextFramework(options) ??
+    detectLaravelInertiaFramework(options, evidence) ??
+    detectTanstackStartFramework(options, evidence) ??
+    detectAstroFramework(options, evidence) ??
+    detectReactRouterFramework(options, evidence);
+
+  if (framework) {
+    return framework;
   }
 
   if (dependencies.vite && dependencies.react && viteEntry) {
@@ -456,6 +684,58 @@ const detectFramework = ({
   };
 };
 
+const assertReactDependency = async (
+  dependencies: Record<string, string>,
+  rootDir: string
+): Promise<void> => {
+  if (dependencies.react) {
+    return;
+  }
+
+  const laravelVersion = await getLaravelFrameworkVersion(rootDir);
+  let unsupportedMessage =
+    "The nearest package does not declare React; run shadscan from a React application package.";
+
+  if (laravelVersion) {
+    unsupportedMessage =
+      "This Laravel application has no React dependency, so its UI stack is Blade or Livewire. Shadscan audits React shadcn UIs; on Laravel that means Inertia with React.";
+  } else if (dependencies.astro) {
+    unsupportedMessage =
+      "This Astro site has no React dependency, so its UI lives in Astro templates or a non-React island framework. Shadscan audits React shadcn UIs; on Astro that means islands via @astrojs/react.";
+  }
+
+  throw new ProjectDiscoveryError(unsupportedMessage, "UNSUPPORTED_PROJECT");
+};
+
+/**
+ * React Router framework mode shares the `app/` directory name with Next's
+ * App Router, so these paths are populated only when that adapter actually
+ * won detection — never merely because an `app/` directory exists.
+ */
+const getReactRouterPaths = (
+  adapter: FrameworkAdapter,
+  rootDir: string,
+  reactRouterRoot: string | null
+): Pick<ProjectPaths, "reactRouterAppDir" | "reactRouterRoot"> =>
+  adapter === "react-router-framework"
+    ? { reactRouterAppDir: path.join(rootDir, "app"), reactRouterRoot }
+    : { reactRouterAppDir: null, reactRouterRoot: null };
+
+/** Filesystem probes every adapter's detection branch reads. */
+const detectFrameworkMarkers = async (rootDir: string) => ({
+  appDir: await detectAppDir(rootDir),
+  astroPagesDir: await detectAstroPagesDir(rootDir),
+  bladeRootView: await detectBladeRootView(rootDir),
+  hasArtisan: await fileExists(path.join(rootDir, "artisan")),
+  inertiaPagesDir: await detectInertiaPagesDir(rootDir),
+  laravelVersion: await getLaravelFrameworkVersion(rootDir),
+  pagesDir: await detectPagesDir(rootDir),
+  reactRouterConfigPresent: await hasReactRouterConfig(rootDir),
+  reactRouterRoot: await detectReactRouterRoot(rootDir),
+  routesDir: await detectRoutesDir(rootDir),
+  viteEntry: await detectViteEntry(rootDir),
+});
+
 const discoverProject = async (
   cwd: string,
   options: DiscoverProjectOptions = {}
@@ -465,12 +745,7 @@ const discoverProject = async (
   const packageJson = await readJson(packageJsonPath);
   const dependencies = getDependencies(packageJson);
 
-  if (!dependencies.react) {
-    throw new ProjectDiscoveryError(
-      "The nearest package does not declare React; run shadscan from a React application package.",
-      "UNSUPPORTED_PROJECT"
-    );
-  }
+  await assertReactDependency(dependencies, rootDir);
 
   const warnings: string[] = [];
   const componentsJsonPath = path.join(rootDir, "components.json");
@@ -492,14 +767,28 @@ const discoverProject = async (
     );
   }
 
-  const appDir = await detectAppDir(rootDir);
-  const pagesDir = await detectPagesDir(rootDir);
-  const routesDir = await detectRoutesDir(rootDir);
-  const viteEntry = await detectViteEntry(rootDir);
+  const {
+    appDir,
+    astroPagesDir,
+    bladeRootView,
+    hasArtisan,
+    inertiaPagesDir,
+    laravelVersion,
+    pagesDir,
+    reactRouterConfigPresent,
+    reactRouterRoot,
+    routesDir,
+    viteEntry,
+  } = await detectFrameworkMarkers(rootDir);
   const framework = detectFramework({
     appDir,
+    astroPagesDir,
     dependencies,
+    hasArtisan,
+    hasReactRouterConfig: reactRouterConfigPresent,
+    inertiaPagesDir,
     pagesDir,
+    reactRouterRoot,
     rootDir,
     routesDir,
     viteEntry,
@@ -527,8 +816,12 @@ const discoverProject = async (
     packageName,
     paths: {
       appDir,
+      astroPagesDir,
+      bladeRootView,
+      inertiaPagesDir,
       packageJson: packageJsonPath,
       pagesDir,
+      ...getReactRouterPaths(framework.adapter, rootDir, reactRouterRoot),
       routesDir,
       srcDir: (await fileExists(srcDir)) ? srcDir : null,
       tailwindCss,
@@ -547,8 +840,12 @@ const discoverProject = async (
     },
     sourceCoverage: "complete",
     versions: {
+      astro: dependencies.astro ?? null,
+      inertia: dependencies["@inertiajs/react"] ?? null,
+      laravel: laravelVersion,
       next: dependencies.next ?? null,
       react: dependencies.react ?? null,
+      reactRouter: dependencies["react-router"] ?? null,
       tanstackStart: dependencies["@tanstack/react-start"] ?? null,
       vite: dependencies.vite ?? null,
     },

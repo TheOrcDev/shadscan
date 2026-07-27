@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { discoverProject } from "../src/discovery";
 
+const ASTRO_TEMPLATE_STACK_PATTERN = /Astro templates/;
+const BLADE_OR_LIVEWIRE_PATTERN = /Blade or Livewire/;
 const tempDirs: string[] = [];
 
 const createFixture = async (): Promise<string> => {
@@ -190,6 +192,418 @@ describe("discoverProject", () => {
     expect(project.framework.adapter).toBe("vite-react");
     expect(project.paths.viteEntry).toBe(path.join(rootDir, "src", "main.tsx"));
     expect(project.versions.vite).toBe("7.2.0");
+  });
+
+  it("detects a React Router framework mode app", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4", "react-router": "7.9.1" },
+      devDependencies: { "@react-router/dev": "7.9.1", vite: "7.2.0" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "react-router.config.ts",
+      "export default { ssr: true };\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/root.tsx",
+      'export default function App() { return <html lang="en" />; }\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("react-router-framework");
+    expect(project.framework.evidence).toContain(
+      "react router dev plugin found"
+    );
+    expect(project.paths.reactRouterRoot).toBe(
+      path.join(rootDir, "app", "root.tsx")
+    );
+    expect(project.paths.reactRouterAppDir).toBe(path.join(rootDir, "app"));
+    expect(project.versions.reactRouter).toBe("7.9.1");
+  });
+
+  it("detects framework mode from the config file alone", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4", "react-router": "7.9.1" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "react-router.config.ts",
+      "export default { ssr: true };\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/root.tsx",
+      'export default function App() { return <html lang="en" />; }\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("react-router-framework");
+    expect(project.framework.evidence).toContain(
+      "react-router.config file found"
+    );
+  });
+
+  it("keeps a declarative react-router SPA on the vite adapter", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        react: "19.2.4",
+        "react-router": "7.9.1",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "index.html", '<div id="root"></div>\n');
+    await writeFixtureFile(
+      rootDir,
+      "src/main.tsx",
+      'import { BrowserRouter } from "react-router";\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+    expect(project.framework.evidence).toContain(
+      "react router dependency found without framework mode; declarative and data-mode routers use the vite or generic adapter"
+    );
+    expect(project.paths.reactRouterAppDir).toBeNull();
+  });
+
+  it("keeps a data-mode react-router SPA on the vite adapter", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        react: "19.2.4",
+        "react-router": "7.9.1",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/main.tsx",
+      'import { createBrowserRouter } from "react-router";\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+  });
+
+  it("falls through when framework mode has no app root module", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { react: "19.2.4", "react-router": "7.9.1" },
+      devDependencies: { "@react-router/dev": "7.9.1" },
+    });
+    await writeComponentsJson(rootDir);
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("generic-react");
+    expect(project.framework.evidence).toContain(
+      "react router framework marker found but no app/root module exists"
+    );
+  });
+
+  it("keeps a Next app with an app directory on the next adapter", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        next: "16.2.6",
+        react: "19.2.4",
+        "react-router": "7.9.1",
+      },
+      devDependencies: { "@react-router/dev": "7.9.1" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/page.tsx",
+      "export default function Page() { return null }\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "app/root.tsx",
+      'export default function App() { return <html lang="en" />; }\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("next-app-router");
+    // The Next App Router path stays authoritative; the React Router paths
+    // must not be populated for a Next project sharing the directory name.
+    expect(project.paths.appDir).toBe(path.join(rootDir, "app"));
+    expect(project.paths.reactRouterAppDir).toBeNull();
+    expect(project.paths.reactRouterRoot).toBeNull();
+  });
+
+  it("detects an Astro React islands shadcn app", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@astrojs/react": "4.4.0",
+        astro: "5.16.2",
+        react: "19.2.4",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/pages/index.astro",
+      '---\n---\n<html lang="en"><body>hi</body></html>\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("astro-react");
+    expect(project.framework.evidence).toContain(
+      "astro react integration found"
+    );
+    expect(project.paths.astroPagesDir).toBe(
+      path.join(rootDir, "src", "pages")
+    );
+    expect(project.versions.astro).toBe("5.16.2");
+  });
+
+  it("prefers astro-react over vite-react when both signals exist", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@astrojs/react": "4.4.0",
+        astro: "5.16.2",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+    await writeFixtureFile(
+      rootDir,
+      "src/pages/index.astro",
+      "---\n---\n<html><body>hi</body></html>\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("astro-react");
+  });
+
+  it("falls through with evidence when astro has react but no astro pages", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@astrojs/react": "4.4.0",
+        astro: "5.16.2",
+        react: "19.2.4",
+      },
+    });
+    await writeComponentsJson(rootDir);
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("generic-react");
+    expect(project.framework.evidence).toContain(
+      "astro dependency found but no .astro pages exist under src/pages"
+    );
+  });
+
+  it("falls through with evidence when astro lacks the react integration", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        astro: "5.16.2",
+        react: "19.2.4",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/pages/index.astro",
+      "---\n---\n<html><body>hi</body></html>\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("generic-react");
+    expect(project.framework.evidence).toContain(
+      "astro dependency found without the @astrojs/react integration; only react islands are audited"
+    );
+  });
+
+  it("names the astro template stack when an astro site has no react", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: { astro: "5.16.2" },
+    });
+
+    await expect(discoverProject(rootDir)).rejects.toThrow(
+      ASTRO_TEMPLATE_STACK_PATTERN
+    );
+  });
+
+  it("keeps the astro codegen cache out of scanned source", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@astrojs/react": "4.4.0",
+        astro: "5.16.2",
+        react: "19.2.4",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "src/pages/index.astro",
+      '---\n---\n<html lang="en"><body>hi</body></html>\n'
+    );
+    await writeFixtureFile(
+      rootDir,
+      ".astro/types.d.ts",
+      "// generated by astro sync\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("astro-react");
+  });
+
+  it("detects a Laravel Inertia React shadcn app", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+      },
+      devDependencies: {
+        "laravel-vite-plugin": "1.3.0",
+        vite: "7.2.0",
+      },
+    });
+    await writeFixtureFile(
+      rootDir,
+      "composer.json",
+      `${JSON.stringify({ require: { "laravel/framework": "^12.0" } }, null, 2)}\n`
+    );
+    await writeFixtureFile(rootDir, "artisan", "#!/usr/bin/env php\n");
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "resources/js/pages/dashboard.tsx",
+      "export default function Dashboard() { return <main />; }\n"
+    );
+    await writeFixtureFile(
+      rootDir,
+      "resources/views/app.blade.php",
+      '<html lang="en"><head>@inertiaHead</head><body>@inertia</body></html>\n'
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("laravel-inertia-react");
+    expect(project.framework.evidence).toContain(
+      "inertia react dependency found"
+    );
+    expect(project.paths.inertiaPagesDir).toBe(
+      path.join(rootDir, "resources", "js", "pages")
+    );
+    expect(project.paths.bladeRootView).toBe(
+      path.join(rootDir, "resources", "views", "app.blade.php")
+    );
+    expect(project.versions.inertia).toBe("2.0.11");
+    expect(project.versions.laravel).toBe("^12.0");
+  });
+
+  it("accepts the capitalized Inertia Pages directory", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+      },
+      devDependencies: { "laravel-vite-plugin": "1.3.0" },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "resources/js/Pages/Dashboard.tsx",
+      "export default function Dashboard() { return <main />; }\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("laravel-inertia-react");
+    // Case-insensitive filesystems (macOS) may report the lowercase probe;
+    // case-sensitive systems return the real Pages casing. Both are valid.
+    expect(project.paths.inertiaPagesDir?.toLowerCase()).toBe(
+      path.join(rootDir, "resources", "js", "pages").toLowerCase()
+    );
+  });
+
+  it("keeps non-laravel inertia hosts on the vite adapter with evidence", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("vite-react");
+    expect(project.framework.evidence).toContain(
+      "inertia react dependency found without a laravel marker (artisan or laravel-vite-plugin); non-laravel inertia hosts use the vite or generic adapter"
+    );
+  });
+
+  it("prefers laravel-inertia-react over vite-react when both signals exist", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      dependencies: {
+        "@inertiajs/react": "2.0.11",
+        react: "19.2.4",
+        vite: "7.2.0",
+      },
+    });
+    await writeFixtureFile(rootDir, "artisan", "#!/usr/bin/env php\n");
+    await writeComponentsJson(rootDir);
+    await writeFixtureFile(rootDir, "src/main.tsx", "import './style.css'\n");
+    await writeFixtureFile(
+      rootDir,
+      "resources/js/pages/home.tsx",
+      "export default function Home() { return <main />; }\n"
+    );
+
+    const project = await discoverProject(rootDir);
+
+    expect(project.framework.adapter).toBe("laravel-inertia-react");
+  });
+
+  it("names the blade or livewire stack when a laravel app has no react", async () => {
+    const rootDir = await createFixture();
+    await writePackageJson(rootDir, {
+      devDependencies: { "laravel-vite-plugin": "1.3.0" },
+    });
+    await writeFixtureFile(
+      rootDir,
+      "composer.json",
+      `${JSON.stringify({ require: { "laravel/framework": "^12.0" } }, null, 2)}\n`
+    );
+
+    await expect(discoverProject(rootDir)).rejects.toThrow(
+      BLADE_OR_LIVEWIRE_PATTERN
+    );
   });
 
   it("detects a TanStack Start shadcn app", async () => {

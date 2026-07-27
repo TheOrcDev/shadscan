@@ -114,6 +114,161 @@ const createTanstackStartProjectArchive = (): Promise<Buffer> =>
     },
   ]);
 
+const createLaravelInertiaProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            "@inertiajs/react": "2.0.11",
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+          },
+          devDependencies: {
+            "laravel-vite-plugin": "1.3.0",
+            vite: "7.2.0",
+          },
+          name: "shadscan-e2e-laravel-fixture",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        { require: { "laravel/framework": "^12.0" } },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/composer.json", type: "file" },
+    },
+    {
+      contents: "#!/usr/bin/env php\n",
+      header: { name: "shadscan-e2e/artisan", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: { components: "@/components", ui: "@/components/ui" },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        '<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <title inertia>Laravel fixture</title>\n    @inertiaHead\n  </head>\n  <body>@inertia</body>\n</html>\n',
+      header: {
+        name: "shadscan-e2e/resources/views/app.blade.php",
+        type: "file",
+      },
+    },
+    {
+      contents:
+        'export default function Dashboard() {\n  return (\n    <main>\n      <h1>Dashboard</h1>\n      <button type="button">Save</button>\n    </main>\n  );\n}\n',
+      header: {
+        name: "shadscan-e2e/resources/js/pages/dashboard.tsx",
+        type: "file",
+      },
+    },
+  ]);
+
+const createAstroProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            "@astrojs/react": "4.4.0",
+            astro: "5.16.2",
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+          },
+          name: "shadscan-e2e-astro-fixture",
+          packageManager: "pnpm@10.16.0",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: { components: "@/components", ui: "@/components/ui" },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        '---\nimport Counter from "../components/counter";\n---\n<html lang="en">\n  <head>\n    <title>Astro fixture</title>\n  </head>\n  <body>\n    <Counter client:load />\n  </body>\n</html>\n',
+      header: { name: "shadscan-e2e/src/pages/index.astro", type: "file" },
+    },
+    {
+      contents:
+        'export default function Counter() {\n  return (\n    <main>\n      <h1>Astro fixture</h1>\n      <button type="button">Add</button>\n    </main>\n  );\n}\n',
+      header: { name: "shadscan-e2e/src/components/counter.tsx", type: "file" },
+    },
+  ]);
+
+const createReactRouterProjectArchive = (): Promise<Buffer> =>
+  createTarGzip([
+    {
+      contents: `${JSON.stringify(
+        {
+          dependencies: {
+            react: "19.2.4",
+            "react-dom": "19.2.4",
+            "react-router": "7.9.1",
+          },
+          devDependencies: { "@react-router/dev": "7.9.1", vite: "7.2.0" },
+          name: "shadscan-e2e-react-router-fixture",
+          packageManager: "pnpm@10.16.0",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/package.json", type: "file" },
+    },
+    {
+      contents: "export default { ssr: true };\n",
+      header: { name: "shadscan-e2e/react-router.config.ts", type: "file" },
+    },
+    {
+      contents: `${JSON.stringify(
+        {
+          aliases: { components: "~/components", ui: "~/components/ui" },
+          style: "new-york",
+        },
+        null,
+        2
+      )}\n`,
+      header: { name: "shadscan-e2e/components.json", type: "file" },
+    },
+    {
+      contents:
+        'import { Links, Meta, Outlet, Scripts } from "react-router";\n\nexport function meta() {\n  return [{ title: "Router fixture" }];\n}\n\nexport function Layout({ children }: { children: React.ReactNode }) {\n  return (\n    <html lang="en">\n      <head>\n        <Meta />\n        <Links />\n      </head>\n      <body>\n        {children}\n        <Scripts />\n      </body>\n    </html>\n  );\n}\n\nexport default function App() {\n  return <Outlet />;\n}\n',
+      header: { name: "shadscan-e2e/app/root.tsx", type: "file" },
+    },
+    {
+      contents:
+        'import { index } from "@react-router/dev/routes";\n\nexport default [index("routes/home.tsx")];\n',
+      header: { name: "shadscan-e2e/app/routes.ts", type: "file" },
+    },
+    {
+      contents:
+        'export default function Home() {\n  return (\n    <main>\n      <h1>Router fixture</h1>\n      <button type="button">Save</button>\n    </main>\n  );\n}\n',
+      header: { name: "shadscan-e2e/app/routes/home.tsx", type: "file" },
+    },
+  ]);
+
 const MONOREPO_PROJECT_TREE = [
   "package.json",
   "apps/admin/package.json",
@@ -216,9 +371,12 @@ const createGitHubFetchHandler = ({
 };
 
 export {
+  createAstroProjectArchive,
   createGitHubFetchHandler,
+  createLaravelInertiaProjectArchive,
   createMonorepoProjectArchive,
   createReactProjectArchive,
+  createReactRouterProjectArchive,
   createTanstackStartProjectArchive,
   MONOREPO_PROJECT_TREE,
 };

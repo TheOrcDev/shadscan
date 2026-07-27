@@ -11,6 +11,131 @@ stable releases published under `latest`.
 - App Router rules now discover route boundaries and metadata exports on
   Windows, where native path separators previously prevented glob and source
   directory matching.
+## 0.6.0 - 2026-07-27
+
+### Fixed
+
+- Three false negatives reported in
+  [#10](https://github.com/TheOrcDev/shadscan/issues/10), all caused by
+  rules matching within a single lexical scope while idiomatic React
+  composition spreads the implementation across files (ruleset
+  `2026.07.39`):
+  - `theme-hotkey-present` now recognizes declarative registrations from
+    `@tanstack/react-hotkeys` and `react-hotkeys-hook`, resolved through
+    the import so a local hook of the same name does not qualify. The two
+    libraries express "do not fire while typing" with opposite polarity —
+    TanStack's `ignoreInputs` (whose default is conditional on the key
+    spec) versus `react-hotkeys-hook`'s `enableOnFormTags` (already
+    guarded by default) — so each is evaluated on its own terms. A key
+    spec that is not a static literal, or options behind an identifier,
+    still fails.
+  - `mobile-nav-present` no longer requires `<SidebarProvider>`,
+    `<Sidebar>` and a link in one file. The provider mount and the
+    sidebar composition are looked up separately and then linked by
+    resolving the provider's children, and the link may live in a nav
+    sub-component one hop below `<Sidebar>`. An `app-sidebar` module that
+    nothing mounts, one rendered outside the provider, and an empty
+    sidebar shell all still fail.
+  - `async-action-pending-state` now follows a pending value through JSX
+    props into the component that owns the trigger, across at most two
+    boundaries, tracking renames and recognizing `mutation.isPending`.
+    Spread props, unresolvable or external targets, ambiguous exports and
+    computed values all end the chain rather than being assumed sound,
+    and the failure message says where it stopped.
+
+  Projects using these idioms will see their score rise on upgrade
+  without any code change; these three rules are worth 12 points
+  combined.
+
+### Changed
+
+- Module resolution, previously reimplemented in five places, is shared
+  by the rules that need it, and the confined TypeScript host and parsed
+  compiler options are now built once per project instead of once per
+  rule.
+
+## 0.5.0 - 2026-07-25
+
+### Added
+
+- A `react-router-framework` adapter (ruleset `2026.07.38`): React Router
+  v7 applications running in framework mode — one of the official shadcn
+  templates — are detected from the `react-router` dependency plus a
+  framework marker (`@react-router/dev` or `react-router.config.*`) and
+  an `app/root` module. Declarative and data-mode routers keep using the
+  Vite or generic adapter, since `react-router` alone is a plain SPA
+  router. Document rules read `app/root.tsx`; metadata comes from the
+  `meta` export; not-found coverage accepts an `ErrorBoundary` handling
+  `isRouteErrorResponse` or a splat route; `error-boundary-present`
+  understands the `ErrorBoundary` export convention; loader-backed route
+  modules need `HydrateFallback`, `useNavigation` pending UI, or a
+  Suspense fallback. The render graph seeds one surface per route module
+  — read from literal `routes.ts` entries when possible, otherwise from
+  directory discovery with a boundary reason — and treats `ErrorBoundary`
+  and `HydrateFallback` exports as rendered surfaces in their own right.
+
+### Changed
+
+- The JSON report schema version is now 8: `framework.adapter` accepts
+  `react-router-framework` and `versions` includes `reactRouter`. The
+  GitHub Action (which reads `score` and `grade`) is unaffected.
+
+## 0.4.0 - 2026-07-25
+
+### Added
+
+- An `astro-react` framework adapter (ruleset `2026.07.37`): Astro sites
+  with React islands — the setup shadcn/ui officially documents for
+  Astro — are detected from the `astro` and `@astrojs/react`
+  dependencies plus `.astro` pages under `src/pages`. `.astro` files are
+  read as text for document-shell checks (language, title, description,
+  favicon, social preview, `404.astro`), their frontmatter is parsed as
+  the TypeScript it is to discover which React components each page and
+  layout renders, and the component render graph seeds one surface per
+  `.astro` page or layout from those islands — server-rendered or
+  `client:*` hydrated alike. Toast and theme-provider mounts are traced
+  from `.astro` shells into their island components. Astro's `.astro`
+  codegen cache is excluded from scanning, Markdown/MDX pages record an
+  explicit graph boundary, and Astro sites without React get an error
+  naming their UI stack.
+
+### Fixed
+
+- Hosted web scans now retain the files their adapters need. `.astro`
+  templates, Laravel's `resources/views/**/*.blade.php` views, and the
+  `artisan` marker were dropped during archive extraction, so scanning a
+  Laravel or Astro repository through the web scanner or hosted API
+  reported it as generic React. Local CLI scans were unaffected.
+
+### Changed
+
+- The JSON report schema version is now 7: `framework.adapter` accepts
+  `astro-react` and `versions` includes `astro`. The GitHub Action
+  (which reads `score` and `grade`) is unaffected.
+
+## 0.3.0 - 2026-07-24
+
+### Added
+
+- A `laravel-inertia-react` framework adapter (ruleset `2026.07.36`):
+  Laravel applications built on Inertia and React — the stack the official
+  Laravel React starter kit ships with shadcn/ui — are detected from the
+  `@inertiajs/react` dependency, a Laravel marker (`artisan` or
+  `laravel-vite-plugin`), and a `resources/js/pages` directory (both
+  casings). The scanner now reads `resources/js` source and
+  `resources/css` styles, rules understand Inertia and Blade conventions
+  (`<Head>` metadata, the Blade root view's language/favicon/social tags,
+  `errors/404.blade.php`, Inertia's navigation progress indicator), and
+  the component render graph seeds one surface per Inertia page with
+  persistent `Page.layout` wrappers resolved. Composer `vendor/`
+  directories are excluded from source scanning, and Blade-only or
+  Livewire Laravel apps get an error that names their UI stack.
+
+### Changed
+
+- The JSON report schema version is now 6: `framework.adapter` accepts
+  `laravel-inertia-react` and `versions` includes `inertia` and `laravel`.
+  The GitHub Action (which reads `score` and `grade`) is unaffected.
 
 ## 0.2.0 - 2026-07-24
 

@@ -1,9 +1,7 @@
 import path from "node:path";
 import {
-  type CompilerOptions,
   createSourceFile,
   forEachChild,
-  getParsedCommandLineOfConfigFile,
   isIdentifier,
   isImportDeclaration,
   isJsxOpeningElement,
@@ -12,18 +10,20 @@ import {
   isNamespaceImport,
   isStringLiteral,
   type Node,
-  resolveModuleName,
   ScriptKind,
   ScriptTarget,
   type SourceFile as TypeScriptSourceFile,
 } from "typescript";
 import type { ProjectDiscovery } from "../discovery";
+import { getAstroMountedBindings } from "./astro-mounts";
 import {
-  type ConfinedTypeScriptHost,
-  createConfinedTypeScriptHost,
-} from "../typescript-host";
+  getProjectModuleResolver,
+  type ProjectModuleResolver,
+  resolveProjectModulePath,
+} from "./module-resolution";
 import {
   getProjectSourceFiles,
+  getTextLineNumber,
   readProjectSourceFile,
   type SourceFile,
 } from "./source-files";
@@ -68,21 +68,6 @@ const TOAST_DEPENDENCIES = [
   "radix-ui",
   "react-hot-toast",
   "sonner",
-] as const;
-const MODULE_CANDIDATE_SUFFIXES = [
-  "",
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".mts",
-  ".cts",
-  ".mjs",
-  ".cjs",
-  "/index.ts",
-  "/index.tsx",
-  "/index.js",
-  "/index.jsx",
 ] as const;
 const analysisCache = new WeakMap<
   ProjectDiscovery,
@@ -213,79 +198,22 @@ const getRenderedBindings = (
   return renderedBindings;
 };
 
-const getCompilerOptions = (
-  project: ProjectDiscovery,
-  host: ConfinedTypeScriptHost
-): CompilerOptions => {
-  if (!project.paths.tsconfig) {
-    return {};
-  }
-
-  return (
-    getParsedCommandLineOfConfigFile(project.paths.tsconfig, {}, host)
-      ?.options ?? {}
-  );
-};
-
-const getSourceCandidate = (
-  candidatePath: string,
-  filesByPath: Map<string, ParsedProjectFile>
-): ParsedProjectFile | null => {
-  for (const suffix of MODULE_CANDIDATE_SUFFIXES) {
-    const candidate = filesByPath.get(
-      path.resolve(`${candidatePath}${suffix}`)
-    );
-
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  return null;
-};
-
 const resolveLocalImport = (
   moduleName: string,
   containingFile: string,
   project: ProjectDiscovery,
-  compilerOptions: CompilerOptions,
-  host: ConfinedTypeScriptHost,
+  resolver: ProjectModuleResolver,
   filesByPath: Map<string, ParsedProjectFile>
 ): ParsedProjectFile | null => {
-  const resolvedFileName = resolveModuleName(
-    moduleName,
+  const resolvedPath = resolveProjectModulePath({
     containingFile,
-    compilerOptions,
-    host
-  ).resolvedModule?.resolvedFileName;
+    hasCandidate: (candidate) => filesByPath.has(candidate),
+    moduleName,
+    project,
+    resolver,
+  });
 
-  if (
-    resolvedFileName &&
-    host.isPathAllowed(resolvedFileName) &&
-    !resolvedFileName.includes(`${path.sep}node_modules${path.sep}`)
-  ) {
-    const resolvedFile = filesByPath.get(path.resolve(resolvedFileName));
-
-    if (resolvedFile) {
-      return resolvedFile;
-    }
-  }
-
-  if (moduleName.startsWith(".")) {
-    return getSourceCandidate(
-      path.resolve(path.dirname(containingFile), moduleName),
-      filesByPath
-    );
-  }
-
-  if (moduleName.startsWith("@/")) {
-    return getSourceCandidate(
-      path.resolve(project.rootDir, moduleName.slice(2)),
-      filesByPath
-    );
-  }
-
-  return null;
+  return resolvedPath ? (filesByPath.get(resolvedPath) ?? null) : null;
 };
 
 const isRuntimeImport = (
@@ -326,8 +254,7 @@ const isRuntimeImport = (
 const findRuntimeThroughLocalImports = (
   currentFile: ParsedProjectFile,
   project: ProjectDiscovery,
-  compilerOptions: CompilerOptions,
-  host: ConfinedTypeScriptHost,
+  resolver: ProjectModuleResolver,
   filesByPath: Map<string, ParsedProjectFile>,
   visitedFiles: Set<string>,
   depth: number
@@ -371,8 +298,7 @@ const findRuntimeThroughLocalImports = (
       reference.moduleName,
       currentFile.file.path,
       project,
-      compilerOptions,
-      host,
+      resolver,
       filesByPath
     );
 
@@ -383,8 +309,7 @@ const findRuntimeThroughLocalImports = (
     const runtime = findRuntimeThroughLocalImports(
       localFile,
       project,
-      compilerOptions,
-      host,
+      resolver,
       filesByPath,
       visitedFiles,
       depth + 1
@@ -425,6 +350,22 @@ const getShellPaths = (project: ProjectDiscovery): string[] => {
     );
   }
 
+  if (project.paths.reactRouterRoot) {
+    shellPaths.push(project.paths.reactRouterRoot);
+  }
+
+  if (project.versions.inertia && project.paths.inertiaPagesDir) {
+    shellPaths.push(
+      ...[
+        "resources/js/app.tsx",
+        "resources/js/app.jsx",
+        "resources/js/ssr.tsx",
+        "resources/js/layouts/app-layout.tsx",
+        "resources/js/Layouts/AppLayout.tsx",
+      ].map((fileName) => path.join(project.rootDir, fileName))
+    );
+  }
+
   if (shellPaths.length > 0) {
     return shellPaths;
   }
@@ -453,19 +394,17 @@ const readShells = async (project: ProjectDiscovery): Promise<SourceFile[]> => {
 };
 
 interface ToastShellContext {
-  compilerOptions: CompilerOptions;
   filesByPath: Map<string, ParsedProjectFile>;
   hasDependency: boolean;
-  host: ConfinedTypeScriptHost;
   project: ProjectDiscovery;
+  resolver: ProjectModuleResolver;
 }
 
 const analyzeToastShell = (
   shell: SourceFile,
   context: ToastShellContext
 ): ToastRuntimeAnalysis | null => {
-  const { compilerOptions, filesByPath, hasDependency, host, project } =
-    context;
+  const { filesByPath, hasDependency, project, resolver } = context;
   const parsedShell =
     filesByPath.get(path.resolve(shell.path)) ?? parseSourceFile(shell);
   const renderedBindings = getRenderedBindings(parsedShell.sourceFile);
@@ -505,8 +444,7 @@ const analyzeToastShell = (
         reference.moduleName,
         shell.path,
         project,
-        compilerOptions,
-        host,
+        resolver,
         filesByPath
       );
 
@@ -517,8 +455,7 @@ const analyzeToastShell = (
       const runtime = findRuntimeThroughLocalImports(
         localFile,
         project,
-        compilerOptions,
-        host,
+        resolver,
         filesByPath,
         new Set<string>(),
         1
@@ -533,18 +470,113 @@ const analyzeToastShell = (
   return null;
 };
 
+const analyzeAstroToastMount = async (
+  project: ProjectDiscovery,
+  context: {
+    resolver: ProjectModuleResolver;
+    filesByPath: Map<string, ParsedProjectFile>;
+    hasDependency: boolean;
+    project: ProjectDiscovery;
+  },
+  sourceFiles: SourceFile[]
+): Promise<ToastRuntimeAnalysis | null> => {
+  const mountedBindings = await getAstroMountedBindings(project);
+
+  for (const binding of mountedBindings) {
+    if (
+      !(
+        TOAST_NAME_PATTERN.test(binding.localName) ||
+        TOAST_NAME_PATTERN.test(binding.moduleSpecifier)
+      )
+    ) {
+      continue;
+    }
+
+    // An island imported straight from a toast package (`import { Toaster }
+    // from "sonner"` in .astro frontmatter) is mount and runtime at once.
+    if (project.dependencies[binding.moduleSpecifier]) {
+      const astroSource =
+        sourceFiles.find((file) => file.path === binding.astroFilePath) ?? null;
+      const line = astroSource
+        ? (getTextLineNumber(
+            astroSource.content,
+            new RegExp(`<${binding.localName}\\b`)
+          ) ?? 1)
+        : 1;
+
+      return {
+        hasDependency: context.hasDependency,
+        mount: {
+          componentName: binding.localName,
+          filePath: binding.astroFilePath,
+          line,
+        },
+        runtime: {
+          filePath: binding.astroFilePath,
+          line,
+          moduleName: binding.moduleSpecifier,
+        },
+        shell: astroSource,
+      };
+    }
+
+    const resolved = resolveLocalImport(
+      binding.moduleSpecifier,
+      binding.astroFilePath,
+      project,
+      context.resolver,
+      context.filesByPath
+    );
+
+    if (!resolved) {
+      continue;
+    }
+
+    const componentAnalysis = analyzeToastShell(resolved.file, context);
+
+    if (!componentAnalysis?.runtime) {
+      continue;
+    }
+
+    const astroSource =
+      sourceFiles.find((file) => file.path === binding.astroFilePath) ?? null;
+    const line = astroSource
+      ? (getTextLineNumber(
+          astroSource.content,
+          new RegExp(`<${binding.localName}\\b`)
+        ) ?? 1)
+      : 1;
+
+    return {
+      hasDependency: context.hasDependency,
+      mount: {
+        componentName: binding.localName,
+        filePath: binding.astroFilePath,
+        line,
+      },
+      runtime: componentAnalysis.runtime,
+      shell: astroSource,
+    };
+  }
+
+  return null;
+};
+
 const runToastRuntimeAnalysis = async (
   project: ProjectDiscovery,
   filesystemRoot: string
 ): Promise<ToastRuntimeAnalysis> => {
-  const host = createConfinedTypeScriptHost(filesystemRoot);
+  const resolver = getProjectModuleResolver(project, filesystemRoot);
   const hasDependency = TOAST_DEPENDENCIES.some(
     (dependency) => project.dependencies[dependency]
   );
   const shells = await readShells(project);
   const firstShell = shells[0] ?? null;
+  const isAstro = Boolean(
+    project.versions.astro && project.paths.astroPagesDir
+  );
 
-  if (!(hasDependency && firstShell)) {
+  if (!(hasDependency && (firstShell || isAstro))) {
     return { hasDependency, mount: null, runtime: null, shell: firstShell };
   }
 
@@ -555,14 +587,24 @@ const runToastRuntimeAnalysis = async (
   const filesByPath = new Map(
     parsedFiles.map((file) => [path.resolve(file.file.path), file])
   );
-  const compilerOptions = getCompilerOptions(project, host);
   const context = {
-    compilerOptions,
     filesByPath,
     hasDependency,
-    host,
     project,
+    resolver,
   };
+
+  if (isAstro) {
+    const astroAnalysis = await analyzeAstroToastMount(
+      project,
+      context,
+      sourceFiles
+    );
+
+    if (astroAnalysis) {
+      return astroAnalysis;
+    }
+  }
 
   for (const shell of shells) {
     if (!SCRIPT_FILE_PATTERN.test(shell.path)) {

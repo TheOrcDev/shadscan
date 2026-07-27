@@ -34,6 +34,7 @@ import {
 import type { AuditRule, AuditRuleResult } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
+import { getAstroSourceFiles } from "./astro-mounts";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   getProjectSourceFiles,
@@ -52,6 +53,8 @@ interface MetadataExport {
 }
 
 const APP_METADATA_FILE_PATTERN = /^(?:layout|page)\.[cm]?[jt]sx?$/;
+const INERTIA_HEAD_TITLE_PATTERN =
+  /<Head\b(?:[^>]*\btitle\s*=|[\s\S]{0,600}?<title[\s>])/;
 const TANSTACK_HEAD_OPTION_PATTERN = /\bhead\s*:\s*(?:\(|[\w$]+\s*=>)/;
 const TANSTACK_HEAD_TITLE_PATTERN = /\btitle\s*:\s*["'`][^"'`]+["'`]/;
 const TANSTACK_HEAD_DESCRIPTION_PATTERN = /\bname\s*:\s*["']description["']/;
@@ -59,6 +62,9 @@ const TANSTACK_HEAD_CONTENT_PATTERN = /\bcontent\s*:\s*["'`][^"'`]+["'`]/;
 const HTML_TITLE_PATTERN = /<title>\s*[^<\s][^<]*<\/title>/i;
 const HTML_DESCRIPTION_PATTERN =
   /<meta(?=[^>]*name=["']description["'])(?=[^>]*content=["'][^"']+["'])[^>]*>/i;
+// Astro templates pass values as expressions: content={description}.
+const ASTRO_DESCRIPTION_PATTERN =
+  /<meta(?=[^>]*name=["']description["'])(?=[^>]*content=(?:["'][^"']+["']|\{[^}]+\}))[^>]*>/i;
 
 const getScriptKind = (filePath: string): ScriptKind => {
   if (filePath.endsWith(".tsx")) {
@@ -458,6 +464,86 @@ const evaluateTanstackStartMetadata = async (
   );
 };
 
+const evaluateAstroMetadata = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const astroFiles = await getAstroSourceFiles(project);
+  let titleMatch: { file: SourceFile; line: number } | null = null;
+  let hasDescription = false;
+
+  for (const file of astroFiles) {
+    if (!titleMatch) {
+      const line = getTextLineNumber(file.content, HTML_TITLE_PATTERN);
+
+      if (line !== undefined) {
+        titleMatch = { file, line };
+      }
+    }
+
+    if (!hasDescription && ASTRO_DESCRIPTION_PATTERN.test(file.content)) {
+      hasDescription = true;
+    }
+
+    if (titleMatch && hasDescription) {
+      return pass(
+        "Astro document metadata includes a non-empty title and description.",
+        titleMatch.file.path,
+        titleMatch.line
+      );
+    }
+  }
+
+  const missing = [
+    titleMatch ? null : "a title element",
+    hasDescription ? null : "a description meta tag",
+  ].filter((item): item is string => item !== null);
+
+  return fail(
+    `Astro document metadata is missing ${missing.join(" and ")}.`,
+    "Add a meaningful title element and description meta tag to the layout's head."
+  );
+};
+
+const evaluateInertiaMetadata = async (
+  project: ProjectDiscovery
+): Promise<AuditRuleResult> => {
+  const files = await getProjectSourceFiles(project);
+  let titleMatch: { file: SourceFile; line: number } | null = null;
+  let hasDescription = false;
+
+  for (const file of files) {
+    if (!titleMatch) {
+      const line = getTextLineNumber(file.content, INERTIA_HEAD_TITLE_PATTERN);
+
+      if (line !== undefined) {
+        titleMatch = { file, line };
+      }
+    }
+
+    if (!hasDescription && HTML_DESCRIPTION_PATTERN.test(file.content)) {
+      hasDescription = true;
+    }
+
+    if (titleMatch && hasDescription) {
+      return pass(
+        "Inertia Head metadata includes a title and description.",
+        titleMatch.file.path,
+        titleMatch.line
+      );
+    }
+  }
+
+  const missing = [
+    titleMatch ? null : "an Inertia `<Head>` title",
+    hasDescription ? null : "a description meta tag",
+  ].filter((item): item is string => item !== null);
+
+  return fail(
+    `Document metadata is missing ${missing.join(" and ")}.`,
+    'Render Inertia\'s `<Head>` with a title and a `<meta name="description">` entry.'
+  );
+};
+
 const evaluateHtmlMetadata = async (
   project: ProjectDiscovery
 ): Promise<AuditRuleResult> => {
@@ -566,6 +652,14 @@ const metadataTitleDescriptionCompleteRule: AuditRule = {
 
     if (project.versions.tanstackStart && project.paths.routesDir) {
       return evaluateTanstackStartMetadata(project);
+    }
+
+    if (project.versions.astro && project.paths.astroPagesDir) {
+      return evaluateAstroMetadata(project);
+    }
+
+    if (project.versions.inertia && project.paths.inertiaPagesDir) {
+      return evaluateInertiaMetadata(project);
     }
 
     return evaluateHtmlMetadata(project);

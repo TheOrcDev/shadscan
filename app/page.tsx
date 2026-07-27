@@ -3,6 +3,7 @@ import Link from "next/link";
 import { GetStarted } from "@/components/get-started";
 import { Hero } from "@/components/hero";
 import { SiteStructuredData } from "@/components/site-structured-data";
+import { SupportedFrameworks } from "@/components/supported-frameworks";
 import { Badge } from "@/components/ui/badge";
 import { getChangelogReleases } from "@/lib/changelog";
 import {
@@ -51,7 +52,8 @@ export default async function Page() {
             </Badge>
           }
           media={
-            <div className="mx-auto w-full max-w-xl">
+            <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
+              <SupportedFrameworks />
               <GetStarted />
             </div>
           }
