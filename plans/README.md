@@ -16,6 +16,7 @@ the executor. Each plan is marked DONE with its landing commit when complete.
 | [010](010-laravel-inertia-react-adapter.md) | Laravel (Inertia + React) framework adapter | P1 | XL | - | DONE (`973d979`) |
 | [011](011-astro-react-adapter.md) | Astro (React islands) framework adapter | P1 | XL | - | DONE (`0edefab`) |
 | [012](012-react-router-framework-adapter.md) | React Router (framework mode) adapter | P1 | L | - | DONE (`97a874c`) |
+| [013](013-cross-scope-rule-evidence.md) | Cross-scope rule evidence (issue #10 false negatives) | P1 | L | - | PLANNED |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
