@@ -121,6 +121,7 @@ const createReport = (): AuditReport => ({
       ],
       id: "metadata-configured",
       impactsScore: true,
+      packageDir: null,
       maxScore: 3,
       remediation: "Export metadata.",
       roast: "A page title would not hurt you.",
@@ -165,6 +166,7 @@ const createReport = (): AuditReport => ({
     vite: null,
   },
   warnings: [],
+  workspace: null,
 });
 
 describe("renderHumanReport", () => {

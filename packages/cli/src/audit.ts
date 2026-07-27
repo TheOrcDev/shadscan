@@ -19,7 +19,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 8 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 9 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -108,6 +108,26 @@ interface AuditRule {
   title: string;
 }
 
+interface WorkspaceReportProject {
+  adapter: string;
+  grade: AuditGrade | null;
+  kind: "application" | "library";
+  kindReason: string;
+  packageDir: string;
+  packageName: string | null;
+  /** Applications feed the pooled score; libraries are reported but excluded. */
+  poolsIntoScore: boolean;
+  score: number | null;
+}
+
+interface WorkspaceReport {
+  applicationCount: number;
+  kind: string;
+  projects: WorkspaceReportProject[];
+  skipped: { packageDir: string; reason: string }[];
+  truncated: number;
+}
+
 interface AuditFinding {
   category: AuditCategory;
   confidence: Confidence;
@@ -116,6 +136,8 @@ interface AuditFinding {
   id: string;
   impactsScore: boolean;
   maxScore: number;
+  /** Workspace-relative package the finding came from; null outside a workspace scan. */
+  packageDir: string | null;
   remediation: string | null;
   roast: string | null;
   score: number;
@@ -187,7 +209,10 @@ interface AuditReport {
   durationMs: number;
   engineVersion: string;
   findings: AuditFinding[];
-  framework: ProjectDiscovery["framework"];
+  framework: {
+    adapter: ProjectDiscovery["framework"]["adapter"] | "mixed";
+    evidence: string[];
+  };
   grade: AuditGrade | null;
   maxScore: 100;
   packageManager: ProjectDiscovery["packageManager"];
@@ -203,6 +228,8 @@ interface AuditReport {
   source: ScanSource;
   versions: ProjectDiscovery["versions"];
   warnings: string[];
+  /** Populated only by a workspace scan; null for a single-package scan. */
+  workspace: WorkspaceReport | null;
 }
 
 interface RunAuditOptions {
@@ -250,6 +277,7 @@ const AuditFindingSchema = z.object({
   id: z.string(),
   impactsScore: z.boolean(),
   maxScore: z.number(),
+  packageDir: z.string().nullable(),
   remediation: z.string().nullable(),
   roast: z.string().nullable(),
   score: z.number(),
@@ -302,6 +330,25 @@ const AgentHandoffSchema = z.object({
   workItems: z.array(AgentWorkItemSchema),
 });
 
+const WorkspaceReportSchema = z.object({
+  applicationCount: z.number(),
+  kind: z.string(),
+  projects: z.array(
+    z.object({
+      adapter: z.string(),
+      grade: z.enum(["A", "B", "C", "D", "F"]).nullable(),
+      kind: z.enum(["application", "library"]),
+      kindReason: z.string(),
+      packageDir: z.string(),
+      packageName: z.string().nullable(),
+      poolsIntoScore: z.boolean(),
+      score: z.number().nullable(),
+    })
+  ),
+  skipped: z.array(z.object({ packageDir: z.string(), reason: z.string() })),
+  truncated: z.number(),
+});
+
 const AuditReportSchema = z.object({
   agentHandoff: AgentHandoffSchema,
   categories: z.array(
@@ -326,6 +373,8 @@ const AuditReportSchema = z.object({
       "astro-react",
       "generic-react",
       "laravel-inertia-react",
+      /** Workspace scans only: the pooled applications use different adapters. */
+      "mixed",
       "next-app-router",
       "next-hybrid-router",
       "next-pages-router",
@@ -366,6 +415,7 @@ const AuditReportSchema = z.object({
     vite: z.string().nullable(),
   }),
   warnings: z.array(z.string()),
+  workspace: WorkspaceReportSchema.nullable(),
 });
 
 const getGrade = (score: number): AuditGrade => {
@@ -502,6 +552,7 @@ const normalizeFinding = (
     id: rule.id,
     impactsScore,
     maxScore,
+    packageDir: null,
     remediation: result.remediation ?? null,
     roast: result.roast ?? null,
     score,
@@ -1177,6 +1228,7 @@ const createAuditReport = ({
     kind: "working-tree",
     revision: null,
   },
+  workspace,
 }: {
   category?: AuditCategory;
   durationMs: number;
@@ -1184,6 +1236,7 @@ const createAuditReport = ({
   project: ProjectDiscovery;
   rulesetVersion?: string;
   source?: ScanSource;
+  workspace?: WorkspaceReport | null;
 }): AuditReport => {
   const normalizedFindings = normalizeFindingPaths(findings, project.rootDir);
   const categories = getCategoryScores(normalizedFindings);
@@ -1226,6 +1279,7 @@ const createAuditReport = ({
     source,
     versions: project.versions,
     warnings: project.warnings,
+    workspace: workspace ?? null,
   };
 
   return AuditReportSchema.parse(report);
@@ -1289,6 +1343,8 @@ export type {
   ScanScope,
   ScanSource,
   ScanSourceKind,
+  WorkspaceReport,
+  WorkspaceReportProject,
 };
 export {
   AUDIT_CATEGORIES,
