@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   createSourceFile,
   type Expression,
@@ -8,11 +9,14 @@ import {
   isBindingElement,
   isCallExpression,
   isIdentifier,
+  isImportDeclaration,
   isJsxAttribute,
   isJsxElement,
   isJsxExpression,
+  isJsxOpeningElement,
   isJsxSelfClosingElement,
   isJsxText,
+  isNamedImports,
   isParenthesizedExpression,
   isPropertyAccessExpression,
   isSatisfiesExpression,
@@ -33,6 +37,12 @@ import {
   getJsxTagName,
 } from "../ast";
 import type { AuditRule } from "../audit";
+import type { ProjectDiscovery } from "../discovery";
+import {
+  getProjectModuleResolver,
+  type ProjectModuleResolver,
+  resolveProjectModulePath,
+} from "./module-resolution";
 import {
   getResponsiveVisibility,
   isSmallScreenVisibility,
@@ -78,8 +88,9 @@ const SHADCN_SIDEBAR_RUNTIME_FILE_PATTERN =
   /[/\\]components[/\\]ui[/\\]sidebar\.[cm]?[jt]sx?$/;
 const SHADCN_SIDEBAR_RUNTIME_PATTERN =
   /useIsMobile\s*\([\s\S]*?openMobile[\s\S]*?<Sheet\b[\s\S]*?<SheetContent\b/;
-const SHADCN_SIDEBAR_COMPOSITION_PATTERN =
-  /<SidebarProvider\b[\s\S]*?<Sidebar\b[\s\S]*?<(?:a|Link)\b/;
+const SHADCN_SIDEBAR_PROVIDER_PATTERN = /<SidebarProvider\b/;
+const SHADCN_SIDEBAR_COMPOSITION_PATTERN = /<Sidebar\b[\s\S]*?<(?:a|Link)\b/;
+const INTRINSIC_TAG_PATTERN = /^[a-z]/;
 const SHADCN_SIDEBAR_TRIGGER_PATTERN = /<SidebarTrigger(?:\s|>)/;
 const USE_SIDEBAR_PATTERN = /useSidebar\s*\(/;
 const TOGGLE_SIDEBAR_PATTERN = /\btoggleSidebar\b/;
@@ -576,8 +587,146 @@ const hasDirectMobileNavigation = (
   return hasResponsiveNavigation;
 };
 
+/** Maps each imported local name to the module it came from. */
+const getFileImports = (file: SourceFile): Map<string, string> => {
+  const sourceFile = createSourceFile(
+    file.path,
+    file.content,
+    ScriptTarget.Latest,
+    true,
+    ScriptKind.TSX
+  );
+  const imports = new Map<string, string>();
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !(
+        isImportDeclaration(statement) &&
+        isStringLiteral(statement.moduleSpecifier)
+      )
+    ) {
+      continue;
+    }
+
+    const moduleName = statement.moduleSpecifier.text;
+    const importClause = statement.importClause;
+
+    if (importClause?.name) {
+      imports.set(importClause.name.text, moduleName);
+    }
+
+    const namedBindings = importClause?.namedBindings;
+
+    if (namedBindings && isNamedImports(namedBindings)) {
+      for (const element of namedBindings.elements) {
+        imports.set(element.name.text, moduleName);
+      }
+    }
+  }
+
+  return imports;
+};
+
+/**
+ * Component tags rendered beneath a `<SidebarProvider>`. Used to prove the
+ * provider actually mounts the file that composes the sidebar, rather than
+ * accepting any project that merely contains both somewhere.
+ */
+const getTagsRenderedInsideProvider = (file: SourceFile): string[] => {
+  const sourceFile = createSourceFile(
+    file.path,
+    file.content,
+    ScriptTarget.Latest,
+    true,
+    ScriptKind.TSX
+  );
+  const tags: string[] = [];
+
+  walkNodes(sourceFile, (node) => {
+    if (
+      !(
+        isJsxElement(node) &&
+        getJsxTagName(node.openingElement) === "SidebarProvider"
+      )
+    ) {
+      return;
+    }
+
+    walkNodes(node, (child) => {
+      if (!(isJsxOpeningElement(child) || isJsxSelfClosingElement(child))) {
+        return;
+      }
+
+      const tagName = getJsxTagName(child)?.split(".")[0];
+
+      if (tagName && !INTRINSIC_TAG_PATTERN.test(tagName)) {
+        tags.push(tagName);
+      }
+    });
+  });
+
+  return tags;
+};
+
+/**
+ * The shadcn docs layout — and `shadcn add sidebar` — puts
+ * `<SidebarProvider>` in the root layout and `<Sidebar>` in its own
+ * `app-sidebar` module, so the two halves are looked up separately and then
+ * linked by resolving the provider's own children one hop.
+ */
+const findLinkedSidebarComposition = (
+  providerFiles: SourceFile[],
+  compositionFiles: SourceFile[],
+  project: ProjectDiscovery,
+  resolver: ProjectModuleResolver
+): SourceFile | null => {
+  const compositionsByPath = new Map(
+    compositionFiles.map((file) => [path.resolve(file.path), file])
+  );
+
+  for (const providerFile of providerFiles) {
+    // A file holding both halves needs no resolution.
+    const selfComposition = compositionsByPath.get(
+      path.resolve(providerFile.path)
+    );
+
+    if (selfComposition) {
+      return selfComposition;
+    }
+
+    const imports = getFileImports(providerFile);
+
+    for (const tagName of getTagsRenderedInsideProvider(providerFile)) {
+      const moduleName = imports.get(tagName);
+
+      if (!moduleName) {
+        continue;
+      }
+
+      const resolvedPath = resolveProjectModulePath({
+        containingFile: providerFile.path,
+        hasCandidate: (candidate) => compositionsByPath.has(candidate),
+        moduleName,
+        project,
+        resolver,
+      });
+      const composition = resolvedPath
+        ? compositionsByPath.get(resolvedPath)
+        : null;
+
+      if (composition) {
+        return composition;
+      }
+    }
+  }
+
+  return null;
+};
+
 const findShadcnSidebarMobileNavigation = (
-  files: SourceFile[]
+  files: SourceFile[],
+  project: ProjectDiscovery,
+  resolver: ProjectModuleResolver
 ): SourceFile | null => {
   const runtimeFile = files.find(
     (file) =>
@@ -589,23 +738,33 @@ const findShadcnSidebarMobileNavigation = (
     return null;
   }
 
-  const compositionFile = files.find(
+  const authoredSidebarFiles = files.filter(
     (file) =>
       !GENERATED_UI_PATH_PATTERN.test(file.path) &&
-      SHADCN_SIDEBAR_IMPORT_PATTERN.test(file.content) &&
-      SHADCN_SIDEBAR_COMPOSITION_PATTERN.test(file.content)
+      SHADCN_SIDEBAR_IMPORT_PATTERN.test(file.content)
   );
-  const hasTrigger = files.some(
+  const hasTrigger = authoredSidebarFiles.some(
     (file) =>
-      !GENERATED_UI_PATH_PATTERN.test(file.path) &&
-      SHADCN_SIDEBAR_IMPORT_PATTERN.test(file.content) &&
-      (SHADCN_SIDEBAR_TRIGGER_PATTERN.test(file.content) ||
-        (USE_SIDEBAR_PATTERN.test(file.content) &&
-          TOGGLE_SIDEBAR_PATTERN.test(file.content) &&
-          SHADCN_SIDEBAR_HOOK_TRIGGER_PATTERN.test(file.content)))
+      SHADCN_SIDEBAR_TRIGGER_PATTERN.test(file.content) ||
+      (USE_SIDEBAR_PATTERN.test(file.content) &&
+        TOGGLE_SIDEBAR_PATTERN.test(file.content) &&
+        SHADCN_SIDEBAR_HOOK_TRIGGER_PATTERN.test(file.content))
   );
 
-  return compositionFile && hasTrigger ? compositionFile : null;
+  if (!hasTrigger) {
+    return null;
+  }
+
+  return findLinkedSidebarComposition(
+    authoredSidebarFiles.filter((file) =>
+      SHADCN_SIDEBAR_PROVIDER_PATTERN.test(file.content)
+    ),
+    authoredSidebarFiles.filter((file) =>
+      SHADCN_SIDEBAR_COMPOSITION_PATTERN.test(file.content)
+    ),
+    project,
+    resolver
+  );
 };
 
 const mobileNavPresentRule: AuditRule = {
@@ -616,7 +775,7 @@ const mobileNavPresentRule: AuditRule = {
     "Checks apps with navigation for a responsive mobile trigger and panel.",
   id: "mobile-nav-present",
   maxScore: 3,
-  run: async ({ project }) => {
+  run: async ({ filesystemRoot, project }) => {
     const sourceFiles = await getProjectSourceFiles(project);
     const navigationScopes = (
       await findOwnedSourceScopes(project, NAVIGATION_PATTERN)
@@ -647,7 +806,11 @@ const mobileNavPresentRule: AuditRule = {
       }
     }
 
-    const sidebarNavigation = findShadcnSidebarMobileNavigation(sourceFiles);
+    const sidebarNavigation = findShadcnSidebarMobileNavigation(
+      sourceFiles,
+      project,
+      getProjectModuleResolver(project, filesystemRoot)
+    );
     if (sidebarNavigation) {
       return pass(
         "Mounted shadcn Sidebar has a mobile Sheet runtime and an app-level trigger.",
