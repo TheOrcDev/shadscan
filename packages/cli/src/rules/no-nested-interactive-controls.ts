@@ -43,21 +43,33 @@ const noNestedInteractiveControlsRule: AuditRule = {
         return;
       }
 
-      const interactiveAncestor = ancestors.find((ancestor) => {
-        if (!isJsxElement(ancestor)) {
-          return false;
-        }
+      const interactiveAncestorIndex = ancestors.findIndex(
+        (ancestor, index) => {
+          if (!isJsxElement(ancestor)) {
+            return false;
+          }
 
-        const ancestorTag = getJsxTagName(ancestor.openingElement);
-        const asChild = getJsxAttributeValue(
-          ancestor.openingElement,
-          "asChild"
-        );
-        return (
-          Boolean(ancestorTag && INTERACTIVE_TAGS.has(ancestorTag)) &&
-          !(asChild.kind === "static" && asChild.value === true)
-        );
-      });
+          const ancestorTag = getJsxTagName(ancestor.openingElement);
+
+          if (!(ancestorTag && INTERACTIVE_TAGS.has(ancestorTag))) {
+            return false;
+          }
+
+          const isComposedIntoAncestor =
+            ancestors[index + 1] === ancestor.openingElement;
+
+          if (isComposedIntoAncestor) {
+            return false;
+          }
+
+          const asChild = getJsxAttributeValue(
+            ancestor.openingElement,
+            "asChild"
+          );
+          return !(asChild.kind === "static" && asChild.value === true);
+        }
+      );
+      const interactiveAncestor = ancestors[interactiveAncestorIndex];
 
       if (!(interactiveAncestor && isJsxElement(interactiveAncestor))) {
         return;
@@ -66,7 +78,7 @@ const noNestedInteractiveControlsRule: AuditRule = {
       const ancestorTag = getJsxTagName(interactiveAncestor.openingElement);
       failure = fail(
         `${tagName} is nested inside interactive ${ancestorTag}.`,
-        "Render one interactive element, or use the component's asChild/slot composition when supported.",
+        "Render one interactive element, or use the component's asChild/render/slot composition when supported.",
         {
           filePath: file.filePath,
           line: getLineNumber(file, openingElement),
