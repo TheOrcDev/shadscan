@@ -375,6 +375,46 @@ describe("expanded accessibility rules", () => {
     }
   });
 
+  it("allows render-prop composition without losing real nesting", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <Button render={<Link href="/" />}>Home</Button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <Button render={(props) => <Link href="/" {...props} />}>Home</Button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("pass");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <Button render={<Link href="/" />}><button type="button">Go</button></Button>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("fail");
+
+      await fixture.write(
+        "src/App.tsx",
+        'export function App() { return <a href="/"><Tooltip render={<Link href="/docs" />} /></a>; }'
+      );
+      expect(
+        (await runRule(fixture.rootDir, noNestedInteractiveControlsRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("requires dynamic status messages to be announced", async () => {
     const fixture = await createRuleFixture();
 

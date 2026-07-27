@@ -6,6 +6,18 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- `no-nested-interactive-controls` no longer reports a false positive for
+  Base UI's `render` composition (ruleset `2026.07.41`). `<Button render={<Link
+  />}>` passes the link through the owner's attributes, and the owner renders
+  it *instead of* its own tag, so a single anchor reaches the DOM — but the
+  JSX walker sees the link as a descendant of an interactive element and
+  flagged it, the same way `asChild` would have before its explicit
+  exemption. An element is now exempt only from the element whose attributes
+  it is passed to: real nesting through `children` still fails, and an outer
+  interactive ancestor still catches a `render` target composed below it.
+
 ## 0.6.1 - 2026-07-27
 
 ### Fixed
