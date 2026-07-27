@@ -47,6 +47,7 @@ import {
   fileExists,
   findFiles,
   findSourceMatch,
+  getAppRelativePatterns,
   getProjectSourceFiles,
   getTextLineNumber,
   readProjectSourceFile,
@@ -352,22 +353,6 @@ const hasAnyFile = async (
   const matches = await findFiles(rootDir, patterns, 4);
 
   return matches[0] ?? null;
-};
-
-const getAppRoutePatterns = (
-  context: AuditContext,
-  fileName: string
-): string[] => {
-  const appDir = context.project.paths.appDir;
-
-  if (!appDir) {
-    return [];
-  }
-
-  return [
-    path.join(path.relative(context.project.rootDir, appDir), fileName),
-    path.join(path.relative(context.project.rootDir, appDir), "**", fileName),
-  ];
 };
 
 const findSourceMatchInDirectory = async (
@@ -969,7 +954,7 @@ const notFoundRoutePresentRule: AuditRule = {
     if (context.project.versions.next && context.project.paths.appDir) {
       const appNotFound = await hasAnyFile(
         context.project.rootDir,
-        getAppRoutePatterns(context, "not-found.{js,jsx,ts,tsx}")
+        getAppRelativePatterns(context, "not-found.{js,jsx,ts,tsx}")
       );
 
       if (!appNotFound) {
@@ -1050,7 +1035,7 @@ const errorBoundaryPresentRule: AuditRule = {
     if (context.project.versions.next && context.project.paths.appDir) {
       const appError = await hasAnyFile(
         context.project.rootDir,
-        getAppRoutePatterns(context, "error.{js,jsx,ts,tsx}")
+        getAppRelativePatterns(context, "error.{js,jsx,ts,tsx}")
       );
 
       if (appError) {

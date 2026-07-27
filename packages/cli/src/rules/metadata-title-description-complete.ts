@@ -411,19 +411,24 @@ const evaluateNextMetadata = async (
     return notApplicable("No Next App Router directory was found.");
   }
 
+  const resolvedAppDir = path.resolve(appDir);
   const files = (await getProjectSourceFiles(project))
-    .filter(
-      (file) =>
-        file.path.startsWith(`${appDir}${path.sep}`) &&
+    .filter((file) => {
+      const relativePath = path.relative(resolvedAppDir, file.path);
+      return (
+        relativePath !== ".." &&
+        !relativePath.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relativePath) &&
         APP_METADATA_FILE_PATTERN.test(path.basename(file.path))
-    )
+      );
+    })
     .sort((left, right) => compareCodeUnits(left.path, right.path));
   const metadataExports = files
     .map(findMetadataExport)
     .filter((metadata): metadata is MetadataExport => metadata !== null);
   const rootMetadata = metadataExports.find(
     (metadata) =>
-      path.dirname(metadata.file.path) === path.resolve(appDir) &&
+      path.dirname(path.resolve(metadata.file.path)) === resolvedAppDir &&
       path.basename(metadata.file.path).startsWith("layout.")
   );
 
