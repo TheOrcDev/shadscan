@@ -6,6 +6,50 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- Monorepo support. Running shadscan at a workspace root now audits every
+  React application it finds and pools their findings into one score,
+  rather than failing with "the nearest package does not declare React".
+  Workspaces are discovered by walking the tree for `package.json` files,
+  so pnpm, npm, yarn, bun, Turborepo, Nx and Lerna all work without
+  configuration and without adding a YAML parser to the CLI.
+  - Each package is classified as an application or a library, and only
+    applications feed the score. A React library has no document shell, so
+    it fails rules about page titles and favicons it should never satisfy;
+    pooling those would penalise a repository for owning a design system.
+    Libraries are still scanned and reported with their own score. The
+    deciding signal is an application entry point rather than a
+    `main`/`exports` field, because internal workspace packages are
+    routinely consumed from source through a path alias and declare no
+    entry at all.
+  - The report lists every package with its own score, adapter and
+    classification reason, plus any packages that were skipped and why, so
+    the pooled number is explicable rather than mysterious.
+  - `--list-projects` prints what discovery found without scanning, and
+    `--project <path>` scans a single package.
+  - A workspace containing one application takes the single-package path
+    unchanged, so the common "app at the root plus shared packages" layout
+    keeps its existing score.
+
+### Changed
+
+- The JSON report schema version is now 9. Findings and agent actionables
+  gain `packageDir`, agent work items gain `packageDir`, the report gains
+  `workspace` (null for single-package scans), and `framework.adapter`
+  accepts `mixed` when pooled applications use different adapters. The
+  GitHub Action (which reads `score` and `grade`) is unaffected.
+
+### Fixed
+
+- Agent work items are now grouped per package. Grouping matched one
+  actionable per rule id, so a pooled report silently dropped grouped
+  items for every package after the first and emitted the remainder as
+  duplicate entries with no way to tell which package they referred to.
+- The scan result page keys findings by package and rule rather than rule
+  alone, which in a pooled report collapsed rows and could resolve a work
+  item to another package's finding.
+
 ## 0.6.1 - 2026-07-27
 
 ### Fixed

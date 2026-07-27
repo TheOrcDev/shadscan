@@ -560,13 +560,17 @@ const runScanAction = async (
     ? null
     : await discoverWorkspace(resolvedProjectPath);
   /**
-   * A single application is scanned exactly as before, so the common
-   * "app at the root plus shared packages" layout keeps its existing score.
+   * Only a lone package at the repository root takes the single-package path,
+   * which keeps plain projects byte-identical. Counting applications instead
+   * broke the very common "one app under apps/, libraries beside it" layout:
+   * it fell through to scanning the root, which declares no React.
    */
+  const onlyProject =
+    workspace?.projects.length === 1 ? workspace.projects[0] : null;
   const scanAsWorkspace =
     workspace !== null &&
-    workspace.projects.filter((entry) => entry.kind === "application").length >
-      1;
+    workspace.projects.length > 0 &&
+    onlyProject?.packageDir !== ".";
   const selectedPath = options.project
     ? await resolveProjectPath(
         path.resolve(resolvedProjectPath, options.project)

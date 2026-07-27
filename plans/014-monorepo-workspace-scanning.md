@@ -19,7 +19,7 @@
 
 ## Status
 
-- **State**: PLANNED
+- **State**: DONE
 - **Priority**: P1 — running shadscan at a monorepo root today is a dead
   end, and monorepos are the default shape for the shadcn audience
   (`shadcn init --monorepo` is a documented first-class template).
@@ -33,6 +33,59 @@
 - **Depends on**: none
 - **Category**: feature
 - **Planned at**: 2026-07-27
+
+## Outcome (executed 2026-07-27)
+
+Shipped across four commits. Three deviations from the plan as written, all
+forced by things only running the code revealed:
+
+1. **Classification keys off an application entry point, not `main`/
+   `exports`.** The plan proposed a manifest-entry test with `unclassified`
+   pooled as an application. The first real run showed why that is backwards:
+   internal workspace packages are routinely consumed from source through a
+   path alias and declare no entry at all, so they classified as applications
+   and would have dragged a workspace's score down — the exact outcome the
+   split exists to prevent. Every application has an entry point, so its
+   absence is the reliable half of the test, and `unclassified` no longer
+   exists.
+2. **Test scaffolding had to be excluded from discovery.** Burn-in on
+   `shadcn-ui/ui` returned **31 projects**, most of them
+   `packages/*/test/fixtures/*` — real `package.json` files describing real
+   frameworks. Discovery now mirrors the scanner's own source ignores: if the
+   scanner will not read source from a directory, it is not a project. That
+   took the list from 31 to 17.
+3. **The single-application fast path was wrong.** The plan's invariant was
+   "app at the root plus shared packages keeps its score", which was
+   implemented as "one application takes the single-package path". Burn-in on
+   `dub` — one app at `apps/web`, five libraries, a root that declares no
+   React — fell straight through to scanning the root and failed with
+   `UNSUPPORTED_PROJECT`. Only a lone package **at the root** takes the fast
+   path now. A regression fixture covers this shape.
+
+Two smaller additions the plan did not anticipate: agent work items had to be
+partitioned by package (grouping matched one actionable per rule id, so a
+pooled report silently dropped grouped items for every package after the
+first), and a library-only workspace pools its libraries rather than
+reporting an unassessed score.
+
+### Burn-in
+
+| Project | Packages | Applications | Score | Time |
+|---|---|---|---|---|
+| `dubinc/dub` | 6 (+6 skipped) | 1 (`apps/web`) | 21 F | 23s |
+| `shadcn-ui/ui` | 17 (+11 skipped) | 11 | 40 F (mixed) | 3s |
+| this repository | 1 | 1 (root) | 100 A | — |
+
+No drift: `dub` pools to **21**, exactly the `apps/web` score recorded in plan
+013's burn-in, and `shadcn-ui/ui`'s `apps/v4` still reports **34**. This
+repository stays on the single-package path and keeps 100 A. Repeated runs are
+byte-identical. Neither monorepo hit the 25-application cap, and the cap has
+not yet been exercised against a repository that needs it.
+
+One judgment call left standing: `shadcn-ui/ui`'s `templates/*` are real,
+complete applications and are pooled. Excluding them would be a guess about
+intent, and `--list-projects` plus `--project` make the choice inspectable and
+overridable.
 
 ## Current State (verified 2026-07-27, at HEAD `8c97bc2`)
 

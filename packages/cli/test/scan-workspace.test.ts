@@ -141,6 +141,43 @@ describe("workspace scanning", () => {
     }
   });
 
+  it("scans a lone application that lives below the root", async () => {
+    /**
+     * The shape of most real monorepos — one app under apps/, libraries
+     * beside it, and a root package that declares no React. Counting
+     * applications to pick the fast path sent this to the root and failed.
+     */
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "apps/web", preset: "next" },
+        { path: "packages/ui", preset: "library" },
+      ],
+    });
+
+    const report = await scanWorkspace(rootDir);
+
+    expect(report.score).not.toBeNull();
+    expect(report.workspace?.applicationCount).toBe(1);
+    expect(report.framework.adapter).toBe("next-app-router");
+  });
+
+  it("pools libraries when a workspace has no application at all", async () => {
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "packages/ui", preset: "library" },
+        { path: "packages/icons", preset: "library" },
+      ],
+    });
+
+    const report = await scanWorkspace(rootDir);
+
+    expect(report.workspace?.applicationCount).toBe(0);
+    expect(report.score).not.toBeNull();
+    expect(
+      report.workspace?.projects.every((project) => project.poolsIntoScore)
+    ).toBe(true);
+  });
+
   it("records skipped packages without failing the run", async () => {
     const rootDir = await createWorkspaceFixture({
       packages: [

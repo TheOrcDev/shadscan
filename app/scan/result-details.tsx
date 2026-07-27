@@ -180,7 +180,7 @@ function WorkItemArticle({
       <h4>Related findings</h4>
       <ul>
         {workItem.findingIds.map((findingId) => (
-          <li key={findingId}>
+          <li key={getFindingKey(workItem.packageDir, findingId)}>
             <code>{findingId}</code>
           </li>
         ))}
@@ -299,7 +299,10 @@ function ActionablesReport({
   }
 
   const findingsById = new Map(
-    findings.map((finding) => [finding.id, finding])
+    findings.map((finding) => [
+      getFindingKey(finding.packageDir, finding.id),
+      finding,
+    ])
   );
 
   return (
@@ -309,7 +312,9 @@ function ActionablesReport({
           {index > 0 ? <Separator className="not-typeset my-8" /> : null}
           <WorkItemArticle
             findings={workItem.findingIds.flatMap((findingId) => {
-              const finding = findingsById.get(findingId);
+              const finding = findingsById.get(
+                getFindingKey(workItem.packageDir, findingId)
+              );
               return finding ? [finding] : [];
             })}
             workItem={workItem}
@@ -369,11 +374,20 @@ function FindingArticle({ finding }: { finding: Finding }) {
   );
 }
 
+/**
+ * A pooled workspace report contains the same rule once per package, so a
+ * bare rule id is no longer unique — it collapses React rows and resolves a
+ * work item to another package's finding.
+ */
+function getFindingKey(packageDir: string | null, findingId: string): string {
+  return `${packageDir ?? "."}:${findingId}`;
+}
+
 function FindingsReport({ findings }: FindingsReportProps) {
   return (
     <div className="typeset typeset-report">
       {findings.map((finding, index) => (
-        <Fragment key={finding.id}>
+        <Fragment key={getFindingKey(finding.packageDir, finding.id)}>
           {index > 0 ? <Separator className="not-typeset my-8" /> : null}
           <FindingArticle finding={finding} />
         </Fragment>

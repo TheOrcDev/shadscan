@@ -73,13 +73,24 @@ interface WorkspaceDiscovery {
  */
 const MAX_APPLICATION_PROJECTS = 25;
 
+/**
+ * Mirrors the scanner's own source ignores. Test scaffolding contains real
+ * `package.json` files describing real frameworks — `shadcn-ui/ui` ships two
+ * dozen of them — and treating those as applications would pool a repository's
+ * test fixtures into its score. If the scanner will not read source from a
+ * directory, discovery must not call it a project either.
+ */
 const PACKAGE_IGNORES = [
   "**/node_modules/**",
   "**/.next/**",
   "**/.astro/**",
-  "**/dist/**",
+  "**/__fixtures__/**",
+  "**/__mocks__/**",
+  "**/__tests__/**",
   "**/build/**",
   "**/coverage/**",
+  "**/dist/**",
+  "**/fixtures/**",
   "**/vendor/**",
 ];
 

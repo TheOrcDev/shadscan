@@ -74,6 +74,7 @@ const createReport = (): AuditReport => ({
         ],
         findingIds: ["metadata-configured"],
         id: "metadata-configured",
+        packageDir: null,
         priority: "P1",
         rawScoreImpact: 3,
         suggestedFixes: ["Export metadata."],

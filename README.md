@@ -101,6 +101,12 @@ pnpm dlx @shadscan/cli@0.6.1 --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
+
+# See which workspace packages shadscan found, without scanning
+pnpm dlx @shadscan/cli --list-projects
+
+# Scan one package of a monorepo instead of pooling every application
+pnpm dlx @shadscan/cli --project apps/web
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
@@ -189,6 +195,27 @@ Rules only run where they apply. Shadscan supports Next.js App Router, Pages
 Router, hybrid Next.js projects, React Router framework mode, TanStack Start,
 Laravel with Inertia and React, Astro with React islands, Vite React, and
 generic React applications.
+
+### Monorepos
+
+Run shadscan at a workspace root and it audits every React application it
+finds, pooling their findings into one score. The report lists each package
+with its own score so the pooled number is explicable, and `--list-projects`
+prints that list without scanning.
+
+Packages are classified as **applications** or **libraries**. A library — a
+React package with no application entry point — is scanned and reported, but
+its findings do not count toward the score: it has no document shell, so it
+would fail rules about page titles and favicons that it should never satisfy,
+and pooling those would punish you for owning a design system. Packages that
+shadscan cannot audit at all, such as one that does not declare React, are
+listed as skipped with the reason.
+
+Workspaces are found by walking the tree for `package.json` files, so pnpm,
+npm, yarn, bun, Turborepo, Nx and Lerna all work without configuration. A
+workspace containing a single application is scanned exactly as before, so the
+common "app at the root plus shared packages" layout keeps its existing score.
+Use `--project <path>` to scan one package on its own.
 
 ## Web Scanner And Hosted API
 

@@ -181,6 +181,8 @@ interface AgentWorkItem {
   evidence: AuditEvidence[];
   findingIds: string[];
   id: string;
+  /** Workspace-relative package these findings belong to; null outside a workspace scan. */
+  packageDir: string | null;
   priority: ActionablePriority;
   rawScoreImpact: number;
   suggestedFixes: string[];
@@ -312,6 +314,7 @@ const AgentWorkItemSchema = z.object({
   evidence: z.array(AuditEvidenceSchema),
   findingIds: z.array(z.string()).min(1),
   id: z.string(),
+  packageDir: z.string().nullable(),
   priority: ActionablePrioritySchema,
   rawScoreImpact: z.number(),
   suggestedFixes: z.array(z.string()),
@@ -1007,6 +1010,7 @@ const createWorkItem = ({
     findingIds: actionables.map(({ findingId }) => findingId),
     id,
     priority: getWorkItemPriority(actionables),
+    packageDir: actionables[0]?.packageDir ?? null,
     rawScoreImpact: actionables.reduce(
       (total, actionable) => total + actionable.scoreImpact,
       0

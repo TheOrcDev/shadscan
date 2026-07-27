@@ -67,17 +67,17 @@ const getPooledAdapter = (applications: ScannedProject[]): PooledAdapter => {
   return adapters.size === 1 && only ? only : "mixed";
 };
 
-const toWorkspaceReportProject = ({
-  project,
-  report,
-}: ScannedProject): WorkspaceReportProject => ({
+const toWorkspaceReportProject = (
+  { project, report }: ScannedProject,
+  poolsIntoScore: boolean
+): WorkspaceReportProject => ({
   adapter: report.framework.adapter,
   grade: report.grade,
   kind: project.kind,
   kindReason: project.kindReason,
   packageDir: project.packageDir,
   packageName: report.packageName,
-  poolsIntoScore: project.kind === "application",
+  poolsIntoScore,
   score: report.score,
 });
 
@@ -138,11 +138,18 @@ const scanWorkspace = async (
   const applications = scanned.filter(
     (entry) => entry.project.kind === "application"
   );
+  /**
+   * With no application present there is nothing for a library to drag down,
+   * so a library-only workspace pools its libraries rather than reporting an
+   * unassessed score.
+   */
+  const poolsIntoScore = (entry: ScannedProject): boolean =>
+    applications.length === 0 || entry.project.kind === "application";
   const pooledFindings = scanned.flatMap((entry) =>
     prefixFindings(
       entry.report.findings,
       entry.project.packageDir,
-      entry.project.kind === "application"
+      poolsIntoScore(entry)
     )
   );
 
@@ -164,7 +171,9 @@ const scanWorkspace = async (
   const workspaceReport: WorkspaceReport = {
     applicationCount: applications.length,
     kind: workspace.kind,
-    projects: scanned.map(toWorkspaceReportProject),
+    projects: scanned.map((entry) =>
+      toWorkspaceReportProject(entry, poolsIntoScore(entry))
+    ),
     skipped: workspace.skipped,
     truncated: workspace.truncated,
   };
