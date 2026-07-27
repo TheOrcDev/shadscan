@@ -20,7 +20,7 @@
 
 ## Status
 
-- **State**: PLANNED
+- **State**: DONE — ruleset `2026.07.39`
 - **Priority**: P1 — these are false negatives on the officially
   documented shadcn patterns, reported by an external user against a
   first-party adapter.
@@ -35,6 +35,39 @@
 - **Category**: bugfix/detector
 - **Planned at**: 2026-07-27
 - **Reported against**: `@shadscan/cli` 0.2.0, TanStack Start + React
+
+## Outcome (executed 2026-07-27)
+
+Shipped as ruleset `2026.07.39`. Two deliberate deviations from the plan
+as written:
+
+1. **Phase 0 migrated two of the four call sites, not all four.**
+   `high-confidence.ts` and `not-found-recovery-present.ts` have no
+   alias fallback, so adopting the shared resolver would make them
+   resolve *more* modules. That is a behavior change, and Phase 0 was
+   specified as byte-identical. They keep their own resolvers; the
+   consolidation is a follow-up.
+2. **Phase 2 needed a second hop for the link.** Splitting the provider
+   from the sidebar was not sufficient on real projects: a sidebar
+   almost never holds its own links, it renders a nav component that
+   does. Requiring `<a>`/`<Link>` beside `<Sidebar>` was the same
+   single-file assumption one level down. Found by burn-in, not by the
+   fixtures — `satnaing/shadcn-admin` was still flagged after Phase 2.
+
+Burn-in covered four public projects. Exactly one status changed:
+
+| Project | Adapter | Score | Flip |
+|---|---|---|---|
+| `shadcn-ui/ui` (apps/v4) | next-app-router | 34 → 34 | none |
+| `shadcn/taxonomy` | next-hybrid-router | 44 → 44 | none |
+| `dub` (apps/web) | next-app-router | 21 → 21 | none |
+| `satnaing/shadcn-admin` | vite-react | 38 → 41 | `mobile-nav-present` fail → pass |
+
+The single flip was verified by hand as a corrected false negative: Sheet
+runtime at `ui/sidebar.tsx:182`, trigger at `layout/header.tsx:44`, links
+at `nav-group.tsx:74`, mounted through
+`authenticated-layout` → `AppSidebar` → `Sidebar` → `NavGroup`. Repeated
+runs are byte-identical.
 
 ## Current State (verified 2026-07-27, at HEAD `29f716a`)
 

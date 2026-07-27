@@ -6,6 +6,47 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- Three false negatives reported in
+  [#10](https://github.com/TheOrcDev/shadscan/issues/10), all caused by
+  rules matching within a single lexical scope while idiomatic React
+  composition spreads the implementation across files (ruleset
+  `2026.07.39`):
+  - `theme-hotkey-present` now recognizes declarative registrations from
+    `@tanstack/react-hotkeys` and `react-hotkeys-hook`, resolved through
+    the import so a local hook of the same name does not qualify. The two
+    libraries express "do not fire while typing" with opposite polarity —
+    TanStack's `ignoreInputs` (whose default is conditional on the key
+    spec) versus `react-hotkeys-hook`'s `enableOnFormTags` (already
+    guarded by default) — so each is evaluated on its own terms. A key
+    spec that is not a static literal, or options behind an identifier,
+    still fails.
+  - `mobile-nav-present` no longer requires `<SidebarProvider>`,
+    `<Sidebar>` and a link in one file. The provider mount and the
+    sidebar composition are looked up separately and then linked by
+    resolving the provider's children, and the link may live in a nav
+    sub-component one hop below `<Sidebar>`. An `app-sidebar` module that
+    nothing mounts, one rendered outside the provider, and an empty
+    sidebar shell all still fail.
+  - `async-action-pending-state` now follows a pending value through JSX
+    props into the component that owns the trigger, across at most two
+    boundaries, tracking renames and recognizing `mutation.isPending`.
+    Spread props, unresolvable or external targets, ambiguous exports and
+    computed values all end the chain rather than being assumed sound,
+    and the failure message says where it stopped.
+
+  Projects using these idioms will see their score rise on upgrade
+  without any code change; these three rules are worth 12 points
+  combined.
+
+### Changed
+
+- Module resolution, previously reimplemented in five places, is shared
+  by the rules that need it, and the confined TypeScript host and parsed
+  compiler options are now built once per project instead of once per
+  rule.
+
 ## 0.5.0 - 2026-07-25
 
 ### Added
