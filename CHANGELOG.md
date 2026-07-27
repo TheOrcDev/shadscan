@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.7.0 - 2026-07-27
+
 ### Added
 
 - Monorepo support. Running shadscan at a workspace root now audits every
