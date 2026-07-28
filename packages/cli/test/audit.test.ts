@@ -102,6 +102,29 @@ describe("runAudit", () => {
     ).rejects.toBe(deadlineError);
   });
 
+  it("allows timers to advance between synchronous rules", async () => {
+    const rootDir = await createReactFixture();
+    let timerAdvanced = false;
+
+    await runAudit(rootDir, {
+      rules: [
+        createRule({
+          id: "schedule-timer",
+          run: () => {
+            setImmediate(() => {
+              timerAdvanced = true;
+            });
+
+            return { status: "pass" };
+          },
+        }),
+        createRule({ id: "next-synchronous-rule" }),
+      ],
+    });
+
+    expect(timerAdvanced).toBe(true);
+  });
+
   it("validates the JSON report contract", async () => {
     const rootDir = await createReactFixture();
     await writeFixtureFile(
