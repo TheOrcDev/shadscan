@@ -499,6 +499,28 @@ const renderScanOutput = ({
   return renderHumanReport(outputReport, { includeRoast, terminal });
 };
 
+const runProjectScanPhases = async ({
+  category,
+  progress,
+  projectPath,
+}: {
+  category?: AuditCategory;
+  progress: ScanProgress;
+  projectPath: string;
+}): Promise<{ project: ProjectDiscovery; report: AuditReport }> => {
+  const resolvedProjectPath = await progress.run("Resolving project", () =>
+    resolveProjectPath(projectPath)
+  );
+  const project = await progress.run("Discovering app structure", () =>
+    discoverProject(resolvedProjectPath)
+  );
+  const report = await progress.run("Evaluating UI rules", () =>
+    scanProject(project.rootDir, { category })
+  );
+
+  return { project, report };
+};
+
 const runScanAction = async (
   projectPath: string,
   options: CliOptions,
@@ -516,17 +538,11 @@ const runScanAction = async (
     outputFormat === "human" &&
       canPromptInteractively(options.interactive)
   );
-  const resolvedProjectPath = await progress.run("Resolving project", () =>
-    resolveProjectPath(projectPath)
-  );
-  const project = await progress.run("Discovering app structure", () =>
-    discoverProject(resolvedProjectPath)
-  );
-  const report = await progress.run("Evaluating UI rules", () =>
-    scanProject(project.rootDir, {
-      category: options.category,
-    })
-  );
+  const { project, report } = await runProjectScanPhases({
+    category: options.category,
+    progress,
+    projectPath,
+  });
   const output = await progress.run("Preparing report", () =>
     renderScanOutput({ includeRoast, outputFormat, report })
   );
@@ -560,16 +576,11 @@ const runSetupAction = async (
   options: SetupOptions
 ): Promise<void> => {
   const progress = createCliScanProgress(canPromptInteractively());
-  const resolvedProjectPath = await progress.run("Resolving project", () =>
-    resolveProjectPath(projectPath)
-  );
-  const project = await progress.run("Discovering app structure", () =>
-    discoverProject(resolvedProjectPath)
-  );
-  const report = await progress.run("Evaluating UI rules", () =>
-    scanProject(project.rootDir)
-  );
-  const prepared = await progress.run("Preparing report", async () => {
+  const { project, report } = await runProjectScanPhases({
+    progress,
+    projectPath,
+  });
+  const preparedSetup = await progress.run("Preparing report", async () => {
     const plan = await buildPreCommitPlan({ project, report });
 
     return {
@@ -578,8 +589,8 @@ const runSetupAction = async (
     };
   });
   progress.finish();
-  process.stdout.write(prepared.output);
-  const { plan } = prepared;
+  process.stdout.write(preparedSetup.output);
+  const { plan } = preparedSetup;
 
   if (options.dryRun || plan.mode === "not-needed") {
     return;

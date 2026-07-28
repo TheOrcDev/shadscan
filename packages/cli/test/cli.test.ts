@@ -468,6 +468,28 @@ describe("CLI contract", () => {
     }
   });
 
+  it("suppresses progress when stderr is not a TTY", async () => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+    Object.defineProperty(process.stderr, "isTTY", {
+      configurable: true,
+      value: false,
+    });
+
+    try {
+      const output = await captureStreams(
+        ["--category", "forms", "--no-roast"],
+        fixture.rootDir
+      );
+
+      expect(output.stderr).not.toContain("Resolving project");
+      expect(output.stderr).not.toContain("Evaluating UI rules");
+    } finally {
+      restoreTerminal();
+      await fixture.cleanup();
+    }
+  });
+
   it("routes JSON-selected parser failures through the JSON error contract", async () => {
     const writeErr = vi.spyOn(process.stderr, "write");
 
