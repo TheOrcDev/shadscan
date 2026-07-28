@@ -13,7 +13,7 @@
 
 ## Status
 
-- **State**: IN PROGRESS
+- **State**: DONE (`56a3dfc`, `579afad`, `0cf5b45`)
 - **Priority**: P1
 - **Effort**: M
 - **Risk**: MEDIUM - terminal animation must stop on every success and error
