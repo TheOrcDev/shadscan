@@ -13,7 +13,11 @@ import {
   launchAgentCli,
   parseAgentId,
 } from "./agent-cli";
-import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
+import {
+  AUDIT_CATEGORIES,
+  type AuditCategory,
+  type AuditReport,
+} from "./audit";
 import { copyToClipboard } from "./clipboard";
 import {
   discoverProject,
@@ -45,6 +49,7 @@ import {
   stripRoasts,
 } from "./render-human";
 import { scanProject } from "./scan";
+import { createScanProgress, type ScanProgress } from "./scan-progress";
 import { resolveTerminalCapabilities } from "./terminal-capabilities";
 
 const VERSION = packageJson.version;
@@ -155,6 +160,22 @@ const canPromptInteractively = (enabled = true): boolean =>
       SHADSCAN_INTERACTIVE: process.env.SHADSCAN_INTERACTIVE,
     },
     terminal: getInteractiveTerminal(),
+  });
+
+const createCliScanProgress = (enabled: boolean): ScanProgress =>
+  createScanProgress({
+    enabled,
+    output: process.stderr,
+    terminal: resolveTerminalCapabilities({
+      columns: process.stderr.columns,
+      env: {
+        CI: process.env.CI,
+        FORCE_COLOR: process.env.FORCE_COLOR,
+        NO_COLOR: process.env.NO_COLOR,
+        TERM: process.env.TERM,
+      },
+      isTTY: process.stderr.isTTY === true,
+    }),
   });
 
 const resolveAgentTrustRoot = async (startPath: string): Promise<string> => {
@@ -445,6 +466,39 @@ const validateScanActionOptions = (
   }
 };
 
+const renderScanOutput = ({
+  includeRoast,
+  outputFormat,
+  report,
+}: {
+  includeRoast: boolean;
+  outputFormat: OutputFormat;
+  report: AuditReport;
+}): string => {
+  const outputReport = includeRoast ? report : stripRoasts(report);
+
+  if (outputFormat === "json") {
+    return `${JSON.stringify(outputReport, null, 2)}\n`;
+  }
+
+  if (outputFormat === "prompt") {
+    return renderAgentPrompt(outputReport);
+  }
+
+  const terminal = resolveTerminalCapabilities({
+    columns: process.stdout.columns,
+    env: {
+      CI: process.env.CI,
+      FORCE_COLOR: process.env.FORCE_COLOR,
+      NO_COLOR: process.env.NO_COLOR,
+      TERM: process.env.TERM,
+    },
+    isTTY: process.stdout.isTTY === true,
+  });
+
+  return renderHumanReport(outputReport, { includeRoast, terminal });
+};
+
 const runScanAction = async (
   projectPath: string,
   options: CliOptions,
@@ -458,32 +512,26 @@ const runScanAction = async (
     (roastWasSpecified
       ? options.roast !== false
       : outputFormat === "human" && !process.env.CI);
-  const resolvedProjectPath = await resolveProjectPath(projectPath);
-  const project = await discoverProject(resolvedProjectPath);
-  const report = await scanProject(project.rootDir, {
-    category: options.category,
-  });
-  const outputReport = includeRoast ? report : stripRoasts(report);
-
-  if (outputFormat === "json") {
-    process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
-  } else if (outputFormat === "prompt") {
-    process.stdout.write(renderAgentPrompt(outputReport));
-  } else {
-    const terminal = resolveTerminalCapabilities({
-      columns: process.stdout.columns,
-      env: {
-        CI: process.env.CI,
-        FORCE_COLOR: process.env.FORCE_COLOR,
-        NO_COLOR: process.env.NO_COLOR,
-        TERM: process.env.TERM,
-      },
-      isTTY: process.stdout.isTTY === true,
-    });
-    process.stdout.write(
-      renderHumanReport(outputReport, { includeRoast, terminal })
-    );
-  }
+  const progress = createCliScanProgress(
+    outputFormat === "human" &&
+      canPromptInteractively(options.interactive)
+  );
+  const resolvedProjectPath = await progress.run("Resolving project", () =>
+    resolveProjectPath(projectPath)
+  );
+  const project = await progress.run("Discovering app structure", () =>
+    discoverProject(resolvedProjectPath)
+  );
+  const report = await progress.run("Evaluating UI rules", () =>
+    scanProject(project.rootDir, {
+      category: options.category,
+    })
+  );
+  const output = await progress.run("Preparing report", () =>
+    renderScanOutput({ includeRoast, outputFormat, report })
+  );
+  progress.finish();
+  process.stdout.write(output);
 
   if (
     options.failUnder !== undefined &&
@@ -511,14 +559,27 @@ const runSetupAction = async (
   projectPath: string,
   options: SetupOptions
 ): Promise<void> => {
-  const resolvedProjectPath = await resolveProjectPath(projectPath);
-  const project = await discoverProject(resolvedProjectPath);
-  const report = await scanProject(project.rootDir);
-  const plan = await buildPreCommitPlan({ project, report });
-
-  process.stdout.write(
-    `Current Shadscan score: ${getPreCommitFloor(report)}/100\n${formatPreCommitInstallPlan(plan)}`
+  const progress = createCliScanProgress(canPromptInteractively());
+  const resolvedProjectPath = await progress.run("Resolving project", () =>
+    resolveProjectPath(projectPath)
   );
+  const project = await progress.run("Discovering app structure", () =>
+    discoverProject(resolvedProjectPath)
+  );
+  const report = await progress.run("Evaluating UI rules", () =>
+    scanProject(project.rootDir)
+  );
+  const prepared = await progress.run("Preparing report", async () => {
+    const plan = await buildPreCommitPlan({ project, report });
+
+    return {
+      output: `Current Shadscan score: ${getPreCommitFloor(report)}/100\n${formatPreCommitInstallPlan(plan)}`,
+      plan,
+    };
+  });
+  progress.finish();
+  process.stdout.write(prepared.output);
+  const { plan } = prepared;
 
   if (options.dryRun || plan.mode === "not-needed") {
     return;

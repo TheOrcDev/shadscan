@@ -55,6 +55,18 @@ bunx @shadscan/cli
 Shadscan requires Node.js 18 or newer. Commands resolve to the latest stable
 release; prereleases are published under the `next` tag (`@shadscan/cli@next`).
 
+Interactive human scans show progress immediately and keep each completed phase
+above the final report:
+
+```text
+✓ Resolving project
+✓ Discovering app structure
+✓ Evaluating UI rules
+✓ Preparing report
+```
+
+JSON, prompt, CI, piped, redirected, and `--no-interactive` output stay quiet.
+
 ## What You Get
 
 ```text

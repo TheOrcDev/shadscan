@@ -6,6 +6,12 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- Interactive human scans and pre-commit setup now show an immediate,
+  persistent four-phase progress checklist on stderr, while JSON, prompt, CI,
+  piped, redirected, and explicitly non-interactive output remain unchanged.
+
 ## 0.6.1 - 2026-07-27
 
 ### Fixed

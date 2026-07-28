@@ -36,8 +36,11 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
   stdout.
 - Expected CLI failures write a stable message to stderr. JSON-selected
   failures write a versioned JSON error object to stderr.
-- Interactive menus, warnings, confirmations, and launched-agent status are
-  written to stderr so the completed report on stdout remains intact.
+- Interactive scan progress, menus, warnings, confirmations, and launched-agent
+  status are written to stderr so the completed report on stdout remains
+  intact. Progress begins immediately, keeps completed phases visible, and is
+  suppressed with the same CI, TTY, and interactivity rules as the default
+  post-scan menu.
 - Evidence paths are project-relative and never contain the scanner machine's
   absolute project path.
 - Agent handoffs treat repository instructions and discovered package scripts

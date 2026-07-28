@@ -81,6 +81,37 @@ const captureOutput = async (
   }
 };
 
+const captureStreams = async (
+  args: string[],
+  cwd = path.resolve(testDirectory, "../../..")
+): Promise<{ stderr: string; stdout: string }> => {
+  const previousCwd = process.cwd();
+  let stderr = "";
+  let stdout = "";
+  const writeOutput = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation((chunk) => {
+      stdout += String(chunk);
+      return true;
+    });
+  const writeError = vi
+    .spyOn(process.stderr, "write")
+    .mockImplementation((chunk) => {
+      stderr += String(chunk);
+      return true;
+    });
+
+  try {
+    process.chdir(cwd);
+    await createProgram().parseAsync(["node", "shadscan", ...args]);
+    return { stderr, stdout };
+  } finally {
+    process.chdir(previousCwd);
+    writeOutput.mockRestore();
+    writeError.mockRestore();
+  }
+};
+
 afterEach(() => {
   process.exitCode = undefined;
   vi.restoreAllMocks();
@@ -344,6 +375,95 @@ describe("CLI contract", () => {
       expect(output).toContain("Shadscan pre-commit plan");
       expect(output).toContain("Mode: manual");
     } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("shows the same progress phases for interactive scans and setup", async () => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+    const previousEnvironment = {
+      CI: process.env.CI,
+      SHADSCAN_INTERACTIVE: process.env.SHADSCAN_INTERACTIVE,
+    };
+    Reflect.deleteProperty(process.env, "CI");
+    Reflect.deleteProperty(process.env, "SHADSCAN_INTERACTIVE");
+
+    try {
+      const scan = await captureStreams(
+        [
+          "--category",
+          "forms",
+          "--apply",
+          "--no-roast",
+        ],
+        fixture.rootDir
+      );
+      const setup = await captureStreams(
+        ["setup", fixture.rootDir, "--pre-commit", "--dry-run"],
+        fixture.rootDir
+      );
+
+      for (const output of [scan, setup]) {
+        expect(output.stderr).toContain("Resolving project");
+        expect(output.stderr).toContain("Discovering app structure");
+        expect(output.stderr).toContain("Evaluating UI rules");
+        expect(output.stderr).toContain("Preparing report");
+      }
+      expect(scan.stdout).toContain("Your shadscan score:");
+      expect(setup.stdout).toContain("Current Shadscan score:");
+    } finally {
+      restoreTerminal();
+      restoreEnvironment(previousEnvironment);
+      await fixture.cleanup();
+    }
+  });
+
+  it.each([
+    {
+      args: ["--json"],
+      label: "JSON output",
+    },
+    {
+      args: ["--prompt"],
+      label: "prompt output",
+    },
+    {
+      args: ["--category", "forms", "--no-interactive", "--no-roast"],
+      label: "explicitly non-interactive output",
+    },
+  ])("suppresses progress for $label", async ({ args }) => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+
+    try {
+      const output = await captureStreams(args, fixture.rootDir);
+
+      expect(output.stderr).not.toContain("Resolving project");
+      expect(output.stderr).not.toContain("Evaluating UI rules");
+    } finally {
+      restoreTerminal();
+      await fixture.cleanup();
+    }
+  });
+
+  it("suppresses progress in CI even when streams are TTYs", async () => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+    const previousEnvironment = { CI: process.env.CI };
+    process.env.CI = "1";
+
+    try {
+      const output = await captureStreams(
+        ["--category", "forms", "--no-roast"],
+        fixture.rootDir
+      );
+
+      expect(output.stderr).not.toContain("Resolving project");
+      expect(output.stderr).not.toContain("Evaluating UI rules");
+    } finally {
+      restoreTerminal();
+      restoreEnvironment(previousEnvironment);
       await fixture.cleanup();
     }
   });
