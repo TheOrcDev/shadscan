@@ -17,6 +17,7 @@ the executor. Each plan is marked DONE with its landing commit when complete.
 | [011](011-astro-react-adapter.md) | Astro (React islands) framework adapter | P1 | XL | - | DONE (`0edefab`) |
 | [012](012-react-router-framework-adapter.md) | React Router (framework mode) adapter | P1 | L | - | DONE (`97a874c`) |
 | [013](013-cross-scope-rule-evidence.md) | Cross-scope rule evidence (issue #10 false negatives) | P1 | L | - | DONE (`5c37154`) |
+| [014](014-interactive-scan-progress.md) | Interactive scan progress checklist | P1 | M | - | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 
