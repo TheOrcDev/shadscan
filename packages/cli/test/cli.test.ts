@@ -24,6 +24,12 @@ import {
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const PLAIN_SCORE_PATTERN =
   /Your shadscan score: \[[#-]{16}\] \d+\/100 \(Grade [A-F]\)/;
+const PROGRESS_PHASE_LABELS = [
+  "Resolving project",
+  "Discovering app structure",
+  "Evaluating UI rules",
+  "Preparing report",
+] as const;
 
 const setInteractiveTerminal = (): (() => void) => {
   const streams = [process.stdin, process.stdout, process.stderr];
@@ -409,10 +415,10 @@ describe("CLI contract", () => {
       );
 
       for (const output of [scan, setup]) {
-        expect(output.stderr).toContain("Resolving project");
-        expect(output.stderr).toContain("Discovering app structure");
-        expect(output.stderr).toContain("Evaluating UI rules");
-        expect(output.stderr).toContain("Preparing report");
+        for (const label of PROGRESS_PHASE_LABELS) {
+          expect(output.stderr).toContain(label);
+          expect(output.stdout).not.toContain(label);
+        }
       }
       expect(scan.stdout).toContain("Your shadscan score:");
       expect(setup.stdout).toContain("Current Shadscan score:");
@@ -437,6 +443,10 @@ describe("CLI contract", () => {
     };
     Reflect.deleteProperty(process.env, "CI");
     Reflect.deleteProperty(process.env, "SHADSCAN_INTERACTIVE");
+    Object.defineProperty(process.stdout, "isTTY", {
+      configurable: true,
+      value: false,
+    });
 
     try {
       const output = await captureStreams(
@@ -444,12 +454,13 @@ describe("CLI contract", () => {
         rootDir
       );
 
-      expect(output.stderr).toContain("Resolving project");
-      expect(output.stderr).toContain("Discovering app structure");
-      expect(output.stderr).toContain("Evaluating UI rules");
-      expect(output.stderr).toContain("Preparing report");
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).toContain(label);
+        expect(output.stdout).not.toContain(label);
+      }
       expect(output.stdout).toContain("Workspace:");
       expect(output.stdout).toContain("Your shadscan score:");
+      expect(output.stdout).not.toContain("\u001B");
     } finally {
       restoreTerminal();
       restoreEnvironment(previousEnvironment);
@@ -477,8 +488,9 @@ describe("CLI contract", () => {
     try {
       const output = await captureStreams(args, fixture.rootDir);
 
-      expect(output.stderr).not.toContain("Resolving project");
-      expect(output.stderr).not.toContain("Evaluating UI rules");
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
     } finally {
       restoreTerminal();
       await fixture.cleanup();
@@ -497,8 +509,9 @@ describe("CLI contract", () => {
         fixture.rootDir
       );
 
-      expect(output.stderr).not.toContain("Resolving project");
-      expect(output.stderr).not.toContain("Evaluating UI rules");
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
     } finally {
       restoreTerminal();
       restoreEnvironment(previousEnvironment);
@@ -520,8 +533,9 @@ describe("CLI contract", () => {
         fixture.rootDir
       );
 
-      expect(output.stderr).not.toContain("Resolving project");
-      expect(output.stderr).not.toContain("Evaluating UI rules");
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
     } finally {
       restoreTerminal();
       await fixture.cleanup();

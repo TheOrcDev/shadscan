@@ -63,7 +63,9 @@ above the final report:
 ✓ Preparing report
 ```
 
-JSON, prompt, CI, piped, redirected, and `--no-interactive` output stay quiet.
+JSON, prompt, CI, non-TTY stderr, and `--no-interactive` output stay quiet.
+Redirecting stdout keeps the report clean while progress remains on an eligible
+stderr terminal.
 
 Every interactive scan ends with a short menu — pick with the arrow keys and
 Enter: copy the agent handoff to your clipboard, print it, launch an installed

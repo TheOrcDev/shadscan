@@ -65,7 +65,9 @@ above the final report:
 ✓ Preparing report
 ```
 
-JSON, prompt, CI, piped, redirected, and `--no-interactive` output stay quiet.
+JSON, prompt, CI, non-TTY stderr, and `--no-interactive` output stay quiet.
+Redirecting stdout keeps the report clean while progress remains on an eligible
+stderr terminal.
 
 ## What You Get
 

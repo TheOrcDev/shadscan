@@ -166,21 +166,24 @@ const canPromptInteractively = (enabled = true): boolean =>
     terminal: getInteractiveTerminal(),
   });
 
-const createCliScanProgress = (enabled: boolean): ScanProgress =>
-  createScanProgress({
-    enabled,
-    output: process.stderr,
-    terminal: resolveTerminalCapabilities({
-      columns: process.stderr.columns,
-      env: {
-        CI: process.env.CI,
-        FORCE_COLOR: process.env.FORCE_COLOR,
-        NO_COLOR: process.env.NO_COLOR,
-        TERM: process.env.TERM,
-      },
-      isTTY: process.stderr.isTTY === true,
-    }),
+const createCliScanProgress = (enabled: boolean): ScanProgress => {
+  const terminal = resolveTerminalCapabilities({
+    columns: process.stderr.columns,
+    env: {
+      CI: process.env.CI,
+      FORCE_COLOR: process.env.FORCE_COLOR,
+      NO_COLOR: process.env.NO_COLOR,
+      TERM: process.env.TERM,
+    },
+    isTTY: process.stderr.isTTY === true,
   });
+
+  return createScanProgress({
+    enabled: enabled && terminal.unicode,
+    output: process.stderr,
+    terminal,
+  });
+};
 
 const resolveAgentTrustRoot = async (startPath: string): Promise<string> => {
   let currentPath = path.resolve(startPath);
@@ -590,8 +593,7 @@ const runScanAction = async (
       ? options.roast !== false
       : outputFormat === "human" && !process.env.CI);
   const progress = createCliScanProgress(
-    outputFormat === "human" &&
-      canPromptInteractively(options.interactive)
+    outputFormat === "human" && options.interactive
   );
   const resolvedProjectPath = await progress.run("Resolving project", () =>
     resolveProjectPath(projectPath)
