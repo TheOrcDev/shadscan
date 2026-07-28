@@ -13,7 +13,7 @@
 
 ## Status
 
-- **State**: DONE (`56a3dfc`)
+- **State**: IN PROGRESS
 - **Priority**: P1
 - **Effort**: M
 - **Risk**: MEDIUM - terminal animation must stop on every success and error
@@ -108,6 +108,25 @@ implementation executes tasks without writing output or starting timers.
 Do not hide the cursor, enable raw input, install process signal handlers, or
 change stdin behavior. The timer must not keep Node alive.
 
+### Responsive animation during rule evaluation
+
+The initial renderer implementation landed in `56a3dfc`, but testing against a
+real scan exposed an event-loop starvation case: consecutive rules can perform
+synchronous AST work and resolve without giving timer callbacks a macrotask
+turn. The progress timer therefore remains healthy but cannot render another
+frame until rule evaluation completes.
+
+Keep the renderer timer-based and add a dependency-free cooperative event-loop
+yield between evaluated audit rules. This preserves the in-process audit
+architecture, report contents, rule order, error propagation, and public
+`scanProject` contract while allowing terminal animation and abort delivery to
+advance throughout a multi-rule scan.
+
+Do not move the audit into a worker thread or child process. A single unusually
+long synchronous rule may still pause animation until that rule returns; the
+yield boundary guarantees responsiveness between rules without requiring a
+broader rule API redesign.
+
 ## Command integration and data flow
 
 Progress eligibility is decided by the command layer, not the renderer:
@@ -177,6 +196,10 @@ Extend CLI integration coverage:
 - `--json`, `--prompt`, `--no-interactive`, CI, and non-TTY runs produce no
   progress output;
 - score gates, errors, report contents, and exit statuses remain unchanged.
+
+Add a regression test at the audit runner seam that executes multiple
+synchronous rules while a timer is pending. It must fail when the rule loop
+starves the timer and pass once the cooperative yield allows the timer to run.
 
 ## Documentation
 
