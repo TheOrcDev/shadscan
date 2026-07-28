@@ -861,4 +861,4 @@ export type {
   ProjectDiscoveryErrorCode,
   SourceCoverage,
 };
-export { discoverProject, ProjectDiscoveryError };
+export { discoverProject, fileExists, ProjectDiscoveryError };

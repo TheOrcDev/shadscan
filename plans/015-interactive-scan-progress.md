@@ -1,4 +1,4 @@
-# Plan 014: Interactive scan progress checklist
+# Plan 015: Interactive scan progress checklist
 
 > **Executor instructions**: Add a dependency-free, CLI-owned progress
 > checklist for interactive human scans. Keep reports on stdout, write progress

@@ -34,6 +34,7 @@ const createReport = (): AuditReport => ({
           },
         ],
         findingId: "metadata-configured",
+        packageDir: null,
         priority: "P1",
         scoreImpact: 3,
         severity: "warning",
@@ -73,6 +74,7 @@ const createReport = (): AuditReport => ({
         ],
         findingIds: ["metadata-configured"],
         id: "metadata-configured",
+        packageDir: null,
         priority: "P1",
         rawScoreImpact: 3,
         suggestedFixes: ["Export metadata."],
@@ -121,6 +123,7 @@ const createReport = (): AuditReport => ({
       ],
       id: "metadata-configured",
       impactsScore: true,
+      packageDir: null,
       maxScore: 3,
       remediation: "Export metadata.",
       roast: "A page title would not hurt you.",
@@ -165,6 +168,7 @@ const createReport = (): AuditReport => ({
     vite: null,
   },
   warnings: [],
+  workspace: null,
 });
 
 describe("renderHumanReport", () => {

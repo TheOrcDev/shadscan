@@ -20,7 +20,7 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 8 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 9 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
@@ -109,6 +109,26 @@ interface AuditRule {
   title: string;
 }
 
+interface WorkspaceReportProject {
+  adapter: string;
+  grade: AuditGrade | null;
+  kind: "application" | "library";
+  kindReason: string;
+  packageDir: string;
+  packageName: string | null;
+  /** Applications feed the pooled score; libraries are reported but excluded. */
+  poolsIntoScore: boolean;
+  score: number | null;
+}
+
+interface WorkspaceReport {
+  applicationCount: number;
+  kind: string;
+  projects: WorkspaceReportProject[];
+  skipped: { packageDir: string; reason: string }[];
+  truncated: number;
+}
+
 interface AuditFinding {
   category: AuditCategory;
   confidence: Confidence;
@@ -117,6 +137,8 @@ interface AuditFinding {
   id: string;
   impactsScore: boolean;
   maxScore: number;
+  /** Workspace-relative package the finding came from; null outside a workspace scan. */
+  packageDir: string | null;
   remediation: string | null;
   roast: string | null;
   score: number;
@@ -142,6 +164,8 @@ interface AgentActionable {
   disposition: ActionableDisposition;
   evidence: AuditEvidence[];
   findingId: string;
+  /** Workspace-relative package to work in; null outside a workspace scan. */
+  packageDir: string | null;
   priority: ActionablePriority;
   scoreImpact: number;
   severity: AuditSeverity;
@@ -158,6 +182,8 @@ interface AgentWorkItem {
   evidence: AuditEvidence[];
   findingIds: string[];
   id: string;
+  /** Workspace-relative package these findings belong to; null outside a workspace scan. */
+  packageDir: string | null;
   priority: ActionablePriority;
   rawScoreImpact: number;
   suggestedFixes: string[];
@@ -188,7 +214,10 @@ interface AuditReport {
   durationMs: number;
   engineVersion: string;
   findings: AuditFinding[];
-  framework: ProjectDiscovery["framework"];
+  framework: {
+    adapter: ProjectDiscovery["framework"]["adapter"] | "mixed";
+    evidence: string[];
+  };
   grade: AuditGrade | null;
   maxScore: 100;
   packageManager: ProjectDiscovery["packageManager"];
@@ -204,6 +233,8 @@ interface AuditReport {
   source: ScanSource;
   versions: ProjectDiscovery["versions"];
   warnings: string[];
+  /** Populated only by a workspace scan; null for a single-package scan. */
+  workspace: WorkspaceReport | null;
 }
 
 interface RunAuditOptions {
@@ -251,6 +282,7 @@ const AuditFindingSchema = z.object({
   id: z.string(),
   impactsScore: z.boolean(),
   maxScore: z.number(),
+  packageDir: z.string().nullable(),
   remediation: z.string().nullable(),
   roast: z.string().nullable(),
   score: z.number(),
@@ -266,6 +298,7 @@ const AgentActionableSchema = z.object({
   disposition: ActionableDispositionSchema,
   evidence: z.array(AuditEvidenceSchema),
   findingId: z.string(),
+  packageDir: z.string().nullable(),
   priority: ActionablePrioritySchema,
   scoreImpact: z.number(),
   severity: SeveritySchema,
@@ -282,6 +315,7 @@ const AgentWorkItemSchema = z.object({
   evidence: z.array(AuditEvidenceSchema),
   findingIds: z.array(z.string()).min(1),
   id: z.string(),
+  packageDir: z.string().nullable(),
   priority: ActionablePrioritySchema,
   rawScoreImpact: z.number(),
   suggestedFixes: z.array(z.string()),
@@ -301,6 +335,25 @@ const AgentHandoffSchema = z.object({
   suggestedSkills: z.array(z.string()),
   verification: AgentVerificationSchema,
   workItems: z.array(AgentWorkItemSchema),
+});
+
+const WorkspaceReportSchema = z.object({
+  applicationCount: z.number(),
+  kind: z.string(),
+  projects: z.array(
+    z.object({
+      adapter: z.string(),
+      grade: z.enum(["A", "B", "C", "D", "F"]).nullable(),
+      kind: z.enum(["application", "library"]),
+      kindReason: z.string(),
+      packageDir: z.string(),
+      packageName: z.string().nullable(),
+      poolsIntoScore: z.boolean(),
+      score: z.number().nullable(),
+    })
+  ),
+  skipped: z.array(z.object({ packageDir: z.string(), reason: z.string() })),
+  truncated: z.number(),
 });
 
 const AuditReportSchema = z.object({
@@ -327,6 +380,8 @@ const AuditReportSchema = z.object({
       "astro-react",
       "generic-react",
       "laravel-inertia-react",
+      /** Workspace scans only: the pooled applications use different adapters. */
+      "mixed",
       "next-app-router",
       "next-hybrid-router",
       "next-pages-router",
@@ -367,6 +422,7 @@ const AuditReportSchema = z.object({
     vite: z.string().nullable(),
   }),
   warnings: z.array(z.string()),
+  workspace: WorkspaceReportSchema.nullable(),
 });
 
 const getGrade = (score: number): AuditGrade => {
@@ -503,6 +559,7 @@ const normalizeFinding = (
     id: rule.id,
     impactsScore,
     maxScore,
+    packageDir: null,
     remediation: result.remediation ?? null,
     roast: result.roast ?? null,
     score,
@@ -954,6 +1011,7 @@ const createWorkItem = ({
     findingIds: actionables.map(({ findingId }) => findingId),
     id,
     priority: getWorkItemPriority(actionables),
+    packageDir: actionables[0]?.packageDir ?? null,
     rawScoreImpact: actionables.reduce(
       (total, actionable) => total + actionable.scoreImpact,
       0
@@ -964,51 +1022,84 @@ const createWorkItem = ({
   };
 };
 
-const createWorkItems = (
+/**
+ * Pooled reports contain the same rule once per package, so an unqualified
+ * title produces work items an agent cannot tell apart or act on.
+ */
+const qualifyWorkItemTitle = (
+  title: string,
+  packageDir: string | null
+): string => (packageDir ? `${title} (${packageDir})` : title);
+
+const createGroupedWorkItems = (
+  group: (typeof WORK_ITEM_GROUPS)[number],
   actionables: AgentActionable[],
-  projectGates: string[]
+  projectGates: string[],
+  packageDir: string | null
+): AgentWorkItem[] => {
+  const matchingActionables = group.findingIds.flatMap((findingId) => {
+    const actionable = actionables.find(
+      (candidate) => candidate.findingId === findingId
+    );
+    return actionable ? [actionable] : [];
+  });
+
+  if (matchingActionables.length < 2) {
+    return [];
+  }
+
+  const dispositions = new Set(
+    matchingActionables.map(({ disposition }) => disposition)
+  );
+  const workItems: AgentWorkItem[] = [];
+
+  for (const disposition of dispositions) {
+    const groupedActionables = matchingActionables.filter(
+      (actionable) => actionable.disposition === disposition
+    );
+
+    if (groupedActionables.length < 2) {
+      continue;
+    }
+
+    const groupId =
+      dispositions.size === 1 ? group.id : `${group.id}-${disposition}`;
+    workItems.push(
+      createWorkItem({
+        actionables: groupedActionables,
+        id: packageDir ? `${packageDir}:${groupId}` : groupId,
+        projectGates,
+        summary: group.summary,
+        title: qualifyWorkItemTitle(group.title, packageDir),
+      })
+    );
+  }
+
+  return workItems;
+};
+
+const createScopedWorkItems = (
+  actionables: AgentActionable[],
+  projectGates: string[],
+  packageDir: string | null
 ): AgentWorkItem[] => {
   const groupedFindingIds = new Set<string>();
   const workItems: AgentWorkItem[] = [];
 
   for (const group of WORK_ITEM_GROUPS) {
-    const matchingActionables = group.findingIds.flatMap((findingId) => {
-      const actionable = actionables.find(
-        (candidate) => candidate.findingId === findingId
-      );
-      return actionable ? [actionable] : [];
-    });
-
-    if (matchingActionables.length < 2) {
-      continue;
-    }
-
-    const dispositions = new Set(
-      matchingActionables.map(({ disposition }) => disposition)
+    const grouped = createGroupedWorkItems(
+      group,
+      actionables,
+      projectGates,
+      packageDir
     );
 
-    for (const disposition of dispositions) {
-      const groupedActionables = matchingActionables.filter(
-        (actionable) => actionable.disposition === disposition
-      );
-
-      if (groupedActionables.length < 2) {
-        continue;
+    for (const workItem of grouped) {
+      for (const findingId of workItem.findingIds) {
+        groupedFindingIds.add(findingId);
       }
-
-      for (const actionable of groupedActionables) {
-        groupedFindingIds.add(actionable.findingId);
-      }
-      workItems.push(
-        createWorkItem({
-          actionables: groupedActionables,
-          id: dispositions.size === 1 ? group.id : `${group.id}-${disposition}`,
-          projectGates,
-          summary: group.summary,
-          title: group.title,
-        })
-      );
     }
+    workItems.push(...grouped);
   }
 
   for (const actionable of actionables) {
@@ -1019,10 +1110,12 @@ const createWorkItems = (
     workItems.push(
       createWorkItem({
         actionables: [actionable],
-        id: actionable.findingId,
+        id: packageDir
+          ? `${packageDir}:${actionable.findingId}`
+          : actionable.findingId,
         projectGates,
         summary: actionable.summary,
-        title: actionable.title,
+        title: qualifyWorkItemTitle(actionable.title, packageDir),
       })
     );
   }
@@ -1035,6 +1128,43 @@ const createWorkItems = (
       right.rawScoreImpact - left.rawScoreImpact ||
       compareCodeUnits(left.id, right.id)
   );
+};
+
+/**
+ * Work-item grouping matches one actionable per rule, so a pooled report must
+ * be partitioned by package first — otherwise every package after the first
+ * silently loses its grouped items.
+ */
+const createWorkItems = (
+  actionables: AgentActionable[],
+  projectGates: string[]
+): AgentWorkItem[] => {
+  const byPackage = new Map<string | null, AgentActionable[]>();
+
+  for (const actionable of actionables) {
+    const existing = byPackage.get(actionable.packageDir);
+
+    if (existing) {
+      existing.push(actionable);
+    } else {
+      byPackage.set(actionable.packageDir, [actionable]);
+    }
+  }
+
+  const [onlyPackage] = [...byPackage.keys()];
+
+  if (
+    byPackage.size <= 1 &&
+    (onlyPackage === null || onlyPackage === undefined)
+  ) {
+    return createScopedWorkItems(actionables, projectGates, null);
+  }
+
+  return [...byPackage.entries()]
+    .sort(([left], [right]) => compareCodeUnits(left ?? "", right ?? ""))
+    .flatMap(([packageDir, scoped]) =>
+      createScopedWorkItems(scoped, projectGates, packageDir)
+    );
 };
 
 const getSuggestedSkills = ({
@@ -1101,6 +1231,7 @@ const createAgentHandoff = ({
         disposition,
         evidence: finding.evidence,
         findingId: finding.id,
+        packageDir: finding.packageDir,
         priority: getActionablePriority(finding),
         scoreImpact: finding.impactsScore
           ? finding.maxScore - finding.score
@@ -1178,6 +1309,7 @@ const createAuditReport = ({
     kind: "working-tree",
     revision: null,
   },
+  workspace,
 }: {
   category?: AuditCategory;
   durationMs: number;
@@ -1185,6 +1317,7 @@ const createAuditReport = ({
   project: ProjectDiscovery;
   rulesetVersion?: string;
   source?: ScanSource;
+  workspace?: WorkspaceReport | null;
 }): AuditReport => {
   const normalizedFindings = normalizeFindingPaths(findings, project.rootDir);
   const categories = getCategoryScores(normalizedFindings);
@@ -1227,6 +1360,7 @@ const createAuditReport = ({
     source,
     versions: project.versions,
     warnings: project.warnings,
+    workspace: workspace ?? null,
   };
 
   return AuditReportSchema.parse(report);
@@ -1297,6 +1431,8 @@ export type {
   ScanScope,
   ScanSource,
   ScanSourceKind,
+  WorkspaceReport,
+  WorkspaceReportProject,
 };
 export {
   AUDIT_CATEGORIES,

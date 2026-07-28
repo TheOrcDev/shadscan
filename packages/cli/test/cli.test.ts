@@ -16,6 +16,10 @@ import { normalizeCliFailure } from "../src/cli-error";
 import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
 import { createRuleFixture } from "./rule-fixture";
+import {
+  cleanupWorkspaceFixtures,
+  createWorkspaceFixture,
+} from "./workspace-fixture";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const PLAIN_SCORE_PATTERN =
@@ -416,6 +420,40 @@ describe("CLI contract", () => {
       restoreTerminal();
       restoreEnvironment(previousEnvironment);
       await fixture.cleanup();
+    }
+  });
+
+  it("shows progress phases for an interactive workspace scan", async () => {
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "apps/web", preset: "next" },
+        { path: "apps/admin", preset: "vite" },
+      ],
+    });
+    const restoreTerminal = setInteractiveTerminal();
+    const previousEnvironment = {
+      CI: process.env.CI,
+      SHADSCAN_INTERACTIVE: process.env.SHADSCAN_INTERACTIVE,
+    };
+    Reflect.deleteProperty(process.env, "CI");
+    Reflect.deleteProperty(process.env, "SHADSCAN_INTERACTIVE");
+
+    try {
+      const output = await captureStreams(
+        ["--category", "forms", "--no-roast"],
+        rootDir
+      );
+
+      expect(output.stderr).toContain("Resolving project");
+      expect(output.stderr).toContain("Discovering app structure");
+      expect(output.stderr).toContain("Evaluating UI rules");
+      expect(output.stderr).toContain("Preparing report");
+      expect(output.stdout).toContain("Workspace:");
+      expect(output.stdout).toContain("Your shadscan score:");
+    } finally {
+      restoreTerminal();
+      restoreEnvironment(previousEnvironment);
+      await cleanupWorkspaceFixtures();
     }
   });
 
