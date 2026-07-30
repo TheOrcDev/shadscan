@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.8.0 - 2026-07-30
+
 ### Added
 
 - Interactive human scans and pre-commit setup now show an immediate,
