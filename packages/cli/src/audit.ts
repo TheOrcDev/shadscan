@@ -1,4 +1,5 @@
 import path from "node:path";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
 import packageJson from "../package.json";
@@ -1380,6 +1381,7 @@ const runAudit = async (
     project,
   };
   const findings: AuditFinding[] = [];
+  let hasEvaluatedRule = false;
 
   for (const rule of options.rules) {
     options.signal?.throwIfAborted();
@@ -1387,7 +1389,13 @@ const runAudit = async (
       continue;
     }
 
+    if (hasEvaluatedRule) {
+      await yieldToEventLoop();
+      options.signal?.throwIfAborted();
+    }
+
     findings.push(normalizeFinding(rule, await rule.run(context)));
+    hasEvaluatedRule = true;
     options.signal?.throwIfAborted();
   }
 

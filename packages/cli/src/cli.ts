@@ -13,7 +13,11 @@ import {
   launchAgentCli,
   parseAgentId,
 } from "./agent-cli";
-import { AUDIT_CATEGORIES, type AuditCategory } from "./audit";
+import {
+  AUDIT_CATEGORIES,
+  type AuditCategory,
+  type AuditReport,
+} from "./audit";
 import { copyToClipboard } from "./clipboard";
 import {
   discoverProject,
@@ -45,6 +49,7 @@ import {
   stripRoasts,
 } from "./render-human";
 import { scanProject } from "./scan";
+import { createScanProgress, type ScanProgress } from "./scan-progress";
 import { scanWorkspace } from "./scan-workspace";
 import { resolveTerminalCapabilities } from "./terminal-capabilities";
 import { discoverWorkspace } from "./workspace";
@@ -160,6 +165,25 @@ const canPromptInteractively = (enabled = true): boolean =>
     },
     terminal: getInteractiveTerminal(),
   });
+
+const createCliScanProgress = (enabled: boolean): ScanProgress => {
+  const terminal = resolveTerminalCapabilities({
+    columns: process.stderr.columns,
+    env: {
+      CI: process.env.CI,
+      FORCE_COLOR: process.env.FORCE_COLOR,
+      NO_COLOR: process.env.NO_COLOR,
+      TERM: process.env.TERM,
+    },
+    isTTY: process.stderr.isTTY === true,
+  });
+
+  return createScanProgress({
+    enabled: enabled && terminal.unicode,
+    output: process.stderr,
+    terminal,
+  });
+};
 
 const resolveAgentTrustRoot = async (startPath: string): Promise<string> => {
   let currentPath = path.resolve(startPath);
@@ -495,46 +519,59 @@ const runListProjectsAction = async (
   process.stdout.write(`${lines.join("\n")}\n`);
 };
 
-/** Output and exit-code handling shared by single-package and workspace scans. */
-const emitScanReport = ({
+const renderScanOutput = ({
   includeRoast,
-  options,
   outputFormat,
   report,
 }: {
   includeRoast: boolean;
-  options: CliOptions;
   outputFormat: OutputFormat;
-  report: Awaited<ReturnType<typeof scanProject>>;
-}): void => {
+  report: AuditReport;
+}): string => {
   const outputReport = includeRoast ? report : stripRoasts(report);
 
   if (outputFormat === "json") {
-    process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
-  } else if (outputFormat === "prompt") {
-    process.stdout.write(renderAgentPrompt(outputReport));
-  } else {
-    const terminal = resolveTerminalCapabilities({
-      columns: process.stdout.columns,
-      env: {
-        CI: process.env.CI,
-        FORCE_COLOR: process.env.FORCE_COLOR,
-        NO_COLOR: process.env.NO_COLOR,
-        TERM: process.env.TERM,
-      },
-      isTTY: process.stdout.isTTY === true,
-    });
-    process.stdout.write(
-      renderHumanReport(outputReport, { includeRoast, terminal })
-    );
+    return `${JSON.stringify(outputReport, null, 2)}\n`;
   }
 
-  if (
-    options.failUnder !== undefined &&
-    scoreFailsThreshold(report.score, options.failUnder, report.coverage.source)
-  ) {
-    process.exitCode = 1;
+  if (outputFormat === "prompt") {
+    return renderAgentPrompt(outputReport);
   }
+
+  const terminal = resolveTerminalCapabilities({
+    columns: process.stdout.columns,
+    env: {
+      CI: process.env.CI,
+      FORCE_COLOR: process.env.FORCE_COLOR,
+      NO_COLOR: process.env.NO_COLOR,
+      TERM: process.env.TERM,
+    },
+    isTTY: process.stdout.isTTY === true,
+  });
+
+  return renderHumanReport(outputReport, { includeRoast, terminal });
+};
+
+const runProjectScanPhases = async ({
+  category,
+  progress,
+  projectPath,
+}: {
+  category?: AuditCategory;
+  progress: ScanProgress;
+  projectPath: string;
+}): Promise<{ project: ProjectDiscovery; report: AuditReport }> => {
+  const resolvedProjectPath = await progress.run("Resolving project", () =>
+    resolveProjectPath(projectPath)
+  );
+  const project = await progress.run("Discovering app structure", () =>
+    discoverProject(resolvedProjectPath)
+  );
+  const report = await progress.run("Evaluating UI rules", () =>
+    scanProject(project.rootDir, { category })
+  );
+
+  return { project, report };
 };
 
 const runScanAction = async (
@@ -555,61 +592,62 @@ const runScanAction = async (
     (roastWasSpecified
       ? options.roast !== false
       : outputFormat === "human" && !process.env.CI);
-  const resolvedProjectPath = await resolveProjectPath(projectPath);
-  const workspace = options.project
-    ? null
-    : await discoverWorkspace(resolvedProjectPath);
-  /**
-   * Only a lone package at the repository root takes the single-package path,
-   * which keeps plain projects byte-identical. Counting applications instead
-   * broke the very common "one app under apps/, libraries beside it" layout:
-   * it fell through to scanning the root, which declares no React.
-   */
-  const onlyProject =
-    workspace?.projects.length === 1 ? workspace.projects[0] : null;
-  const scanAsWorkspace =
-    workspace !== null &&
-    workspace.projects.length > 0 &&
-    onlyProject?.packageDir !== ".";
-  const selectedPath = options.project
-    ? await resolveProjectPath(
-        path.resolve(resolvedProjectPath, options.project)
-      )
-    : resolvedProjectPath;
+  const progress = createCliScanProgress(
+    outputFormat === "human" && options.interactive
+  );
+  const resolvedProjectPath = await progress.run("Resolving project", () =>
+    resolveProjectPath(projectPath)
+  );
+  const scanTarget = await progress.run(
+    "Discovering app structure",
+    async () => {
+      const workspace = options.project
+        ? null
+        : await discoverWorkspace(resolvedProjectPath);
+      /**
+       * Only a lone package at the repository root takes the single-package
+       * path, which keeps plain projects byte-identical. Counting applications
+       * instead broke the common "one app under apps/, libraries beside it"
+       * layout because the root does not declare React.
+       */
+      const onlyProject =
+        workspace?.projects.length === 1 ? workspace.projects[0] : null;
+      const scanAsWorkspace =
+        workspace !== null &&
+        workspace.projects.length > 0 &&
+        onlyProject?.packageDir !== ".";
 
-  if (scanAsWorkspace) {
-    const report = await scanWorkspace(resolvedProjectPath, {
-      category: options.category,
-    });
-    emitScanReport({ includeRoast, options, outputFormat, report });
-    return;
-  }
+      if (scanAsWorkspace) {
+        return {
+          kind: "workspace" as const,
+          rootDir: resolvedProjectPath,
+        };
+      }
 
-  const project = await discoverProject(selectedPath);
-  const report = await scanProject(project.rootDir, {
-    category: options.category,
-  });
-  const outputReport = includeRoast ? report : stripRoasts(report);
+      const selectedPath = options.project
+        ? await resolveProjectPath(
+            path.resolve(resolvedProjectPath, options.project)
+          )
+        : resolvedProjectPath;
 
-  if (outputFormat === "json") {
-    process.stdout.write(`${JSON.stringify(outputReport, null, 2)}\n`);
-  } else if (outputFormat === "prompt") {
-    process.stdout.write(renderAgentPrompt(outputReport));
-  } else {
-    const terminal = resolveTerminalCapabilities({
-      columns: process.stdout.columns,
-      env: {
-        CI: process.env.CI,
-        FORCE_COLOR: process.env.FORCE_COLOR,
-        NO_COLOR: process.env.NO_COLOR,
-        TERM: process.env.TERM,
-      },
-      isTTY: process.stdout.isTTY === true,
-    });
-    process.stdout.write(
-      renderHumanReport(outputReport, { includeRoast, terminal })
-    );
-  }
+      return {
+        kind: "project" as const,
+        project: await discoverProject(selectedPath),
+      };
+    }
+  );
+  const report = await progress.run("Evaluating UI rules", () =>
+    scanTarget.kind === "workspace"
+      ? scanWorkspace(scanTarget.rootDir, { category: options.category })
+      : scanProject(scanTarget.project.rootDir, {
+          category: options.category,
+        })
+  );
+  const output = await progress.run("Preparing report", () =>
+    renderScanOutput({ includeRoast, outputFormat, report })
+  );
+  progress.finish();
+  process.stdout.write(output);
 
   if (
     options.failUnder !== undefined &&
@@ -617,6 +655,12 @@ const runScanAction = async (
   ) {
     process.exitCode = 1;
   }
+
+  if (scanTarget.kind === "workspace") {
+    return;
+  }
+
+  const { project } = scanTarget;
 
   if (options.apply) {
     await runExplicitApply({ agentId: options.agent, project, report });
@@ -637,14 +681,22 @@ const runSetupAction = async (
   projectPath: string,
   options: SetupOptions
 ): Promise<void> => {
-  const resolvedProjectPath = await resolveProjectPath(projectPath);
-  const project = await discoverProject(resolvedProjectPath);
-  const report = await scanProject(project.rootDir);
-  const plan = await buildPreCommitPlan({ project, report });
+  const progress = createCliScanProgress(canPromptInteractively());
+  const { project, report } = await runProjectScanPhases({
+    progress,
+    projectPath,
+  });
+  const preparedSetup = await progress.run("Preparing report", async () => {
+    const plan = await buildPreCommitPlan({ project, report });
 
-  process.stdout.write(
-    `Current Shadscan score: ${getPreCommitFloor(report)}/100\n${formatPreCommitInstallPlan(plan)}`
-  );
+    return {
+      output: `Current Shadscan score: ${getPreCommitFloor(report)}/100\n${formatPreCommitInstallPlan(plan)}`,
+      plan,
+    };
+  });
+  progress.finish();
+  process.stdout.write(preparedSetup.output);
+  const { plan } = preparedSetup;
 
   if (options.dryRun || plan.mode === "not-needed") {
     return;

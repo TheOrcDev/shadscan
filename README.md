@@ -53,6 +53,20 @@ bunx @shadscan/cli
 Commands resolve to the latest stable release. Prereleases are published
 under the `next` tag (`@shadscan/cli@next`) for early testing.
 
+Interactive human scans show progress immediately and keep each completed phase
+above the final report:
+
+```text
+✓ Resolving project
+✓ Discovering app structure
+✓ Evaluating UI rules
+✓ Preparing report
+```
+
+JSON, prompt, CI, non-TTY stderr, and `--no-interactive` output stay quiet.
+Redirecting stdout keeps the report clean while progress remains on an eligible
+stderr terminal.
+
 Every interactive scan ends with a short menu — pick with the arrow keys and
 Enter: copy the agent handoff to your clipboard, print it, launch an installed
 coding agent, or add a pre-commit score gate. The handoff is highlighted

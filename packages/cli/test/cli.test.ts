@@ -16,10 +16,20 @@ import { normalizeCliFailure } from "../src/cli-error";
 import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
 import { createRuleFixture } from "./rule-fixture";
+import {
+  cleanupWorkspaceFixtures,
+  createWorkspaceFixture,
+} from "./workspace-fixture";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const PLAIN_SCORE_PATTERN =
   /Your shadscan score: \[[#-]{16}\] \d+\/100 \(Grade [A-F]\)/;
+const PROGRESS_PHASE_LABELS = [
+  "Resolving project",
+  "Discovering app structure",
+  "Evaluating UI rules",
+  "Preparing report",
+] as const;
 
 const setInteractiveTerminal = (): (() => void) => {
   const streams = [process.stdin, process.stdout, process.stderr];
@@ -78,6 +88,37 @@ const captureOutput = async (
   } finally {
     process.chdir(previousCwd);
     write.mockRestore();
+  }
+};
+
+const captureStreams = async (
+  args: string[],
+  cwd = path.resolve(testDirectory, "../../..")
+): Promise<{ stderr: string; stdout: string }> => {
+  const previousCwd = process.cwd();
+  let stderr = "";
+  let stdout = "";
+  const writeOutput = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation((chunk) => {
+      stdout += String(chunk);
+      return true;
+    });
+  const writeError = vi
+    .spyOn(process.stderr, "write")
+    .mockImplementation((chunk) => {
+      stderr += String(chunk);
+      return true;
+    });
+
+  try {
+    process.chdir(cwd);
+    await createProgram().parseAsync(["node", "shadscan", ...args]);
+    return { stderr, stdout };
+  } finally {
+    process.chdir(previousCwd);
+    writeOutput.mockRestore();
+    writeError.mockRestore();
   }
 };
 
@@ -344,6 +385,159 @@ describe("CLI contract", () => {
       expect(output).toContain("Shadscan pre-commit plan");
       expect(output).toContain("Mode: manual");
     } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("shows the same progress phases for interactive scans and setup", async () => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+    const previousEnvironment = {
+      CI: process.env.CI,
+      SHADSCAN_INTERACTIVE: process.env.SHADSCAN_INTERACTIVE,
+    };
+    Reflect.deleteProperty(process.env, "CI");
+    Reflect.deleteProperty(process.env, "SHADSCAN_INTERACTIVE");
+
+    try {
+      const scan = await captureStreams(
+        [
+          "--category",
+          "forms",
+          "--apply",
+          "--no-roast",
+        ],
+        fixture.rootDir
+      );
+      const setup = await captureStreams(
+        ["setup", fixture.rootDir, "--pre-commit", "--dry-run"],
+        fixture.rootDir
+      );
+
+      for (const output of [scan, setup]) {
+        for (const label of PROGRESS_PHASE_LABELS) {
+          expect(output.stderr).toContain(label);
+          expect(output.stdout).not.toContain(label);
+        }
+      }
+      expect(scan.stdout).toContain("Your shadscan score:");
+      expect(setup.stdout).toContain("Current Shadscan score:");
+    } finally {
+      restoreTerminal();
+      restoreEnvironment(previousEnvironment);
+      await fixture.cleanup();
+    }
+  });
+
+  it("shows progress phases for an interactive workspace scan", async () => {
+    const rootDir = await createWorkspaceFixture({
+      packages: [
+        { path: "apps/web", preset: "next" },
+        { path: "apps/admin", preset: "vite" },
+      ],
+    });
+    const restoreTerminal = setInteractiveTerminal();
+    const previousEnvironment = {
+      CI: process.env.CI,
+      SHADSCAN_INTERACTIVE: process.env.SHADSCAN_INTERACTIVE,
+    };
+    Reflect.deleteProperty(process.env, "CI");
+    Reflect.deleteProperty(process.env, "SHADSCAN_INTERACTIVE");
+    Object.defineProperty(process.stdout, "isTTY", {
+      configurable: true,
+      value: false,
+    });
+
+    try {
+      const output = await captureStreams(
+        ["--category", "forms", "--no-roast"],
+        rootDir
+      );
+
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).toContain(label);
+        expect(output.stdout).not.toContain(label);
+      }
+      expect(output.stdout).toContain("Workspace:");
+      expect(output.stdout).toContain("Your shadscan score:");
+      expect(output.stdout).not.toContain("\u001B");
+    } finally {
+      restoreTerminal();
+      restoreEnvironment(previousEnvironment);
+      await cleanupWorkspaceFixtures();
+    }
+  });
+
+  it.each([
+    {
+      args: ["--json"],
+      label: "JSON output",
+    },
+    {
+      args: ["--prompt"],
+      label: "prompt output",
+    },
+    {
+      args: ["--category", "forms", "--no-interactive", "--no-roast"],
+      label: "explicitly non-interactive output",
+    },
+  ])("suppresses progress for $label", async ({ args }) => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+
+    try {
+      const output = await captureStreams(args, fixture.rootDir);
+
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
+    } finally {
+      restoreTerminal();
+      await fixture.cleanup();
+    }
+  });
+
+  it("suppresses progress in CI even when streams are TTYs", async () => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+    const previousEnvironment = { CI: process.env.CI };
+    process.env.CI = "1";
+
+    try {
+      const output = await captureStreams(
+        ["--category", "forms", "--no-roast"],
+        fixture.rootDir
+      );
+
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
+    } finally {
+      restoreTerminal();
+      restoreEnvironment(previousEnvironment);
+      await fixture.cleanup();
+    }
+  });
+
+  it("suppresses progress when stderr is not a TTY", async () => {
+    const fixture = await createRuleFixture();
+    const restoreTerminal = setInteractiveTerminal();
+    Object.defineProperty(process.stderr, "isTTY", {
+      configurable: true,
+      value: false,
+    });
+
+    try {
+      const output = await captureStreams(
+        ["--category", "forms", "--no-roast"],
+        fixture.rootDir
+      );
+
+      for (const label of PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
+    } finally {
+      restoreTerminal();
       await fixture.cleanup();
     }
   });
