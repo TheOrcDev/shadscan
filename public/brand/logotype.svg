@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="272" height="64" viewBox="0 0 272 64" fill="none" role="img" aria-label="shadscan">
+  <g fill="none" stroke="currentColor" stroke-linecap="square" stroke-linejoin="miter" stroke-width="6">
+  <path d="M23 11H11v12" />
+  <path d="M41 11h12v12" />
+  <path d="M11 41v12h12" />
+  <path d="M53 41v12H41" />
+  <g transform="translate(3.4 3.4) scale(.864)">
+    <path d="m22 41 19-19" />
+    <path d="m35 43 8-8" />
+  </g>
+  </g>
+  <text x="84" y="45" fill="currentColor" font-family="'Nunito Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="42" font-weight="700" letter-spacing="-1.2">shadscan</text>
+</svg>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandAssetsMenu } from "@/components/brand-assets-menu";
 import { CommandMenu } from "@/components/command-menu";
 import { GitHubStars } from "@/components/github-stars";
 import { ModeSwitcher } from "@/components/mode-switcher";
@@ -32,14 +33,16 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
     <header>
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
-          <Link
-            aria-current={pathname === "/" ? "page" : undefined}
-            className="flex items-center gap-2 font-heading font-medium"
-            href="/"
-          >
-            <ShadscanMark className="size-7" />
-            <span className="hidden sm:inline">shadscan</span>
-          </Link>
+          <BrandAssetsMenu brandAssetsUrl="/brand/shadscan-brand-assets.zip">
+            <Link
+              aria-current={pathname === "/" ? "page" : undefined}
+              className="flex items-center gap-2 font-heading font-medium"
+              href="/"
+            >
+              <ShadscanMark className="size-7" />
+              <span className="hidden sm:inline">shadscan</span>
+            </Link>
+          </BrandAssetsMenu>
           <nav aria-label="Primary" className="flex items-center gap-1">
             {NAV_LINKS.map((link) => {
               const isActive = isActivePath(pathname, link.href);
