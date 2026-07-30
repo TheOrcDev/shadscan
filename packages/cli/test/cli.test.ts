@@ -401,12 +401,7 @@ describe("CLI contract", () => {
 
     try {
       const scan = await captureStreams(
-        [
-          "--category",
-          "forms",
-          "--apply",
-          "--no-roast",
-        ],
+        ["--category", "forms", "--apply", "--no-roast"],
         fixture.rootDir
       );
       const setup = await captureStreams(

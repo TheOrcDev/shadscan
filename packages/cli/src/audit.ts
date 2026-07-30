@@ -1,6 +1,6 @@
 import path from "node:path";
-import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { z } from "zod";
 import packageJson from "../package.json";
 import { compareCodeUnits } from "./deterministic-order";
