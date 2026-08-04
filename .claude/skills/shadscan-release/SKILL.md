@@ -57,7 +57,24 @@ skill as the executable coordinator; never weaken or skip the runbook's gates.
 4. Verify the three versions agree: `packages/cli/package.json`,
    the new `CHANGELOG.md` heading, and the `changelog/<version>.md`
    frontmatter.
-5. Commit the preparation and push.
+5. Sweep the product surfaces that no generator owns. `pnpm docs:check`
+   catches the advertised version pins and rule counts, but run it now
+   rather than discovering it at gate time:
+   - **Advertised rule count** — both `README.md` and
+     `packages/cli/README.md` state the rule count in prose ("N rules",
+     "contains N deterministic checks"). A release that adds or removes a
+     rule must update all four. Never touch the counts in `CHANGELOG.md`
+     or `changelog/*.md`: those are historical records of what shipped
+     then, and rewriting them is falsifying the record.
+   - **Ruleset version** — `BUNDLED_RULESET_VERSION` in
+     `packages/cli/src/scan.ts` must already be bumped by whatever added
+     or changed a rule, and `docs/rules.md` regenerated with
+     `pnpm docs:rules`.
+   - **Hardcoded rule counts in tests** — `packages/cli/test/public-api.test.ts`
+     and `packages/cli/scripts/smoke-package.mjs` both assert
+     `RULE_CATALOG.length`. The smoke one fails late, after a full build
+     and npm pack, with a message that says nothing about rule counts.
+6. Commit the preparation and push.
 
 ## 2. Run every release gate
 
@@ -111,9 +128,22 @@ staged tarball and approves on npm with 2FA.
    Next.js, Vite React, and generic React fixture projects. Run one fixture
    twice and confirm the two reports are identical — determinism is the
    product promise.
-4. Verify the deployed site: `/changelog` shows the new entry, and the audit
-   badge/scoring flows still work (site examples stay pinned to `@next` or an
-   exact version during the RC window).
+4. Verify the deployed site:
+   - `/changelog` shows the new entry.
+   - `/stats` reflects the release. **Nothing on this page is edited by
+     hand** — every tile (`Latest`, `Versions`, `Downloads`, `Stars`) is
+     pulled live from the npm registry and the GitHub API, and the page
+     revalidates hourly (`export const revalidate = 3600`). So this is a
+     confirmation step, not an update step: after publishing, the `Latest`
+     tile should show the new version within the hour, and a new bar
+     should appear in the per-version chart. If it still shows the
+     previous version after the revalidate window, the publish did not
+     reach the registry — investigate rather than editing the page.
+   - `/rules` lists the new rule count; it reads
+     `lib/generated/rule-catalog.json`, so a wrong number there means the
+     catalog was not regenerated.
+   - The audit badge/scoring flows still work (site examples stay pinned to
+     `@next` or an exact version during the RC window).
 
 ## 5. Close out
 
@@ -126,6 +156,17 @@ staged tarball and approves on npm with 2FA.
   forward. Unpublish only for security or accidental disclosure, per policy.
 
 ## Hard-won rules
+
+- **Tag the release before publishing the next one.** Three releases
+  published before their Git tag existed (0.8.0, 0.9.0, 0.10.0), leaving no
+  commit to diff a shipped version against. `check-release.mjs` now fails
+  when the previous release in `CHANGELOG.md` has no matching tag and names
+  the command to fix it, but push the tag as part of the release rather than
+  waiting for the next one to complain.
+- **Prose counts go stale silently.** The rule count in both READMEs is not
+  owned by any generator. `pnpm docs:rules --check` now compares them against
+  `RULE_CATALOG.length`, which is why that gate exists — do not "fix" a
+  failure by editing the generated files.
 
 - Any new top-level file or directory in this repository must be added to
   `SCANNER_TRACE_EXCLUDES` in `next.config.ts`, or `pnpm build` fails in the
