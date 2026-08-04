@@ -6,6 +6,21 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- An MCP server: `shadscan mcp` serves the audit over the Model Context
+  Protocol on stdio, with three read-only tools — `scan` (score plus
+  actionables, filterable by category, severity, or workspace package),
+  `list_projects`, and `explain_rule`. Every call re-scans the current
+  file state rather than answering from a cache, results are neutral
+  (no roast copy), tool calls can only read inside the roots the server
+  was started with, and every response carries the engine, ruleset, and
+  schema versions. The library API now also exports `scanWorkspace` and
+  `discoverWorkspace`. The MCP SDK is bundled at build time, so the
+  published package still installs the same six runtime dependencies;
+  the packed-CLI smoke test audits the bundle to keep the SDK's HTTP
+  transports out.
+
 ## 0.8.0 - 2026-07-30
 
 ### Added

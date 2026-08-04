@@ -808,6 +808,20 @@ const createProgram = (): Command => {
     )
     .action(runSetupAction);
 
+  program
+    .command("mcp")
+    .description(
+      "Serve shadscan as an MCP server over stdio for coding agents."
+    )
+    .argument("[paths...]", "Root directories tool calls may scan.", undefined)
+    .action(async (paths: string[]) => {
+      // stdout carries JSON-RPC exclusively in this mode; the server writes
+      // its one startup line to stderr. Lazy import keeps the MCP bundle out
+      // of ordinary scan startup.
+      const { runMcpServer } = await import("./mcp/server");
+      await runMcpServer(paths ?? []);
+    });
+
   return program;
 };
 
