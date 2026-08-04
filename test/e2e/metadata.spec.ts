@@ -54,6 +54,14 @@ const PAGE_METADATA = [
     socialTitle: "Shadscan contributors | shadscan",
   },
   {
+    browserTitle: "Shadscan usage stats | shadscan",
+    description:
+      "npm downloads, version adoption, and repository stats for the shadscan CLI.",
+    imagePath: "/stats/opengraph-image",
+    path: "/stats",
+    socialTitle: "Shadscan usage stats | shadscan",
+  },
+  {
     browserTitle: "Privacy Policy | shadscan",
     description:
       "How Shadscan processes repository scans, request data, local preferences, and communications.",
@@ -262,6 +270,7 @@ for (const imagePath of [
   "/docs/opengraph-image",
   "/sponsors/opengraph-image",
   "/contributors/opengraph-image",
+  "/stats/opengraph-image",
 ]) {
   test(`renders the 1200x630 social card at ${imagePath}`, async ({
     request,

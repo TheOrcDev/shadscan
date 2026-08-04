@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import {
   DailyDownloadsChart,
   VersionDownloadsChart,
@@ -6,14 +5,18 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { getNpmStats, PACKAGE_NAME } from "@/lib/npm-stats";
 import { getHeaderGitHubRepository } from "@/lib/public-github-repository";
+import { createPageMetadata } from "@/lib/site-metadata";
 
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
+export const metadata = createPageMetadata({
   description:
     "npm downloads, version adoption, and repository stats for the shadscan CLI.",
-  title: "Stats",
-};
+  imageAlt: "shadscan usage stats: npm downloads and version adoption",
+  imagePath: "/stats/opengraph-image",
+  path: "/stats",
+  title: "Shadscan usage stats",
+});
 
 const COMPACT = new Intl.NumberFormat("en-US", {
   compactDisplay: "short",
