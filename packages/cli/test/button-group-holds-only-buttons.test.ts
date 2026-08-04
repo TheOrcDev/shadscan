@@ -285,6 +285,62 @@ describe("button-group-holds-only-buttons", () => {
     expect(result.status).toBe("not-applicable");
   });
 
+  it("stays silent on a lone text control with nothing joined to it", async () => {
+    // ButtonGroup joins with [&>*:not(:first-child)], so a single child is
+    // joined to nothing: no seam, no bisected ring, nothing to report.
+    const fixture = await createShadcnFixture();
+    await fixture.write(
+      "src/lone.tsx",
+      `
+        import { ButtonGroup } from "@/components/ui/button-group";
+        import { Input } from "@/components/ui/input";
+
+        export function Lone() {
+          return (
+            <ButtonGroup>
+              <Input placeholder="Email" />
+            </ButtonGroup>
+          );
+        }
+      `
+    );
+
+    const result = await runRule(
+      fixture.rootDir,
+      buttonGroupHoldsOnlyButtonsRule
+    );
+
+    expect(result.status).toBe("pass");
+  });
+
+  it("still reports when the sibling is conditional", async () => {
+    const fixture = await createShadcnFixture();
+    await fixture.write(
+      "src/conditional.tsx",
+      `
+        import { Button } from "@/components/ui/button";
+        import { ButtonGroup } from "@/components/ui/button-group";
+        import { Input } from "@/components/ui/input";
+
+        export function Conditional({ loading }: { loading: boolean }) {
+          return (
+            <ButtonGroup>
+              <Input placeholder="Email" />
+              {loading ? <span>…</span> : <Button>Go</Button>}
+            </ButtonGroup>
+          );
+        }
+      `
+    );
+
+    const result = await runRule(
+      fixture.rootDir,
+      buttonGroupHoldsOnlyButtonsRule
+    );
+
+    expect(result.status).toBe("advisory");
+  });
+
   it("never moves the score while it ships advisory", () => {
     // Promotion must change maxScore, confidence and the result helper
     // together; a fail() left at confidence "low" is silently downgraded back

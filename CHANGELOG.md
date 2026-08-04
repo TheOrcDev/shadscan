@@ -28,6 +28,11 @@ stable releases published under `latest`.
     legitimately holds buttons, selects, separators and arbitrary wrappers,
     and radio, checkbox and submit inputs carry no offset ring, so none of
     those are reported.
+  - A group holding a single child is silent. `ButtonGroup` joins with
+    `[&>*:not(:first-child)]`, so a lone control is joined to nothing:
+    there is no seam and no ring to bisect. A conditional sibling still
+    counts, since `{loading ? <Spinner/> : <Button/>}` renders one either
+    way.
   - It ships advisory and does not affect scores. Burn-in across nine real
     shadcn projects found four instances and no false positives, but all nine
     share one author, so that is not yet an independent enough sample to
