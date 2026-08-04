@@ -16,7 +16,7 @@
   <a href="https://www.shadscan.com">Website</a> ·
   <a href="https://www.shadscan.com/scan">Scan a repository</a> ·
   <a href="https://www.shadscan.com/docs">Docs</a> ·
-  <a href="docs/rules.md">59 rules</a> ·
+  <a href="docs/rules.md">60 rules</a> ·
   <a href="https://www.shadscan.com/sponsors">Sponsor</a>
 </p>
 
@@ -202,7 +202,7 @@ files. Details and per-client setup live in [docs/mcp.md](docs/mcp.md).
 
 ## What It Checks
 
-The bundled ruleset contains 59 deterministic checks across six weighted
+The bundled ruleset contains 60 deterministic checks across six weighted
 categories.
 
 | Category | Examples |

@@ -13,6 +13,46 @@ const SITE_OUTPUT_PATH = fileURLToPath(
   new URL("../../../lib/generated/rule-catalog.json", import.meta.url)
 );
 
+/**
+ * Both READMEs advertise the rule count in prose, which no generator owns, so
+ * it silently went stale for several releases. Checked here because this is
+ * the one place that already knows the true count.
+ */
+const ADVERTISED_COUNT_READMES = [
+  {
+    label: "README.md",
+    path: fileURLToPath(new URL("../../../README.md", import.meta.url)),
+  },
+  {
+    label: "packages/cli/README.md",
+    path: fileURLToPath(new URL("../README.md", import.meta.url)),
+  },
+];
+const ADVERTISED_COUNT_PATTERNS = [
+  /(\d+) rules<\/a>/,
+  /The bundled ruleset contains (\d+) deterministic checks/,
+];
+
+const findStaleAdvertisedCounts = async (): Promise<string[]> => {
+  const stale: string[] = [];
+
+  for (const readme of ADVERTISED_COUNT_READMES) {
+    const content = await readFile(readme.path, "utf8").catch(() => "");
+
+    for (const pattern of ADVERTISED_COUNT_PATTERNS) {
+      const match = content.match(pattern);
+
+      if (match && Number(match[1]) !== RULE_CATALOG.length) {
+        stale.push(
+          `${readme.label} advertises ${match[1]} rules, expected ${RULE_CATALOG.length}`
+        );
+      }
+    }
+  }
+
+  return stale;
+};
+
 const CATEGORY_TITLES = {
   accessibility: "Accessibility",
   forms: "Forms and Data Entry",
@@ -103,6 +143,15 @@ const main = async (): Promise<void> => {
     if (staleOutputs.length > 0) {
       process.stderr.write(
         `${staleOutputs.join(", ")} ${staleOutputs.length === 1 ? "is" : "are"} stale. Run \`pnpm docs:rules\` and commit the result.\n`
+      );
+      process.exitCode = 1;
+    }
+
+    const staleCounts = await findStaleAdvertisedCounts();
+
+    if (staleCounts.length > 0) {
+      process.stderr.write(
+        `${staleCounts.join("\n")}\nUpdate the advertised rule counts by hand; no generator owns README prose.\n`
       );
       process.exitCode = 1;
     }
