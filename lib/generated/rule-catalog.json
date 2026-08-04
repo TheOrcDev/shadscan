@@ -549,6 +549,18 @@
       "adapters": [
         "core"
       ],
+      "category": "forms",
+      "confidence": "medium",
+      "description": "Checks that ButtonGroup joins buttons rather than wrapping a text input, whose focus ring would cover only part of the joined control.",
+      "id": "button-group-holds-only-buttons",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "ButtonGroup holds buttons, not text inputs"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
       "category": "production-polish",
       "confidence": "high",
       "description": "Checks inline icons in shadcn Buttons for position-correct data-icon attributes.",
@@ -757,5 +769,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.41"
+  "rulesetVersion": "2026.07.42"
 }

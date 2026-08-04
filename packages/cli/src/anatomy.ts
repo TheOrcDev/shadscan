@@ -683,6 +683,7 @@ export type {
   AnatomyForbiddenChild,
   AnatomyViolation,
   ComponentAnatomyManifest,
+  UiModuleImports,
 };
 export {
   collectModuleExportNames,
