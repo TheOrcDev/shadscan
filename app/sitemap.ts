@@ -41,6 +41,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: new URL("/contributors", siteUrl).href,
     },
     {
+      changeFrequency: "daily",
+      priority: 0.5,
+      url: new URL("/stats", siteUrl).href,
+    },
+    {
       changeFrequency: "yearly",
       priority: 0.2,
       url: new URL("/privacy", siteUrl).href,
