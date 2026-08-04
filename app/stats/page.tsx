@@ -37,7 +37,7 @@ interface StatTileProps {
 
 function StatTile({ detail, label, title, value }: StatTileProps) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border p-4">
+    <div className="flex flex-col gap-1 rounded-none border border-border p-4">
       <dt className="text-muted-foreground text-sm">{label}</dt>
       <dd
         className="font-heading font-semibold text-2xl tabular-nums"
@@ -54,7 +54,7 @@ function StatTile({ detail, label, title, value }: StatTileProps) {
 
 function StatsUnavailable() {
   return (
-    <p className="rounded-lg border border-border border-dashed p-6 text-muted-foreground text-sm">
+    <p className="rounded-none border border-border border-dashed p-6 text-muted-foreground text-sm">
       Download stats are temporarily unavailable. The npm registry did not
       answer; this page will fill back in on its next refresh.
     </p>
@@ -77,7 +77,7 @@ export default async function StatsPage() {
         </h1>
         <p className="max-w-2xl text-muted-foreground">
           Public usage numbers for{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-sm">
+          <code className="rounded-none bg-muted px-1.5 py-0.5 text-sm">
             {PACKAGE_NAME}
           </code>
           , pulled from the npm registry. Counts include continuous integration
