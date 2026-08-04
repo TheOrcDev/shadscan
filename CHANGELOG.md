@@ -6,6 +6,31 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A new advisory rule, `button-group-holds-only-buttons` (ruleset
+  `2026.07.42`): shadcn's `ButtonGroup` joins its children into one shape,
+  and its whole answer to focus is
+  `[&>*]:focus-visible:relative [&>*]:focus-visible:z-10` — it lifts the
+  focused child above its neighbours rather than lighting the group. That is
+  right for buttons, which share a geometry and a ring. Around a text input
+  it reads as broken: the input's ring is drawn around its own box, including
+  the edge flush against the button, so the ring runs down the middle of a
+  control that looks like a single pill. `InputGroup` is the component for
+  that composition — its wrapper reacts to descendant focus and
+  `InputGroupInput` gives up its own ring — so the rule points there.
+  - The rule descends the whole subtree rather than reading direct children,
+    because the shape that actually ships wraps the control in a form
+    primitive (`ButtonGroup > FormControl > Input`).
+  - It reports only text entry. `ButtonGroup` is an open container that
+    legitimately holds buttons, selects, separators and arbitrary wrappers,
+    and radio, checkbox and submit inputs carry no offset ring, so none of
+    those are reported.
+  - It ships advisory and does not affect scores. Burn-in across nine real
+    shadcn projects found four instances and no false positives, but all nine
+    share one author, so that is not yet an independent enough sample to
+    justify moving anyone's score.
+
 ## 0.9.0 - 2026-08-04
 
 ### Added

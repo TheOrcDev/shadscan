@@ -2,6 +2,7 @@ import { accessibilityRules } from "./accessibility";
 import { alertAnatomyRule } from "./alert-anatomy";
 import { animationsRespectReducedMotionRule } from "./animations-respect-reduced-motion";
 import { asyncActionPendingStateRule } from "./async-action-pending-state";
+import { buttonGroupHoldsOnlyButtonsRule } from "./button-group-holds-only-buttons";
 import { buttonIconsHaveDataIconRule } from "./button-icons-have-data-icon";
 import { colorContrastPassesRule } from "./color-contrast-passes";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
@@ -84,6 +85,7 @@ const defaultRules = [
   formButtonsHaveExplicitTypeRule,
   personalDataAutocompletePresentRule,
   headingStructureSaneRule,
+  buttonGroupHoldsOnlyButtonsRule,
   buttonIconsHaveDataIconRule,
   itemsBelongToGroupsRule,
   inputGroupCompositionRule,
