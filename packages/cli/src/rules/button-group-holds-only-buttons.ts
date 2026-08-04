@@ -1,7 +1,9 @@
 import {
   forEachChild,
   isJsxElement,
+  isJsxExpression,
   isJsxSelfClosingElement,
+  isJsxText,
   type JsxOpeningLikeElement,
   type Node,
 } from "typescript";
@@ -152,6 +154,31 @@ const findTextControl = (
   return hit;
 };
 
+/**
+ * How many direct children the group actually joins. ButtonGroup squares off
+ * corners and drops borders with `[&>*:not(:first-child)]`, so a group holding
+ * a single child joins nothing: there is no seam, and no ring to bisect. A
+ * conditional child counts, since `{loading ? <Spinner/> : <Button/>}` renders
+ * a sibling in either branch.
+ */
+const countJoinedChildren = (node: Node): number => {
+  if (!isJsxElement(node)) {
+    return 0;
+  }
+
+  return node.children.filter((child) => {
+    if (isJsxText(child)) {
+      return child.text.trim() !== "";
+    }
+
+    return (
+      isJsxElement(child) ||
+      isJsxSelfClosingElement(child) ||
+      isJsxExpression(child)
+    );
+  }).length;
+};
+
 const isButtonGroup = (node: Node, groupImports: UiModuleImports): boolean => {
   const element = getOpeningElement(node);
   const tagName = element ? getJsxTagName(element) : null;
@@ -188,7 +215,11 @@ const scanFile = (
   const visit = (node: Node): void => {
     if (isButtonGroup(node, groupImports)) {
       groupCount += 1;
-      violation ??= findTextControl(node, file, controls);
+
+      // Only a joined group can show the defect, so a lone child is silent.
+      if (countJoinedChildren(node) > 1) {
+        violation ??= findTextControl(node, file, controls);
+      }
     }
 
     forEachChild(node, visit);
