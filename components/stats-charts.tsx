@@ -21,6 +21,19 @@ import type { DownloadDay, VersionDownloads } from "@/lib/npm-stats";
  */
 const SERIES_COLOR = "var(--stats-series)";
 
+/**
+ * The chart primitives default to rounded marks — bars get an 8px cap and the
+ * hover marker is a circle. This site's shadcn preset (`radix-sera`) is squared
+ * everywhere, so the mark geometry is squared here, at the call site, using the
+ * primitives' own props. The tooltip's own chrome has no such props and is
+ * squared in `components/charts/tooltip` instead.
+ */
+const SQUARE_BAR_CAP = "butt" as const;
+const SQUARE_TOOLTIP_MARKER = {
+  dotRadiusFraction: 0,
+  dotVariant: "ring",
+} as const;
+
 interface DailyDownloadsChartProps {
   data: DownloadDay[];
 }
@@ -54,7 +67,7 @@ function DailyDownloadsChart({ data }: DailyDownloadsChartProps) {
       <Grid />
       <XAxis />
       <Area dataKey="downloads" fill={SERIES_COLOR} stroke={SERIES_COLOR} />
-      <ChartTooltip />
+      <ChartTooltip {...SQUARE_TOOLTIP_MARKER} />
     </AreaChart>
   );
 }
@@ -74,8 +87,8 @@ function VersionDownloadsChart({ data }: VersionDownloadsChartProps) {
     >
       <Grid />
       <BarXAxis />
-      <Bar dataKey="downloads" fill={SERIES_COLOR} />
-      <ChartTooltip />
+      <Bar dataKey="downloads" fill={SERIES_COLOR} lineCap={SQUARE_BAR_CAP} />
+      <ChartTooltip {...SQUARE_TOOLTIP_MARKER} />
     </BarChart>
   );
 }
