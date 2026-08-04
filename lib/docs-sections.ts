@@ -9,6 +9,7 @@ const DOCS_SECTIONS = [
   { href: "#github-action", label: "GitHub Action" },
   { href: "#pre-commit", label: "Pre-commit gate" },
   { href: "#agent-skill", label: "Agent skill" },
+  { href: "#mcp-server", label: "MCP server" },
   { href: "#project-rule", label: "Project rule" },
   { href: "#troubleshooting", label: "Troubleshooting" },
 ] as const satisfies readonly DocsSection[];

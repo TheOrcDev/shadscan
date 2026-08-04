@@ -69,6 +69,7 @@
     "zod": "4.1.13"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@types/node": "18.19.130",
     "commander": "13.1.0",
     "execa": "9.6.1",

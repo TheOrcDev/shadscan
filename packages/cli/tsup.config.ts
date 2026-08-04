@@ -22,7 +22,20 @@ export default defineConfig([
     },
     esbuildOptions: configureEsbuild,
     format: ["esm"],
-    noExternal: ["commander"],
+    // The MCP SDK (and the validator family its server core imports) is a
+    // devDependency bundled into dist, mirroring commander: users install
+    // six runtime deps, not an HTTP stack. cli:smoke audits the emitted
+    // bundle for the SDK's HTTP-transport modules.
+    noExternal: [
+      "commander",
+      /^@modelcontextprotocol\/sdk/,
+      "ajv",
+      "ajv-formats",
+      "json-schema-typed",
+      "zod-to-json-schema",
+      "eventsource-parser",
+      "content-type",
+    ],
     platform: "node",
     sourcemap: true,
     splitting: false,

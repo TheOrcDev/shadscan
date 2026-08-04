@@ -461,6 +461,38 @@ export default function DocsPage() {
           />
         </section>
 
+        <section id="mcp-server">
+          <h2>MCP server</h2>
+          <p>
+            <code>shadscan mcp</code> serves the audit over the Model Context
+            Protocol on stdio, so coding agents query results as typed tool
+            calls instead of parsing output. Three read-only tools:{" "}
+            <code>scan</code> returns the score and actionables, filterable by
+            category, severity, or workspace package; <code>list_projects</code>{" "}
+            classifies a monorepo&apos;s packages; <code>explain_rule</code>{" "}
+            describes one rule. Every call re-scans the current file state —
+            results are never cached — and the server only reads inside the
+            roots it was started with.
+          </p>
+          <DocsCodeBlock
+            code="claude mcp add shadscan -- npx -y @shadscan/cli mcp"
+            label="Claude Code"
+            language="bash"
+          />
+          <p>
+            Setup for other clients, the tool reference, and the security
+            posture live in the{" "}
+            <a
+              href="https://github.com/TheOrcDev/shadscan/blob/main/docs/mcp.md"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              MCP runbook
+            </a>
+            .
+          </p>
+        </section>
+
         <section id="project-rule">
           <h2>Make it a project rule</h2>
           <p>

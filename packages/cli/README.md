@@ -137,6 +137,25 @@ Codex CLI, or Grok Build executable before launching it. Shadscan itself still
 does not make an AI request; the selected external agent follows its own
 provider and approval model.
 
+## MCP Server
+
+`shadscan mcp` serves the same deterministic audit over the Model Context
+Protocol on stdio, so coding agents can query results as typed tool calls
+instead of parsing output:
+
+```bash
+claude mcp add shadscan -- npx -y @shadscan/cli mcp
+```
+
+Three read-only tools: `scan` (score plus filterable actionables — by
+category, severity, or workspace package), `list_projects` (workspace
+packages with their application-or-library classification), and
+`explain_rule` (what one rule checks and where it applies). Every call
+re-scans the current file state — results are never cached — and every
+response carries the engine, ruleset, and schema versions. The server scans
+inside the roots it was started with and nothing else, and it never writes
+files. Details and per-client setup live in [docs/mcp.md](https://github.com/TheOrcDev/shadscan/blob/main/docs/mcp.md).
+
 ## Before Every Agent Commit
 
 Install the optional AI-agent commit protocol:

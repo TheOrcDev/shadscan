@@ -20,7 +20,8 @@ the executor. Each plan is marked DONE with its landing commit when complete.
 | [014](014-monorepo-workspace-scanning.md) | Monorepo workspace scanning and pooled scoring | P1 | XL | - | DONE |
 | [015](015-interactive-scan-progress.md) | Interactive scan progress checklist | P1 | M | - | DONE (`56a3dfc`, `579afad`, `0cf5b45`) |
 | [016](016-children-transparent-wrappers.md) | See through children-transparent wrappers | P1 | L | - | PLANNED |
-| [017](017-stats-page.md) | /stats page: npm usage charted with Bklit | P2 | M | - | PLANNED |
+| [017](017-stats-page.md) | /stats page: npm usage charted with Bklit | P2 | M | - | DONE (`e2e0c51`) |
+| [018](018-mcp-server.md) | MCP server: typed audit tools for coding agents | P1 | L | - | PLANNED |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 

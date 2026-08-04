@@ -255,8 +255,105 @@ try {
   );
   await run(process.execPath, [importCheckPath], { cwd: consumerDirectory });
 
+  // --- MCP bundle audit -----------------------------------------------------
+  // The MCP SDK is a bundled devDependency; its HTTP transports (express,
+  // hono, and friends) must never reach the shipped bundle. Import
+  // specifiers surviving in dist/cli.js would mean esbuild left them
+  // external — a runtime crash for users; their absence plus the size guard
+  // means they were neither imported nor inlined.
+  const bundlePath = path.join(
+    consumerDirectory,
+    "node_modules",
+    "@shadscan",
+    "cli",
+    "dist",
+    "cli.js"
+  );
+  const bundle = await readFile(bundlePath, "utf8");
+  const forbiddenSpecifiers = [
+    "express",
+    "hono",
+    "@hono/node-server",
+    "cors",
+    "jose",
+    "eventsource",
+    "express-rate-limit",
+    "raw-body",
+    "pkce-challenge",
+  ];
+  for (const specifier of forbiddenSpecifiers) {
+    const importPattern = new RegExp(
+      `(?:from\\s*|require\\()["']${specifier.replace("/", "\\/")}["']`
+    );
+    assert.ok(
+      !importPattern.test(bundle),
+      `dist/cli.js references "${specifier}"; the MCP HTTP stack leaked into the bundle.`
+    );
+  }
+  const bundleBytes = Buffer.byteLength(bundle);
+  assert.ok(
+    bundleBytes < 2_500_000,
+    `dist/cli.js is ${bundleBytes} bytes; expected the stdio-only MCP bundle to stay under 2.5MB.`
+  );
+
+  // --- MCP stdio roundtrip --------------------------------------------------
+  // Drive the packed binary end to end over real stdio: initialize,
+  // tools/list, then a scan of the consumer project. Every stdout line must
+  // parse as JSON — one stray write corrupts the protocol.
+  const mcpMessages = [
+    {
+      id: 1,
+      jsonrpc: "2.0",
+      method: "initialize",
+      params: {
+        capabilities: {},
+        clientInfo: { name: "smoke", version: "0.0.0" },
+        protocolVersion: "2025-06-18",
+      },
+    },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    { id: 2, jsonrpc: "2.0", method: "tools/list" },
+    {
+      id: 3,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { arguments: {}, name: "scan" },
+    },
+  ];
+  const mcpResult = await execa(executable, ["mcp", consumerDirectory], {
+    cwd: consumerDirectory,
+    env: { CI: "1", NO_COLOR: "1", npm_config_cache: npmCacheDirectory },
+    input: `${mcpMessages.map((message) => JSON.stringify(message)).join("\n")}\n`,
+    reject: false,
+    timeout: 120_000,
+  });
+  const mcpLines = mcpResult.stdout.split("\n").filter(Boolean);
+  assert.ok(mcpLines.length >= 3, "Expected three JSON-RPC responses.");
+  const mcpParsed = [];
+  for (const line of mcpLines) {
+    try {
+      mcpParsed.push(JSON.parse(line));
+    } catch {
+      assert.fail(
+        `Non-JSON output on the MCP stdout stream: ${line.slice(0, 120)}`
+      );
+    }
+  }
+  const toolsListResponse = mcpParsed.find((message) => message.id === 2);
+  assert.ok(toolsListResponse, "Missing tools/list response.");
+  assert.deepEqual(
+    toolsListResponse.result.tools.map((tool) => tool.name).sort(),
+    ["explain_rule", "list_projects", "scan"]
+  );
+  const scanResponse = mcpParsed.find((message) => message.id === 3);
+  assert.ok(scanResponse, "Missing scan response.");
+  const scanPayload = JSON.parse(scanResponse.result.content[0].text);
+  assert.equal(scanPayload.engineVersion, packageManifest.version);
+  assert.ok(Number.isInteger(scanPayload.score));
+  assert.ok(Array.isArray(scanPayload.actionables));
+
   process.stdout.write(
-    `Packed shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, and import smoke tests.\n`
+    `Packed shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, import, MCP bundle-audit, and MCP stdio smoke tests.\n`
   );
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });

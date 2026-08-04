@@ -42,6 +42,10 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
   visible, and depends on stderr terminal capabilities rather than stdin or
   stdout TTY state. JSON, prompt, CI, non-TTY stderr, and `--no-interactive`
   scans suppress progress.
+- Under `shadscan mcp`, stdout carries JSON-RPC exclusively; stderr carries a
+  single startup line and abnormal-exit diagnostics. Tool errors return as
+  MCP error results with the same stable public messages as CLI failures,
+  never as raw stream writes. All other output contracts are unchanged.
 - Evidence paths are project-relative and never contain the scanner machine's
   absolute project path.
 - Agent handoffs treat repository instructions and discovered package scripts

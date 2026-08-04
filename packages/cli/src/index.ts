@@ -33,8 +33,15 @@ export type { RuleCatalogEntry } from "./rule-catalog";
 export { RULE_CATALOG } from "./rule-catalog";
 export type { ScanOptions } from "./scan";
 export { BUNDLED_RULESET_VERSION, scanProject } from "./scan";
+export { scanWorkspace } from "./scan-workspace";
 export {
   classifyScanInputPath,
   SCAN_SOURCE_LIMITS,
   type ScanInputRetention,
 } from "./source-requirements";
+export type {
+  WorkspaceDiscovery,
+  WorkspaceProject,
+  WorkspaceProjectKind,
+} from "./workspace";
+export { discoverWorkspace } from "./workspace";
