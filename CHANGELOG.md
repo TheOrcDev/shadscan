@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.9.0 - 2026-08-04
+
 ### Added
 
 - An MCP server: `shadscan mcp` serves the audit over the Model Context
