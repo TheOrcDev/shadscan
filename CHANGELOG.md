@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.10.0 - 2026-08-04
+
 ### Added
 
 - A new advisory rule, `button-group-holds-only-buttons` (ruleset

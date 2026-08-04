@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ const SUPPORT_EMAIL = "orc@orcdev.com";
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const UNPUBLISHED_COPY_PATTERN = /not published yet/i;
+const RELEASE_HEADING_PATTERN = /^## (\d+\.\d+\.\d+[^\s]*) - /gm;
 const FORBIDDEN_LIFECYCLE_SCRIPTS = ["install", "postinstall", "preinstall"];
 const COMMANDER_RUNTIME_IMPORT_PATTERN = /^import .* from ["']commander["'];$/m;
 const PUBLISHED_SOURCE_MAPS = ["cli.js.map", "index.js.map"];
@@ -133,6 +135,27 @@ const main = async () => {
       changelog.includes(`## ${manifest.version}`),
       "The changelog must contain the release version."
     );
+
+    // The previous release must already be tagged. Publishing has repeatedly
+    // run ahead of tagging, which leaves no commit to diff a shipped version
+    // against; catching it here costs nothing and the tag is trivial to add.
+    const releasedVersions = [...changelog.matchAll(RELEASE_HEADING_PATTERN)]
+      .map((match) => match[1])
+      .filter((version) => version !== manifest.version);
+    const previousVersion = releasedVersions[0];
+
+    if (previousVersion) {
+      const existingTags = execFileSync(
+        "git",
+        ["tag", "--list", `v${previousVersion}`],
+        { cwd: repositoryRoot, encoding: "utf8" }
+      ).trim();
+
+      assert.ok(
+        existingTags !== "",
+        `The previous release ${previousVersion} has no v${previousVersion} Git tag. Tag it before publishing ${manifest.version}: git tag -a v${previousVersion} <commit> -m "shadscan ${previousVersion}" && git push origin v${previousVersion}`
+      );
+    }
     assert.doesNotMatch(
       packageReadme,
       UNPUBLISHED_COPY_PATTERN,
