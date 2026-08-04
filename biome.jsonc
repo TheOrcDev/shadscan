@@ -4,5 +4,11 @@
     "ultracite/biome/core",
     "ultracite/biome/react",
     "ultracite/biome/next"
-  ]
+  ],
+  // components/charts is vendored from the @bklit shadcn registry. It is
+  // upstream code we do not author, and re-running `shadcn add` would
+  // reintroduce any local edits, so it is excluded rather than reformatted.
+  "files": {
+    "includes": ["!**/components/charts"]
+  }
 }

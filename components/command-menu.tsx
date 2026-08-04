@@ -3,6 +3,7 @@
 import {
   ArrowSquareOut,
   BookOpen,
+  ChartLineUp,
   ClipboardText,
   ClockCounterClockwise,
   GithubLogo,
@@ -189,6 +190,15 @@ function CommandMenu({ repositoryUrl }: CommandMenuProps) {
               >
                 <UsersThree weight="bold" />
                 Contributors
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/stats");
+                }}
+              >
+                <ChartLineUp weight="bold" />
+                Stats
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="CLI">
