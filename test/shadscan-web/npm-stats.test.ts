@@ -181,6 +181,72 @@ describe("fetchNpmStats", () => {
     expect(calls.some((url) => url.includes("@shadscan%2Fcli"))).toBe(true);
   });
 
+  it("drops trailing days npm has not settled yet", async () => {
+    // npm answers 0 for a day it has not filled in, which is indistinguishable
+    // from a real zero and plots as a cliff to the floor at the right edge.
+    const { fetchImplementation } = createFetch({
+      ...ALL_ROUTES,
+      "/downloads/range/": {
+        downloads: [
+          { day: "2026-07-27", downloads: 1194 },
+          { day: "2026-07-28", downloads: 1611 },
+          { day: "2026-07-29", downloads: 0 },
+          { day: "2026-07-30", downloads: 0 },
+        ],
+        end: "2026-07-30",
+        package: "@shadscan/cli",
+        start: "2026-07-27",
+      },
+    });
+    const stats = await fetchNpmStats(NOW, fetchImplementation);
+
+    expect(stats?.daily.map((entry) => entry.day)).toEqual([
+      "2026-07-27",
+      "2026-07-28",
+    ]);
+    // The dropped days must not be counted either.
+    expect(stats?.totalDownloads).toBe(2805);
+  });
+
+  it("keeps an interior zero, which is a real quiet day", async () => {
+    const { fetchImplementation } = createFetch({
+      ...ALL_ROUTES,
+      "/downloads/range/": {
+        downloads: [
+          { day: "2026-07-27", downloads: 1194 },
+          { day: "2026-07-28", downloads: 0 },
+          { day: "2026-07-29", downloads: 1611 },
+        ],
+        end: "2026-07-29",
+        package: "@shadscan/cli",
+        start: "2026-07-27",
+      },
+    });
+    const stats = await fetchNpmStats(NOW, fetchImplementation);
+
+    expect(stats?.daily).toHaveLength(3);
+    expect(stats?.daily[1]?.downloads).toBe(0);
+  });
+
+  it("keeps an all-zero series rather than emptying the chart", async () => {
+    // A package nobody has downloaded yet still deserves its axis.
+    const { fetchImplementation } = createFetch({
+      ...ALL_ROUTES,
+      "/downloads/range/": {
+        downloads: [
+          { day: "2026-07-27", downloads: 0 },
+          { day: "2026-07-28", downloads: 0 },
+        ],
+        end: "2026-07-28",
+        package: "@shadscan/cli",
+        start: "2026-07-27",
+      },
+    });
+    const stats = await fetchNpmStats(NOW, fetchImplementation);
+
+    expect(stats?.daily).toHaveLength(2);
+  });
+
   it("returns null when the registry is unavailable", async () => {
     const { fetchImplementation } = createFetch(ALL_ROUTES, {
       "registry.npmjs.org": 500,
