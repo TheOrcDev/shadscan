@@ -137,9 +137,9 @@ export default async function StatsPage() {
                 Downloads per day
               </h2>
               <p className="text-muted-foreground text-sm">
-                Every complete day since the first release. npm settles a
-                day&apos;s total a few hours after it closes, so today is not
-                plotted.
+                Every settled day since the first release. npm fills a
+                day&apos;s total in some hours after it closes, so the most
+                recent day or two arrive late rather than at zero.
               </p>
             </div>
             {stats.daily.length > 0 ? (

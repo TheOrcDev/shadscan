@@ -62,6 +62,30 @@ const toIsoDay = (value: Date): string =>
 const getLastCompleteDay = (now: Date): string =>
   toIsoDay(new Date(now.getTime() - DAY_MS));
 
+/**
+ * Asking for a day npm has not settled yet returns `0` rather than an error or
+ * a partial count, which is indistinguishable from a real zero and renders as
+ * a cliff to the floor at the right edge — exactly the shape that reads as
+ * "nobody uses this". In practice the lag runs past the 24 hours
+ * `getLastCompleteDay` allows for.
+ *
+ * Trailing zeros are therefore dropped rather than plotted. Only the tail is
+ * trimmed: an interior zero is a real quiet day and stays. A series that is
+ * zero throughout belongs to a package nobody has downloaded yet, so it is
+ * returned untouched rather than emptied.
+ */
+const dropUnsettledTrailingDays = (
+  days: readonly DownloadDay[]
+): DownloadDay[] => {
+  let end = days.length;
+
+  while (end > 0 && days[end - 1]?.downloads === 0) {
+    end -= 1;
+  }
+
+  return end === 0 ? [...days] : days.slice(0, end);
+};
+
 const isIsoDay = (value: unknown): value is string =>
   typeof value === "string" && ISO_DAY_PATTERN.test(value);
 
@@ -295,7 +319,9 @@ const fetchNpmStats = async (
     ),
   ]);
 
-  const daily = parseDownloadRange(rangePayload) ?? [];
+  const daily = dropUnsettledTrailingDays(
+    parseDownloadRange(rangePayload) ?? []
+  );
   const versions = parseVersionDownloads(versionsPayload) ?? [];
 
   return {
