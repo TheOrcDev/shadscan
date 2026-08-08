@@ -1,7 +1,4 @@
-import {
-  DailyDownloadsChart,
-  VersionDownloadsChart,
-} from "@/components/stats-charts";
+import { DailyDownloadsChart } from "@/components/stats-charts";
 import { Separator } from "@/components/ui/separator";
 import catalog from "@/lib/generated/rule-catalog.json";
 import { getNpmStats, PACKAGE_NAME } from "@/lib/npm-stats";
@@ -153,61 +150,6 @@ export default async function StatsPage() {
               <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
                 <DailyDownloadsChart data={stats.daily} />
               </div>
-            ) : (
-              <StatsUnavailable />
-            )}
-          </section>
-
-          <section className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <h2 className="font-heading font-semibold text-xl tracking-tight">
-                Which versions people run
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                A snapshot of the last 7 days, not a trend — npm publishes no
-                per-version history. Prereleases and older versions are grouped
-                as “other”.
-              </p>
-            </div>
-            {stats.versions.length > 0 ? (
-              <>
-                <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                  <VersionDownloadsChart data={stats.versions} />
-                </div>
-                <table className="w-full text-sm">
-                  <caption className="sr-only">
-                    Downloads per version over the last 7 days
-                  </caption>
-                  <thead>
-                    <tr className="border-border border-b text-muted-foreground">
-                      <th className="py-2 text-left font-medium" scope="col">
-                        Version
-                      </th>
-                      <th className="py-2 text-right font-medium" scope="col">
-                        Downloads
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.versions.map((entry) => (
-                      <tr
-                        className="border-border/60 border-b"
-                        key={entry.version}
-                      >
-                        <th
-                          className="py-2 text-left font-normal tabular-nums"
-                          scope="row"
-                        >
-                          {entry.version}
-                        </th>
-                        <td className="py-2 text-right tabular-nums">
-                          {EXACT.format(entry.downloads)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
             ) : (
               <StatsUnavailable />
             )}

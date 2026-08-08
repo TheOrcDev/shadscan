@@ -10,7 +10,6 @@ const createStats = (overrides: Partial<NpmStats> = {}): NpmStats => ({
   releases: [],
   totalDownloads: 45_231,
   versionCount: 12,
-  versions: [],
   ...overrides,
 });
 

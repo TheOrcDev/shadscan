@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "next/experimental/testmode/playwright.js";
 
+const RULESET_DETAIL_PATTERN = /^ruleset \d{4}\./;
 const UNAVAILABLE_PATTERN = /temporarily unavailable/i;
 
 const VIEWPORTS = [
@@ -58,7 +59,7 @@ const createNpmHandler =
     return "abort" as const;
   };
 
-test("shows npm usage with a per-version table", async ({ next, page }) => {
+test("shows npm usage and the bundled ruleset", async ({ next, page }) => {
   next.onFetch(createNpmHandler());
 
   await page.goto("/stats");
@@ -70,12 +71,16 @@ test("shows npm usage with a per-version table", async ({ next, page }) => {
     page.getByRole("heading", { level: 2, name: "Downloads per day" })
   ).toBeVisible();
 
-  // The version table is the non-visual reading of the bar chart, so it is
-  // what the test asserts on rather than the rendered SVG.
-  const table = page.getByRole("table");
-  await expect(table).toBeVisible();
-  await expect(table.getByRole("row")).toHaveCount(3);
-  await expect(table.getByRole("rowheader", { name: "0.7.0" })).toBeVisible();
+  // The tiles are the non-visual reading of the page, so they are what the
+  // test asserts on rather than the rendered SVG. A dt exposes no accessible
+  // name, so the tiles are matched by their text rather than by role name.
+  await expect(
+    page.getByRole("term").filter({ hasText: "Rules" })
+  ).toBeVisible();
+  await expect(page.getByText(RULESET_DETAIL_PATTERN)).toBeVisible();
+
+  // The per-version breakdown was removed; nothing should reintroduce a table.
+  await expect(page.getByRole("table")).toHaveCount(0);
 });
 
 test("degrades to a message when npm is unavailable", async ({
