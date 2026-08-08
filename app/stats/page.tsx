@@ -3,6 +3,7 @@ import {
   VersionDownloadsChart,
 } from "@/components/stats-charts";
 import { Separator } from "@/components/ui/separator";
+import catalog from "@/lib/generated/rule-catalog.json";
 import { getNpmStats, PACKAGE_NAME } from "@/lib/npm-stats";
 import { getHeaderGitHubRepository } from "@/lib/public-github-repository";
 import { createPageMetadata } from "@/lib/site-metadata";
@@ -83,8 +84,9 @@ export default async function StatsPage() {
           <code className="rounded-none bg-muted px-1.5 py-0.5 text-sm">
             {PACKAGE_NAME}
           </code>
-          , pulled from the npm registry. Counts include continuous integration
-          and mirrors, so they measure downloads rather than people.
+          , pulled from the npm registry, alongside the size of the bundled
+          ruleset. Download counts include continuous integration and mirrors,
+          so they measure downloads rather than people.
         </p>
       </header>
 
@@ -96,7 +98,7 @@ export default async function StatsPage() {
         <div className="flex flex-col gap-12">
           <section className="flex flex-col gap-4">
             <h2 className="sr-only">Summary</h2>
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <StatTile
                 detail={`since ${DAY_FORMAT.format(new Date(`${stats.firstPublishedDay}T00:00:00Z`))}`}
                 label="Downloads"
@@ -124,6 +126,11 @@ export default async function StatsPage() {
                 value={EXACT.format(stats.versionCount)}
               />
               <StatTile
+                detail={`ruleset ${catalog.rulesetVersion}`}
+                label="Rules"
+                value={EXACT.format(catalog.rules.length)}
+              />
+              <StatTile
                 label="Stars"
                 title={EXACT.format(repository.stargazersCount)}
                 value={COMPACT.format(repository.stargazersCount)}
@@ -143,7 +150,9 @@ export default async function StatsPage() {
               </p>
             </div>
             {stats.daily.length > 0 ? (
-              <DailyDownloadsChart data={stats.daily} />
+              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+                <DailyDownloadsChart data={stats.daily} />
+              </div>
             ) : (
               <StatsUnavailable />
             )}
@@ -162,7 +171,9 @@ export default async function StatsPage() {
             </div>
             {stats.versions.length > 0 ? (
               <>
-                <VersionDownloadsChart data={stats.versions} />
+                <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+                  <VersionDownloadsChart data={stats.versions} />
+                </div>
                 <table className="w-full text-sm">
                   <caption className="sr-only">
                     Downloads per version over the last 7 days
