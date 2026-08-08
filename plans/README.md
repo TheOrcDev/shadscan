@@ -22,7 +22,8 @@ the executor. Each plan is marked DONE with its landing commit when complete.
 | [016](016-children-transparent-wrappers.md) | See through children-transparent wrappers | P1 | L | - | PLANNED |
 | [017](017-stats-page.md) | /stats page: npm usage charted with Bklit | P2 | M | - | DONE (`e2e0c51`) |
 | [018](018-mcp-server.md) | MCP server: typed audit tools for coding agents | P1 | L | - | DONE (`bb95ec7`) |
-| [019](019-button-group-holds-only-buttons.md) | ButtonGroup holds buttons, not text inputs | P2 | S | - | DONE |
+| [019](019-button-group-holds-only-buttons.md) | ButtonGroup holds buttons, not text inputs | P2 | S | - | DONE (`3fec902`) |
+| [020](020-questionnaire-item-composition.md) | Questionnaire items are composed completely | P3 | S | - | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 

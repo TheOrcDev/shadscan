@@ -3,7 +3,7 @@ packages:
 
 overrides:
   brace-expansion: 5.0.9
-  js-yaml: 4.3.0
+  js-yaml: 4.3.1
   next>postcss: 8.5.23
   sharp: 0.35.3
 
