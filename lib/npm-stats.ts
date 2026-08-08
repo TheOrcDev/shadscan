@@ -10,18 +10,10 @@ const MAX_RANGE_DAYS = 540;
 const DAY_MS = 86_400_000;
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const PRERELEASE_PATTERN = /-/;
-/** Versions charted individually before the remainder is grouped. */
-const TOP_VERSION_COUNT = 6;
 
 interface DownloadDay {
   day: string;
   downloads: number;
-}
-
-interface VersionDownloads {
-  downloads: number;
-  isPrerelease: boolean;
-  version: string;
 }
 
 interface ReleaseMarker {
@@ -38,7 +30,6 @@ interface NpmStats {
   releases: ReleaseMarker[];
   totalDownloads: number;
   versionCount: number;
-  versions: VersionDownloads[];
 }
 
 type FetchImplementation = (
@@ -217,41 +208,6 @@ const parseDownloadRange = (payload: unknown): DownloadDay[] | null => {
   return days;
 };
 
-const parseVersionDownloads = (payload: unknown): VersionDownloads[] | null => {
-  if (typeof payload !== "object" || payload === null) {
-    return null;
-  }
-
-  const { downloads } = payload as Record<string, unknown>;
-
-  if (typeof downloads !== "object" || downloads === null) {
-    return null;
-  }
-
-  const versions: VersionDownloads[] = [];
-  for (const [version, count] of Object.entries(
-    downloads as Record<string, unknown>
-  )) {
-    if (!isDownloadCount(count)) {
-      return null;
-    }
-
-    if (count > 0) {
-      versions.push({
-        downloads: count,
-        isPrerelease: PRERELEASE_PATTERN.test(version),
-        version,
-      });
-    }
-  }
-
-  return versions.sort(
-    (left, right) =>
-      right.downloads - left.downloads ||
-      left.version.localeCompare(right.version)
-  );
-};
-
 const parseLastWeekDownloads = (payload: unknown): number | null => {
   if (typeof payload !== "object" || payload === null) {
     return null;
@@ -266,26 +222,6 @@ const parseLastWeekDownloads = (payload: unknown): number | null => {
  * Prereleases and the long tail are folded into one bar so the chart shows
  * which stable versions people actually run without a dozen slivers.
  */
-const summarizeVersions = (
-  versions: VersionDownloads[]
-): VersionDownloads[] => {
-  const stable = versions.filter((entry) => !entry.isPrerelease);
-  const rest = versions.filter((entry) => entry.isPrerelease);
-  const top = stable.slice(0, TOP_VERSION_COUNT);
-  const remainder = [...stable.slice(TOP_VERSION_COUNT), ...rest];
-  const remainderTotal = remainder.reduce(
-    (total, entry) => total + entry.downloads,
-    0
-  );
-
-  return remainderTotal > 0
-    ? [
-        ...top,
-        { downloads: remainderTotal, isPrerelease: false, version: "other" },
-      ]
-    : top;
-};
-
 const fetchNpmStats = async (
   now: number,
   fetchImplementation: FetchImplementation = fetch
@@ -304,13 +240,9 @@ const fetchNpmStats = async (
 
   const endDay = getLastCompleteDay(new Date(now));
   const startDay = clampRangeStart(registry.firstPublishedDay, endDay);
-  const [rangePayload, versionsPayload, lastWeekPayload] = await Promise.all([
+  const [rangePayload, lastWeekPayload] = await Promise.all([
     fetchJson(
       `${NPM_DOWNLOADS_ORIGIN}/downloads/range/${startDay}:${endDay}/${encodedName}`,
-      fetchImplementation
-    ),
-    fetchJson(
-      `${NPM_DOWNLOADS_ORIGIN}/versions/${encodedName}/last-week`,
       fetchImplementation
     ),
     fetchJson(
@@ -322,7 +254,6 @@ const fetchNpmStats = async (
   const daily = dropUnsettledTrailingDays(
     parseDownloadRange(rangePayload) ?? []
   );
-  const versions = parseVersionDownloads(versionsPayload) ?? [];
 
   return {
     daily,
@@ -332,7 +263,6 @@ const fetchNpmStats = async (
     releases: registry.releases.filter((release) => release.day >= startDay),
     totalDownloads: daily.reduce((total, entry) => total + entry.downloads, 0),
     versionCount: registry.versionCount,
-    versions: summarizeVersions(versions),
   };
 };
 
@@ -351,7 +281,7 @@ const getNpmStats = (): Promise<NpmStats | null> =>
       1000
   );
 
-export type { DownloadDay, NpmStats, ReleaseMarker, VersionDownloads };
+export type { DownloadDay, NpmStats, ReleaseMarker };
 export {
   clampRangeStart,
   encodePackageName,
@@ -361,6 +291,4 @@ export {
   PACKAGE_NAME,
   parseDownloadRange,
   parseRegistryMetadata,
-  parseVersionDownloads,
-  summarizeVersions,
 };

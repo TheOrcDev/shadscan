@@ -1,13 +1,10 @@
 "use client";
 
 import { Area, AreaChart } from "@/components/charts/area-chart";
-import { Bar } from "@/components/charts/bar";
-import { BarChart } from "@/components/charts/bar-chart";
-import { BarXAxis } from "@/components/charts/bar-x-axis";
 import { Grid } from "@/components/charts/grid";
 import { ChartTooltip } from "@/components/charts/tooltip";
 import { XAxis } from "@/components/charts/x-axis";
-import type { DownloadDay, VersionDownloads } from "@/lib/npm-stats";
+import type { DownloadDay } from "@/lib/npm-stats";
 
 /**
  * Both charts plot a single measure — downloads — so they use one hue rather
@@ -22,13 +19,12 @@ import type { DownloadDay, VersionDownloads } from "@/lib/npm-stats";
 const SERIES_COLOR = "var(--stats-series)";
 
 /**
- * The chart primitives default to rounded marks — bars get an 8px cap and the
- * hover marker is a circle. This site's shadcn preset (`radix-sera`) is squared
- * everywhere, so the mark geometry is squared here, at the call site, using the
- * primitives' own props. The tooltip's own chrome has no such props and is
- * squared in `components/charts/tooltip` instead.
+ * The chart primitives default to a circular hover marker. This site's shadcn
+ * preset (`radix-sera`) is squared everywhere, so the mark geometry is squared
+ * here, at the call site, using the primitives' own props. The tooltip's own
+ * chrome has no such props and is squared in `components/charts/tooltip`
+ * instead.
  */
-const SQUARE_BAR_CAP = "butt" as const;
 const SQUARE_TOOLTIP_MARKER = {
   dotRadiusFraction: 0,
   dotVariant: "ring",
@@ -36,10 +32,6 @@ const SQUARE_TOOLTIP_MARKER = {
 
 interface DailyDownloadsChartProps {
   data: DownloadDay[];
-}
-
-interface VersionDownloadsChartProps {
-  data: VersionDownloads[];
 }
 
 const DAY_LABEL_FORMAT = new Intl.DateTimeFormat("en-US", {
@@ -72,25 +64,4 @@ function DailyDownloadsChart({ data }: DailyDownloadsChartProps) {
   );
 }
 
-function VersionDownloadsChart({ data }: VersionDownloadsChartProps) {
-  const points = data.map((entry) => ({
-    downloads: entry.downloads,
-    name: entry.version,
-  }));
-
-  return (
-    <BarChart
-      aspectRatio="3 / 1"
-      data={points}
-      margin={{ bottom: 32, left: 16, right: 16, top: 16 }}
-      xDataKey="name"
-    >
-      <Grid />
-      <BarXAxis />
-      <Bar dataKey="downloads" fill={SERIES_COLOR} lineCap={SQUARE_BAR_CAP} />
-      <ChartTooltip {...SQUARE_TOOLTIP_MARKER} />
-    </BarChart>
-  );
-}
-
-export { DailyDownloadsChart, formatDay, VersionDownloadsChart };
+export { DailyDownloadsChart, formatDay };
