@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.11.0 - 2026-08-08
+
 ### Added
 
 - A new advisory rule, `questionnaire-item-composition` (ruleset
