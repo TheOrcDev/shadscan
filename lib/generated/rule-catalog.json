@@ -664,6 +664,18 @@
       "adapters": [
         "core"
       ],
+      "category": "forms",
+      "confidence": "medium",
+      "description": "Checks that questionnaire items carry a title, and that required items can render their validation error.",
+      "id": "questionnaire-item-composition",
+      "maxScore": 0,
+      "severity": "warning",
+      "title": "questionnaire items are composed completely"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
       "category": "accessibility",
       "confidence": "low",
       "description": "Looks for focus-managed primitives behind dialog-like user interfaces.",
@@ -769,5 +781,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.42"
+  "rulesetVersion": "2026.07.43"
 }

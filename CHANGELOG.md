@@ -6,6 +6,39 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A new advisory rule, `questionnaire-item-composition` (ruleset
+  `2026.07.43`), covering shadcn's new `questionnaire` component. It
+  reports two things a caller can get wrong:
+  - **A required item with no `QuestionnaireError`.** Validation fails
+    with nowhere to say so: the user presses Next, nothing moves, and
+    nothing explains why. In shadcn's own example, 5 of 5 required items
+    render an error.
+  - **An item with no `QuestionnaireTitle`**, which leaves the question
+    unlabelled. All 7 items in the example have one.
+
+  The component is a thin styling wrapper over the headless
+  `@shadcn/react/questionnaire` primitive, so focus movement, aria wiring
+  and error association are not in the file anyone copies. The rule
+  checks only what the caller composes, and says nothing about behaviour
+  the primitive owns. A dynamic `required` is treated as unknown and
+  stays silent.
+
+  Verified against shadcn's published example verbatim: it passes all
+  seven items, and reports the right item and line when an error or a
+  title is deleted. It ships advisory — the component is days old with no
+  adoption, so unlike the rules before it this one could not be burned in
+  against real projects.
+
+### Security
+
+- Raise the `js-yaml` override floor to `4.3.1`, past
+  [GHSA-5p4m-2wfm-xmqj](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj)
+  (quadratic CPU consumption resolving `!!omap`, unpatched in 4.x below
+  4.3.1). The floor sat at `4.3.0`, so bumping the direct dependency alone
+  left the override dragging the whole tree back.
+
 ## 0.10.0 - 2026-08-04
 
 ### Added

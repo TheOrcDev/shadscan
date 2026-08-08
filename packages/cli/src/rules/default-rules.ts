@@ -39,6 +39,7 @@ import { notFoundRecoveryPresentRule } from "./not-found-recovery-present";
 import { personalDataAutocompletePresentRule } from "./personal-data-autocomplete-present";
 import { pointerTargetSizePassesRule } from "./pointer-target-size-passes";
 import { publicAppSeoFilesPresentRule } from "./public-app-seo-files-present";
+import { questionnaireItemCompositionRule } from "./questionnaire-item-composition";
 import { responsiveShellPresentRule } from "./responsive-shell-present";
 import { routeLoadingBoundaryPresentRule } from "./route-loading-boundary-present";
 import { socialPreviewPresentRule } from "./social-preview-present";
@@ -94,6 +95,7 @@ const defaultRules = [
   destructiveActionsConfirmedRule,
   animationsRespectReducedMotionRule,
   publicAppSeoFilesPresentRule,
+  questionnaireItemCompositionRule,
   dialogFocusTrapWorksRule,
   keyboardNavigationWorksRule,
   colorContrastPassesRule,
