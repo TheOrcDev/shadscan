@@ -6,6 +6,14 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- [`validation-wired-to-form` and `field-errors-rendered`](https://github.com/TheOrcDev/shadscan/issues/32)
+  now follow statically provable React Hook Form state through project-owned
+  custom hooks (ruleset `2026.08.45`). Provider hooks no longer have to render
+  their own error UI, while unresolved or dynamic hook flow remains advisory
+  instead of borrowing evidence from unrelated forms.
+
 ## 0.12.0 - 2026-08-10
 
 ### Added
