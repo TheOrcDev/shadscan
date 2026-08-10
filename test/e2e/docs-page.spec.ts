@@ -23,6 +23,14 @@ test("documents the CLI before the optional agent workflow", async ({
   await expect(
     page.locator("article > header").locator('[data-slot="code-block"]')
   ).toContainText("pnpm dlx @shadscan/cli");
+  const publicAgentPrompt = page.locator('#usage code[data-language="text"]');
+  await expect(publicAgentPrompt).toContainText("--prompt");
+  await expect(publicAgentPrompt).toContainText("--check-overflow");
+  await expect(publicAgentPrompt).toContainText("monorepo");
+  await expect(publicAgentPrompt).toContainText("production");
+  await expect(publicAgentPrompt).toContainText("approval");
+  await expect(publicAgentPrompt).not.toContainText("localhost");
+  await expect(publicAgentPrompt).not.toContainText("/dashboard");
   await expect(
     page.locator("#options dt").getByText("--prompt", { exact: true })
   ).toBeVisible();

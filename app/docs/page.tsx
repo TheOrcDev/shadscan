@@ -217,10 +217,13 @@ export default function DocsPage() {
           />
           <p>
             The recommended way to start is to hand the audit to your AI coding
-            agent. Copy the prompt above and paste it in — it runs Shadscan,
-            then, without editing any code, summarizes the findings by severity
-            and proposes a prioritized remediation plan for you to approve
-            before anything changes.
+            agent. Copy the prompt above and paste it in — it runs one source
+            audit across every detected application, inventories each app's
+            concrete page routes, and checks those pages for horizontal overflow
+            both locally and in production. Missing deployment URLs, dynamic
+            values, or authenticated access remain explicit coverage gaps. The
+            agent then proposes one prioritized plan for you to approve before
+            anything changes.
           </p>
           <h3>Hand the results off to an agent</h3>
           <div className="not-typeset mt-4">
