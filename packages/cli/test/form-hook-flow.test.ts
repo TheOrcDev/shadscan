@@ -67,6 +67,405 @@ describe("form hook flow", () => {
     }
   });
 
+  it("follows a custom form hook used inside a nested map callback", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const form = useEditor();
+            return (
+              <form>
+                {["email"].map((fieldName) => (
+                  <div key={fieldName}>
+                    <Input {...form.register(fieldName)} />
+                    <FormMessage />
+                  </div>
+                ))}
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("pass");
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("does not borrow a nested shadowed form use for an outer hook result", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page({ forms }) {
+            const form = useEditor();
+            return (
+              <form>
+                {forms.map((form) => (
+                  <Input key={form.id} {...form.register("email")} />
+                ))}
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("keeps an outer form capture despite a shadow in a sibling block", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page({ fields }) {
+            const form = useEditor();
+            return (
+              <form>
+                {fields.map((fieldName) => {
+                  {
+                    const form = createPreviewForm();
+                    void form;
+                  }
+                  return <Input key={fieldName} {...form.register(fieldName)} />;
+                })}
+                <FormMessage />
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("pass");
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("does not borrow a same-owner inner-block form use", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const form = useEditor();
+            {
+              const form = createPreviewForm();
+              void form.register("email");
+            }
+            return <form><Input /></form>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("keeps an outer form use despite a same-owner inner-block shadow", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const form = useEditor();
+            {
+              const form = createPreviewForm();
+              void form;
+            }
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+                <FormMessage />
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("pass");
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("does not borrow an async callback var-hoisted form use", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const form = useEditor();
+            const previews = ["email"].map(async (fieldName) => {
+              {
+                var form = createPreviewForm();
+              }
+              return form.register(fieldName);
+            });
+            void previews;
+            return <form><Input /></form>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("reports a reassigned consumer form binding as advisory", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            let form = useEditor();
+            form = createPreviewForm();
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+              </form>
+            );
+          }
+        `
+      );
+
+      const validation = await runRule(
+        fixture.rootDir,
+        validationWiredToFormRule
+      );
+      const fieldErrors = await runRule(
+        fixture.rootDir,
+        fieldErrorsRenderedRule
+      );
+
+      expect([validation.status, fieldErrors.status]).toEqual([
+        "advisory",
+        "advisory",
+      ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("reports a redeclared hoisted consumer form binding as advisory", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return useForm({ resolver: zodResolver(schema) });
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            var form = useEditor();
+            {
+              var form = createPreviewForm();
+            }
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+              </form>
+            );
+          }
+        `
+      );
+
+      const validation = await runRule(
+        fixture.rootDir,
+        validationWiredToFormRule
+      );
+      const fieldErrors = await runRule(
+        fixture.rootDir,
+        fieldErrorsRenderedRule
+      );
+
+      expect([validation.status, fieldErrors.status]).toEqual([
+        "advisory",
+        "advisory",
+      ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("connects a same-file custom form hook to its consumer", async () => {
     const fixture = await createRuleFixture({
       "@hookform/resolvers": "5.2.2",
@@ -540,6 +939,198 @@ describe("form hook flow", () => {
             return <form onSubmit={form.handleSubmit(save)}>
               {form.formState.errors.email && <FieldError />}
             </form>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("pass");
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("follows a form instance returned under a quoted object key", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            return { "form": useForm({ resolver: zodResolver(schema) }) };
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const { form } = useEditor();
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+                <FieldError>{form.formState.errors.email?.message}</FieldError>
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("pass");
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("reports nested form API destructuring as advisory", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            const form = useForm({ resolver: zodResolver(schema) });
+            return { form };
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const { form: { handleSubmit } } = useEditor();
+            return <form onSubmit={handleSubmit(save)}><Input /></form>;
+          }
+        `
+      );
+
+      const validation = await runRule(
+        fixture.rootDir,
+        validationWiredToFormRule
+      );
+      const fieldErrors = await runRule(
+        fixture.rootDir,
+        fieldErrorsRenderedRule
+      );
+
+      expect([validation.status, fieldErrors.status]).toEqual([
+        "advisory",
+        "advisory",
+      ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("keeps mixed supported and nested form bindings uncertain", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            const form = useForm();
+            const other = useForm({ resolver: zodResolver(schema) });
+            return { form, other };
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const { form: { handleSubmit }, other } = useEditor();
+            return (
+              <form onSubmit={handleSubmit(save)}>
+                <Input {...other.register("email")} />
+                <FieldError>{other.formState.errors.email?.message}</FieldError>
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, validationWiredToFormRule)).status
+      ).toBe("advisory");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("ignores unrelated nested metadata beside a supported form binding", async () => {
+    const fixture = await createRuleFixture({
+      "@hookform/resolvers": "5.2.2",
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/use-editor.ts",
+        `
+          import { zodResolver } from "@hookform/resolvers/zod";
+          import { useForm } from "react-hook-form";
+
+          export function useEditor() {
+            const form = useForm({ resolver: zodResolver(schema) });
+            return { form, meta: { status: "ready" } };
+          }
+        `
+      );
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useEditor } from "./use-editor";
+
+          export function Page() {
+            const { form, meta: { status } } = useEditor();
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+                <FieldError>{form.formState.errors.email?.message}</FieldError>
+                <output>{status}</output>
+              </form>
+            );
           }
         `
       );
@@ -2050,6 +2641,99 @@ describe("form hook flow", () => {
       expect(
         (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
       ).toBe("pass");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("requires error UI for direct useForm calls with object type arguments", async () => {
+    const fixture = await createRuleFixture({
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useForm } from "react-hook-form";
+
+          export function Page() {
+            const form = useForm<{ email: string }>();
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+              </form>
+            );
+          }
+        `
+      );
+
+      const result = await runRule(fixture.rootDir, fieldErrorsRenderedRule);
+
+      expect(result.status).toBe("fail");
+      expect(result.evidence[0]?.filePath).toContain("src/page.tsx");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("supports semicolons inside direct useForm object type arguments", async () => {
+    const fixture = await createRuleFixture({
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useForm } from "react-hook-form";
+
+          export function Page() {
+            const form = useForm<{ email: string; name: string }>();
+            return (
+              <form onSubmit={form.handleSubmit(save)}>
+                <Input {...form.register("email")} />
+              </form>
+            );
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("fail");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("ignores type-only generic useForm instantiations", async () => {
+    const fixture = await createRuleFixture({
+      react: "19.2.4",
+      "react-hook-form": "7.62.0",
+    });
+
+    try {
+      await fixture.write(
+        "src/page.tsx",
+        `
+          import { useForm } from "react-hook-form";
+
+          type FormApi = ReturnType<
+            typeof useForm<{ email: string; name: string }>
+          >;
+
+          export function Page() {
+            return <form><Input /></form>;
+          }
+        `
+      );
+
+      expect(
+        (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+      ).toBe("not-applicable");
     } finally {
       await fixture.cleanup();
     }

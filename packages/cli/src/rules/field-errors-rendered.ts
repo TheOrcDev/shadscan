@@ -4,7 +4,7 @@ import { analyzeFormHookFlow, getSourceScopeKey } from "./form-hook-flow";
 import { advisory, fail, notApplicable, pass } from "./rule-result";
 
 const CUSTOM_VALIDATION_PATTERN =
-  /\b(?:formState\.errors|fieldState\.error|errors\.\w+|useActionState|useForm(?:\s*<[^;{}]*>)?\s*\()/;
+  /\b(?:formState\.errors|fieldState\.error|errors\.\w+|useActionState)/;
 const RENDERED_ERROR_PATTERN =
   /<(?:FieldError|FormMessage|ErrorMessage)(?:\s|>)|role\s*=\s*["']alert["']|(?:formState\.errors|fieldState\.error|errors\.\w+)\s*(?:&&|\?)/;
 
@@ -19,9 +19,11 @@ const fieldErrorsRenderedRule: AuditRule = {
     const hookFlow = await analyzeFormHookFlow(project, filesystemRoot);
     const directValidationScopes = (
       await findOwnedSourceScopes(project, CUSTOM_VALIDATION_PATTERN)
-    ).filter(
-      (scope) => !hookFlow.providerScopeKeys.has(getSourceScopeKey(scope))
-    );
+    )
+      .concat(hookFlow.directUseFormScopes)
+      .filter(
+        (scope) => !hookFlow.providerScopeKeys.has(getSourceScopeKey(scope))
+      );
     const validationScopesByKey = new Map(
       directValidationScopes.map((scope) => [getSourceScopeKey(scope), scope])
     );

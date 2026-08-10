@@ -14,6 +14,8 @@ import {
   isBinaryExpression,
   isBlock,
   isCallExpression,
+  isCatchClause,
+  isClassDeclaration,
   isComputedPropertyName,
   isElementAccessExpression,
   isExportDeclaration,
@@ -38,10 +40,15 @@ import {
   isSpreadAssignment,
   isStringLiteral,
   isVariableDeclaration,
+  isVariableDeclarationList,
   isVariableStatement,
   type MethodDeclaration,
   type Node,
+  NodeFlags,
+  type ObjectBindingPattern,
   SyntaxKind,
+  type VariableDeclaration,
+  type VariableDeclarationList,
 } from "typescript";
 import {
   findOwnedSourceScopes,
@@ -98,6 +105,7 @@ interface UncertainFormHookFlow {
 type FormHookFlow = ResolvedFormHookFlow | UncertainFormHookFlow;
 
 interface FormHookAnalysis {
+  directUseFormScopes: SourceScope[];
   flowsByConsumerKey: Map<string, FormHookFlow[]>;
   providerScopeKeys: Set<string>;
 }
@@ -135,6 +143,11 @@ interface FunctionDefinition {
   name: string;
 }
 
+interface OwnerBindingIndex {
+  functionScoped: ReadonlySet<string>;
+  lexicalByContainer: ReadonlyMap<Node, ReadonlySet<string>>;
+}
+
 interface ResolvedFunction {
   declaration: SupportedFunction;
   file: ParsedSourceFile;
@@ -144,7 +157,11 @@ const formHookAnalysisCache = new WeakMap<
   ProjectDiscovery,
   Map<string, Promise<FormHookAnalysis>>
 >();
-const localShadowCache = new WeakMap<ScopeOwner, Map<string, boolean>>();
+const ownerBindingCache = new WeakMap<ScopeOwner, OwnerBindingIndex>();
+const topLevelFunctionDefinitionsCache = new WeakMap<
+  ParsedSourceFile,
+  readonly FunctionDefinition[]
+>();
 
 const getSourceScopeKey = (scope: SourceScope): string =>
   JSON.stringify([path.resolve(scope.file.filePath), scope.start, scope.end]);
@@ -201,7 +218,13 @@ const getImportedBinding = (
 
 const getTopLevelFunctionDefinitions = (
   file: ParsedSourceFile
-): FunctionDefinition[] => {
+): readonly FunctionDefinition[] => {
+  const cached = topLevelFunctionDefinitionsCache.get(file);
+
+  if (cached) {
+    return cached;
+  }
+
   const definitions: FunctionDefinition[] = [];
 
   for (const statement of file.sourceFile.statements) {
@@ -229,6 +252,7 @@ const getTopLevelFunctionDefinitions = (
     }
   }
 
+  topLevelFunctionDefinitionsCache.set(file, definitions);
   return definitions;
 };
 
@@ -505,19 +529,19 @@ const getCallValidationState = (call: CallExpression): FormValidationState => {
 
 const walkOwnerNodes = (
   owner: ScopeOwner,
-  visitor: (node: Node) => void
+  visitor: (node: Node, ancestors: Node[]) => void
 ): void => {
-  const visit = (node: Node): void => {
+  const visit = (node: Node, ancestors: Node[]): void => {
     if (node !== owner && isScopeOwner(node)) {
-      visitor(node);
+      visitor(node, ancestors);
       return;
     }
 
-    visitor(node);
-    forEachChild(node, visit);
+    visitor(node, ancestors);
+    forEachChild(node, (child) => visit(child, [...ancestors, node]));
   };
 
-  visit(owner);
+  visit(owner, []);
 };
 
 const getContainingFunction = (node: Node): ScopeOwner | null => {
@@ -534,54 +558,173 @@ const getContainingFunction = (node: Node): ScopeOwner | null => {
   return null;
 };
 
-const bindingNameContainsIdentifier = (
+const collectBindingNames = (
   bindingName: BindingName,
-  identifier: string
-): boolean => {
+  names: Set<string>
+): void => {
   if (isIdentifier(bindingName)) {
-    return bindingName.text === identifier;
+    names.add(bindingName.text);
+    return;
   }
 
-  return bindingName.elements.some(
-    (element) =>
-      !isOmittedExpression(element) &&
-      bindingNameContainsIdentifier(element.name, identifier)
+  for (const element of bindingName.elements) {
+    if (!isOmittedExpression(element)) {
+      collectBindingNames(element.name, names);
+    }
+  }
+};
+
+const hasNodeFlag = (flags: NodeFlags, flag: NodeFlags): boolean =>
+  Math.floor(flags / flag) % 2 === 1;
+
+const variableListIsBlockScoped = (
+  declarationList: VariableDeclarationList
+): boolean =>
+  hasNodeFlag(declarationList.flags, NodeFlags.Let) ||
+  hasNodeFlag(declarationList.flags, NodeFlags.Const) ||
+  hasNodeFlag(declarationList.flags, NodeFlags.Using);
+
+const isLexicalBindingContainer = (node: Node): boolean => {
+  switch (node.kind) {
+    case SyntaxKind.Block:
+    case SyntaxKind.CaseBlock:
+    case SyntaxKind.CatchClause:
+    case SyntaxKind.ForInStatement:
+    case SyntaxKind.ForOfStatement:
+    case SyntaxKind.ForStatement:
+      return true;
+    default:
+      return false;
+  }
+};
+
+const getNearestLexicalBindingContainer = (ancestors: Node[]): Node | null => {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
+
+    if (ancestor && isLexicalBindingContainer(ancestor)) {
+      return ancestor;
+    }
+  }
+
+  return null;
+};
+
+const addLexicalBinding = (
+  lexicalByContainer: Map<Node, Set<string>>,
+  container: Node | null,
+  bindingName: BindingName
+): void => {
+  if (!container) {
+    return;
+  }
+
+  const names = lexicalByContainer.get(container) ?? new Set<string>();
+  collectBindingNames(bindingName, names);
+  lexicalByContainer.set(container, names);
+};
+
+const getOwnerBindingIndex = (owner: ScopeOwner): OwnerBindingIndex => {
+  const cached = ownerBindingCache.get(owner);
+
+  if (cached) {
+    return cached;
+  }
+
+  const functionScoped = new Set<string>();
+  const lexicalByContainer = new Map<Node, Set<string>>();
+
+  if (
+    (isFunctionDeclaration(owner) || isFunctionExpression(owner)) &&
+    owner.name
+  ) {
+    functionScoped.add(owner.name.text);
+  }
+
+  for (const parameter of owner.parameters) {
+    collectBindingNames(parameter.name, functionScoped);
+  }
+
+  walkOwnerNodes(owner, (node, ancestors) => {
+    if (node === owner) {
+      return;
+    }
+
+    if (isVariableDeclaration(node) && isVariableDeclarationList(node.parent)) {
+      if (!variableListIsBlockScoped(node.parent)) {
+        collectBindingNames(node.name, functionScoped);
+        return;
+      }
+
+      addLexicalBinding(
+        lexicalByContainer,
+        getNearestLexicalBindingContainer(ancestors),
+        node.name
+      );
+    } else if (isFunctionDeclaration(node) && node.name) {
+      addLexicalBinding(
+        lexicalByContainer,
+        getNearestLexicalBindingContainer(ancestors),
+        node.name
+      );
+    } else if (isClassDeclaration(node) && node.name) {
+      addLexicalBinding(
+        lexicalByContainer,
+        getNearestLexicalBindingContainer(ancestors),
+        node.name
+      );
+    } else if (isCatchClause(node) && node.variableDeclaration) {
+      addLexicalBinding(
+        lexicalByContainer,
+        node,
+        node.variableDeclaration.name
+      );
+    }
+  });
+
+  const index = { functionScoped, lexicalByContainer };
+  ownerBindingCache.set(owner, index);
+  return index;
+};
+
+const ownerShadowsReference = (
+  owner: ScopeOwner,
+  name: string,
+  referenceAncestors: Node[]
+): boolean => {
+  const bindings = getOwnerBindingIndex(owner);
+
+  return (
+    bindings.functionScoped.has(name) ||
+    referenceAncestors.some((ancestor) =>
+      bindings.lexicalByContainer.get(ancestor)?.has(name)
+    )
   );
+};
+
+const getAncestorsThroughOwner = (node: Node, owner: ScopeOwner): Node[] => {
+  const ancestors: Node[] = [];
+  let current = node.parent;
+
+  while (current) {
+    ancestors.push(current);
+
+    if (current === owner) {
+      break;
+    }
+
+    current = current.parent;
+  }
+
+  return ancestors;
 };
 
 const hasLocalShadow = (call: CallExpression, name: string): boolean => {
   const owner = getContainingFunction(call);
 
-  if (!owner) {
-    return false;
-  }
-
-  const ownerCache = localShadowCache.get(owner) ?? new Map<string, boolean>();
-
-  if (ownerCache.has(name)) {
-    return ownerCache.get(name) ?? false;
-  }
-
-  let shadowed = owner.parameters.some((parameter) =>
-    bindingNameContainsIdentifier(parameter.name, name)
-  );
-  walkOwnerNodes(owner, (node) => {
-    if (shadowed) {
-      return;
-    }
-
-    if (
-      (isVariableDeclaration(node) &&
-        bindingNameContainsIdentifier(node.name, name)) ||
-      (isFunctionDeclaration(node) && node.name?.text === name)
-    ) {
-      shadowed = true;
-    }
-  });
-
-  ownerCache.set(name, shadowed);
-  localShadowCache.set(owner, ownerCache);
-  return shadowed;
+  return owner
+    ? ownerShadowsReference(owner, name, getAncestorsThroughOwner(call, owner))
+    : false;
 };
 
 const getDirectUseFormCall = (
@@ -607,11 +750,13 @@ const getObjectPropertyExpression = (
       return property.name.text === propertyName ? [property.name] : [];
     }
 
-    if (
-      isPropertyAssignment(property) &&
-      property.name.getText(expression.getSourceFile()) === propertyName
-    ) {
-      return [property.initializer];
+    if (isPropertyAssignment(property)) {
+      const name = property.name;
+      const isMatch =
+        (isIdentifier(name) || isStringLiteral(name)) &&
+        name.text === propertyName;
+
+      return isMatch ? [property.initializer] : [];
     }
 
     return [];
@@ -914,53 +1059,144 @@ function getReturnedUseFormProvider(
   };
 }
 
+type BindingSelectors = Map<string, Set<null | string>>;
+type FormBindingSelectors = Map<Node, BindingSelectors>;
+type MutatedBindings = Map<Node, ReadonlySet<string>>;
+
 const addFormBindingSelector = (
-  selectors: Map<string, Set<null | string>>,
+  selectorsByContainer: FormBindingSelectors,
+  container: Node,
   bindingName: string,
   returnSelector: null | string
 ): void => {
+  const selectors = selectorsByContainer.get(container) ?? new Map();
   const bindingSelectors = selectors.get(bindingName) ?? new Set();
   bindingSelectors.add(returnSelector);
   selectors.set(bindingName, bindingSelectors);
+  selectorsByContainer.set(container, selectors);
 };
 
-const getFormBindingSelectors = (
-  owner: ScopeOwner
-): Map<string, Set<null | string>> => {
-  const selectors = new Map<string, Set<null | string>>();
+const getReferenceBindingContainer = (
+  owner: ScopeOwner,
+  bindingName: string,
+  ancestors: Node[]
+): Node | null => {
+  const isShadowedByNestedOwner = ancestors.some(
+    (ancestor) =>
+      ancestor !== owner &&
+      isScopeOwner(ancestor) &&
+      ownerShadowsReference(ancestor, bindingName, ancestors)
+  );
 
-  walkOwnerNodes(owner, (node) => {
-    if (isJsxSpreadAttribute(node) && isIdentifier(node.expression)) {
-      const opening = node.parent.parent;
+  if (isShadowedByNestedOwner) {
+    return null;
+  }
 
-      if (
-        (isJsxOpeningElement(opening) || isJsxSelfClosingElement(opening)) &&
-        FORM_COMPONENT_NAME_PATTERN.test(getJsxTagName(opening) ?? "")
-      ) {
-        addFormBindingSelector(selectors, node.expression.text, null);
-        return;
-      }
-    }
+  const bindings = getOwnerBindingIndex(owner);
+
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
 
     if (
-      !(isPropertyAccessExpression(node) && FORM_API_NAMES.has(node.name.text))
+      ancestor &&
+      bindings.lexicalByContainer.get(ancestor)?.has(bindingName)
     ) {
+      return ancestor;
+    }
+  }
+
+  return bindings.functionScoped.has(bindingName) ? owner : null;
+};
+
+const getDeclarationBindingContainer = (
+  owner: ScopeOwner,
+  declaration: VariableDeclaration
+): Node | null => {
+  const declarationList = declaration.parent;
+
+  if (!isVariableDeclarationList(declarationList)) {
+    return null;
+  }
+
+  if (!variableListIsBlockScoped(declarationList)) {
+    return owner;
+  }
+
+  let current: Node | undefined = declarationList.parent;
+
+  while (current && current !== owner) {
+    if (isLexicalBindingContainer(current)) {
+      return current;
+    }
+
+    current = current.parent;
+  }
+
+  return null;
+};
+
+interface FormBindingReference {
+  bindingName: string;
+  returnSelector: null | string;
+}
+
+const getFormBindingReference = (node: Node): FormBindingReference | null => {
+  if (isJsxSpreadAttribute(node) && isIdentifier(node.expression)) {
+    const opening = node.parent.parent;
+    const isFormComponent =
+      (isJsxOpeningElement(opening) || isJsxSelfClosingElement(opening)) &&
+      FORM_COMPONENT_NAME_PATTERN.test(getJsxTagName(opening) ?? "");
+
+    return isFormComponent
+      ? { bindingName: node.expression.text, returnSelector: null }
+      : null;
+  }
+
+  if (
+    !(isPropertyAccessExpression(node) && FORM_API_NAMES.has(node.name.text))
+  ) {
+    return null;
+  }
+
+  if (isIdentifier(node.expression)) {
+    return { bindingName: node.expression.text, returnSelector: null };
+  }
+
+  if (
+    isPropertyAccessExpression(node.expression) &&
+    isIdentifier(node.expression.expression)
+  ) {
+    return {
+      bindingName: node.expression.expression.text,
+      returnSelector: node.expression.name.text,
+    };
+  }
+
+  return null;
+};
+
+const getFormBindingSelectors = (owner: ScopeOwner): FormBindingSelectors => {
+  const selectors = new Map<Node, BindingSelectors>();
+
+  walkNodes(owner, (node, ancestors) => {
+    const reference = getFormBindingReference(node);
+
+    if (!reference) {
       return;
     }
 
-    if (isIdentifier(node.expression)) {
-      addFormBindingSelector(selectors, node.expression.text, null);
-      return;
-    }
+    const container = getReferenceBindingContainer(
+      owner,
+      reference.bindingName,
+      ancestors
+    );
 
-    if (
-      isPropertyAccessExpression(node.expression) &&
-      isIdentifier(node.expression.expression)
-    ) {
+    if (container) {
       addFormBindingSelector(
         selectors,
-        node.expression.expression.text,
-        node.expression.name.text
+        container,
+        reference.bindingName,
+        reference.returnSelector
       );
     }
   });
@@ -968,34 +1204,156 @@ const getFormBindingSelectors = (
   return selectors;
 };
 
-const getBindingPatternReturnSelector = (
-  pattern: import("typescript").ObjectBindingPattern,
-  formBindingSelectors: Map<string, Set<null | string>>
-): string | null | undefined => {
-  const selectors = pattern.elements.flatMap((element) => {
-    const sourceName = element.propertyName ?? element.name;
+const addMutatedBinding = (
+  mutations: Map<Node, Set<string>>,
+  container: Node,
+  bindingName: string
+): void => {
+  const names = mutations.get(container) ?? new Set<string>();
+  names.add(bindingName);
+  mutations.set(container, names);
+};
 
-    if (!isIdentifier(sourceName)) {
-      return [];
+const getConsumerBindingMutations = (owner: ScopeOwner): MutatedBindings => {
+  const initializerCounts = new Map<Node, Map<string, number>>();
+  const mutations = new Map<Node, Set<string>>();
+
+  walkOwnerNodes(owner, (node) => {
+    if (!(isVariableDeclaration(node) && node.initializer)) {
+      return;
+    }
+
+    const container = getDeclarationBindingContainer(owner, node);
+
+    if (!container) {
+      return;
+    }
+
+    const names = new Set<string>();
+    collectBindingNames(node.name, names);
+    const counts =
+      initializerCounts.get(container) ?? new Map<string, number>();
+
+    for (const name of names) {
+      const count = (counts.get(name) ?? 0) + 1;
+      counts.set(name, count);
+
+      if (count > 1) {
+        addMutatedBinding(mutations, container, name);
+      }
+    }
+
+    initializerCounts.set(container, counts);
+  });
+
+  walkNodes(owner, (node, ancestors) => {
+    if (
+      !(
+        isBinaryExpression(node) &&
+        node.operatorToken.kind >= SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= SyntaxKind.LastAssignment &&
+        isIdentifier(node.left)
+      )
+    ) {
+      return;
+    }
+
+    const container = getReferenceBindingContainer(
+      owner,
+      node.left.text,
+      ancestors
+    );
+
+    if (container) {
+      addMutatedBinding(mutations, container, node.left.text);
+    }
+  });
+
+  return mutations;
+};
+
+const bindingPatternHasFormSignal = (
+  bindingName: BindingName,
+  formBindingSelectors: Map<string, Set<null | string>>
+): boolean => {
+  const isFormSignal = (name: string): boolean =>
+    name === "form" ||
+    FORM_API_NAMES.has(name) ||
+    formBindingSelectors.has(name);
+
+  if (isIdentifier(bindingName)) {
+    return isFormSignal(bindingName.text);
+  }
+
+  return bindingName.elements.some((element) => {
+    if (isOmittedExpression(element)) {
+      return false;
+    }
+
+    const propertyName = element.propertyName;
+    const propertyIsFormSignal = Boolean(
+      propertyName &&
+        (isIdentifier(propertyName) || isStringLiteral(propertyName)) &&
+        isFormSignal(propertyName.text)
+    );
+
+    return (
+      propertyIsFormSignal ||
+      bindingPatternHasFormSignal(element.name, formBindingSelectors)
+    );
+  });
+};
+
+const getBindingPatternReturnSelector = (
+  pattern: ObjectBindingPattern,
+  formBindingSelectors: Map<string, Set<null | string>>
+): ReturnSelector | undefined => {
+  const selectors: (null | string)[] = [];
+  let hasUnsupportedFormBinding = false;
+
+  for (const element of pattern.elements) {
+    const sourceName = element.propertyName ?? element.name;
+    const sourceIsForm =
+      (isIdentifier(sourceName) || isStringLiteral(sourceName)) &&
+      sourceName.text === "form";
+
+    if (
+      (isObjectBindingPattern(element.name) ||
+        isArrayBindingPattern(element.name)) &&
+      (sourceIsForm ||
+        bindingPatternHasFormSignal(element.name, formBindingSelectors))
+    ) {
+      hasUnsupportedFormBinding = true;
+    }
+
+    if (!(isIdentifier(sourceName) || isStringLiteral(sourceName))) {
+      continue;
     }
 
     if (FORM_API_NAMES.has(sourceName.text)) {
-      return [null];
+      selectors.push(null);
+      continue;
     }
 
     if (
       isIdentifier(element.name) &&
       formBindingSelectors.has(element.name.text)
     ) {
-      return [sourceName.text];
+      selectors.push(sourceName.text);
     }
-
-    return [];
-  });
+  }
 
   const uniqueSelectors = new Set(selectors);
 
-  return uniqueSelectors.size === 1 ? selectors[0] : undefined;
+  if (hasUnsupportedFormBinding) {
+    return UNCERTAIN_RETURN_SELECTOR;
+  }
+
+  if (uniqueSelectors.size === 1) {
+    return selectors[0];
+  }
+
+  return selectors.length > 0 ? UNCERTAIN_RETURN_SELECTOR : undefined;
 };
 
 const getHookCallName = (call: CallExpression): string | null => {
@@ -1018,10 +1376,78 @@ const getHookCallName = (call: CallExpression): string | null => {
   return null;
 };
 
+const objectBindingHasRelevantMutation = (
+  pattern: ObjectBindingPattern,
+  selectors: BindingSelectors,
+  mutations: ReadonlySet<string>
+): boolean =>
+  pattern.elements.some((element) => {
+    if (!isIdentifier(element.name)) {
+      return false;
+    }
+
+    const sourceName = element.propertyName ?? element.name;
+    const sourceIsFormApi =
+      (isIdentifier(sourceName) || isStringLiteral(sourceName)) &&
+      FORM_API_NAMES.has(sourceName.text);
+
+    return (
+      mutations.has(element.name.text) &&
+      (sourceIsFormApi || selectors.has(element.name.text))
+    );
+  });
+
+const getConsumerReturnSelector = (
+  bindingName: BindingName,
+  selectors: BindingSelectors,
+  mutations: ReadonlySet<string>
+): ReturnSelector | undefined => {
+  if (isIdentifier(bindingName)) {
+    const bindingSelectors = selectors.get(bindingName.text);
+
+    if (!bindingSelectors) {
+      return;
+    }
+
+    const onlySelector = bindingSelectors.values().next().value;
+    return !mutations.has(bindingName.text) &&
+      bindingSelectors.size === 1 &&
+      onlySelector !== undefined
+      ? onlySelector
+      : UNCERTAIN_RETURN_SELECTOR;
+  }
+
+  if (isArrayBindingPattern(bindingName)) {
+    const hasUsedBinding = bindingName.elements.some(
+      (element) =>
+        !isOmittedExpression(element) &&
+        isIdentifier(element.name) &&
+        selectors.has(element.name.text)
+    );
+    return hasUsedBinding ? UNCERTAIN_RETURN_SELECTOR : undefined;
+  }
+
+  if (!isObjectBindingPattern(bindingName)) {
+    return;
+  }
+
+  const returnSelector = getBindingPatternReturnSelector(
+    bindingName,
+    selectors
+  );
+
+  return returnSelector !== undefined &&
+    objectBindingHasRelevantMutation(bindingName, selectors, mutations)
+    ? UNCERTAIN_RETURN_SELECTOR
+    : returnSelector;
+};
+
 const getHookCandidate = (
   node: Node,
-  formBindingSelectors: Map<string, Set<null | string>>,
-  file: ParsedSourceFile
+  formBindingSelectors: FormBindingSelectors,
+  mutatedBindings: MutatedBindings,
+  file: ParsedSourceFile,
+  owner: ScopeOwner
 ): HookCallCandidate | null => {
   if (!isVariableDeclaration(node)) {
     return null;
@@ -1050,43 +1476,20 @@ const getHookCandidate = (
     return null;
   }
 
-  if (isIdentifier(node.name)) {
-    const selectors = formBindingSelectors.get(node.name.text);
+  const bindingContainer = getDeclarationBindingContainer(owner, node);
 
-    if (!selectors) {
-      return null;
-    }
-
-    const onlySelector = selectors.values().next().value;
-
-    return {
-      call: initializer,
-      returnSelector:
-        selectors.size === 1 && onlySelector !== undefined
-          ? onlySelector
-          : UNCERTAIN_RETURN_SELECTOR,
-    };
-  }
-
-  if (isArrayBindingPattern(node.name)) {
-    const hasUsedBinding = node.name.elements.some(
-      (element) =>
-        !isOmittedExpression(element) &&
-        isIdentifier(element.name) &&
-        formBindingSelectors.has(element.name.text)
-    );
-    return hasUsedBinding
-      ? { call: initializer, returnSelector: UNCERTAIN_RETURN_SELECTOR }
-      : null;
-  }
-
-  if (!isObjectBindingPattern(node.name)) {
+  if (!bindingContainer) {
     return null;
   }
 
-  const returnSelector = getBindingPatternReturnSelector(
+  const selectorsForContainer =
+    formBindingSelectors.get(bindingContainer) ?? new Map();
+  const mutationsForContainer =
+    mutatedBindings.get(bindingContainer) ?? new Set<string>();
+  const returnSelector = getConsumerReturnSelector(
     node.name,
-    formBindingSelectors
+    selectorsForContainer,
+    mutationsForContainer
   );
 
   return returnSelector === undefined
@@ -1106,6 +1509,7 @@ const getHookCalls = (
   }
 
   const formBindingSelectors = getFormBindingSelectors(owner);
+  const mutatedBindings = getConsumerBindingMutations(owner);
 
   const addCandidate = (candidate: HookCallCandidate): void => {
     if (candidates.length >= MAX_HOOK_CALLS_PER_SCOPE) {
@@ -1117,7 +1521,13 @@ const getHookCalls = (
   };
 
   walkOwnerNodes(owner, (node) => {
-    const candidate = getHookCandidate(node, formBindingSelectors, file);
+    const candidate = getHookCandidate(
+      node,
+      formBindingSelectors,
+      mutatedBindings,
+      file,
+      owner
+    );
 
     if (candidate) {
       addCandidate(candidate);
@@ -1169,7 +1579,7 @@ const addFlow = (
 
 const functionOwnsUseFormCall = (
   file: ParsedSourceFile,
-  declaration: SupportedFunction
+  declaration: ScopeOwner
 ): boolean => {
   const useFormLocalName = getImportedLocalName(
     file,
@@ -1214,6 +1624,18 @@ const functionOwnsUseFormCall = (
     }
   });
   return ownsUseFormCall;
+};
+
+const functionContainsUseFormCall = (declaration: ScopeOwner): boolean => {
+  let containsUseFormCall = false;
+
+  walkOwnerNodes(declaration, (node) => {
+    if (isCallExpression(node) && getHookCallName(node) === "useForm") {
+      containsUseFormCall = true;
+    }
+  });
+
+  return containsUseFormCall;
 };
 
 const getProviderScopeKeys = (
@@ -1289,6 +1711,10 @@ const buildFormHookAnalysis = async (
   const flowsByConsumerKey = new Map<string, FormHookFlow[]>();
   const providerScopeKeys = getProviderScopeKeys(files, environment);
   const scopeOwners = getScopeOwners(files);
+  const directUseFormScopes = formScopes.filter((scope) => {
+    const owner = scopeOwners.get(getSourceScopeKey(scope));
+    return owner ? functionContainsUseFormCall(owner) : false;
+  });
 
   for (const consumer of formScopes) {
     const hookCalls = getHookCalls(
@@ -1330,7 +1756,7 @@ const buildFormHookAnalysis = async (
     }
   }
 
-  return { flowsByConsumerKey, providerScopeKeys };
+  return { directUseFormScopes, flowsByConsumerKey, providerScopeKeys };
 };
 
 const analyzeFormHookFlow = (
