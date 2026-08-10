@@ -6,6 +6,15 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Changed
+
+- The public copy-paste AI prompt now combines the deterministic source audit
+  with project-aware horizontal-overflow verification across every detected
+  application, including monorepo apps, their concrete local pages, and their
+  confirmed production deployments. It batches larger route manifests and
+  reports dynamic, authenticated, or otherwise blocked coverage instead of
+  inventing URLs or claiming an incomplete pass.
+
 ## 0.14.0 - 2026-08-10
 
 ### Added
