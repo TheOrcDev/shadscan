@@ -10,11 +10,13 @@ import {
   createProgram,
   resolveProjectPath,
   runCli,
+  runOverflowCheckAction,
   scoreFailsThreshold,
 } from "../src/cli";
 import { normalizeCliFailure } from "../src/cli-error";
 import { ProjectDiscoveryError } from "../src/discovery";
 import { resolveOutputFormat, wantsJsonOutput } from "../src/output-format";
+import { OverflowCheckError } from "../src/overflow-check/error";
 import { createRuleFixture } from "./rule-fixture";
 import {
   cleanupWorkspaceFixtures,
@@ -137,6 +139,7 @@ describe("CLI contract", () => {
 
     expect(program.helpInformation()).toContain("--apply");
     expect(program.helpInformation()).toContain("--agent <agent>");
+    expect(program.helpInformation()).toContain("--check-overflow <url>");
     expect(program.helpInformation()).toContain("--no-interactive");
     expect(program.commands.map((command) => command.name())).toContain(
       "setup"
@@ -169,6 +172,133 @@ describe("CLI contract", () => {
     } finally {
       await fixture.cleanup();
     }
+  });
+
+  it("renders focused overflow JSON and exits on a completed finding", async () => {
+    let stdout = "";
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+    const runBrowserCheck = vi.fn(async () => ({
+      browser: { name: "chromium", version: "123" },
+      durationMs: 12,
+      measurements: [
+        {
+          clientWidth: 320,
+          culprits: [
+            {
+              depth: 2,
+              descriptor: '[data-slot="wide"]',
+              left: 0,
+              order: 1,
+              overflowPx: 1,
+              right: 321,
+            },
+          ],
+          finalPath: "/",
+          forcedScrollbar: false,
+          httpStatus: 200,
+          page: "/",
+          scrollWidth: 321,
+          viewport: { height: 820, name: "mobile", width: 320 } as const,
+        },
+        {
+          clientWidth: 1440,
+          finalPath: "/",
+          forcedScrollbar: false,
+          httpStatus: 200,
+          page: "/",
+          scrollWidth: 1440,
+          viewport: {
+            height: 1000,
+            name: "desktop",
+            width: 1440,
+          } as const,
+        },
+      ],
+    }));
+
+    try {
+      await runOverflowCheckAction(
+        {
+          outputFormat: "json",
+          target: "http://127.0.0.1:3000",
+        },
+        { runBrowserCheck }
+      );
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(runBrowserCheck).toHaveBeenCalledOnce();
+    expect(JSON.parse(stdout)).toMatchObject({
+      kind: "overflow-check",
+      schemaVersion: 1,
+      status: "fail",
+      summary: { failed: 1, maximumOverflowPx: 1, measurements: 2 },
+    });
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("rejects focused overflow-only options during static scans", async () => {
+    await expect(captureOutput(["--route", "/dashboard"])).rejects.toThrow(
+      "--route requires --check-overflow."
+    );
+    await expect(
+      captureOutput(["--browser-executable", "/tmp/chromium"])
+    ).rejects.toThrow("--browser-executable requires --check-overflow.");
+  });
+
+  it("rejects static scan controls in focused overflow mode before launch", async () => {
+    const conflicts = [
+      { arguments: ["--category", "forms"], option: "--category" },
+      { arguments: ["--fail-under", "90"], option: "--fail-under" },
+      { arguments: ["--apply"], option: "--apply" },
+      { arguments: ["--agent", "codex"], option: "--agent" },
+      { arguments: ["--format", "prompt"], option: "--prompt" },
+      { arguments: ["--list-projects"], option: "--list-projects" },
+      { arguments: ["--project", "apps/web"], option: "--project" },
+      { arguments: ["--roast"], option: "--roast" },
+    ];
+
+    for (const conflict of conflicts) {
+      await expect(
+        captureOutput([
+          "--check-overflow",
+          "http://127.0.0.1:3000",
+          ...conflict.arguments,
+        ])
+      ).rejects.toThrow(
+        `--check-overflow cannot be used with ${conflict.option}.`
+      );
+    }
+  });
+
+  it("does not let focused overflow flags leak into subcommands", async () => {
+    await expect(
+      captureOutput([
+        "--check-overflow",
+        "http://127.0.0.1:3000",
+        "setup",
+        "--pre-commit",
+        "--dry-run",
+      ])
+    ).rejects.toThrow(
+      "--check-overflow and its related options cannot be used with subcommands."
+    );
+  });
+
+  it("rejects a project path in focused overflow mode", async () => {
+    await expect(
+      captureOutput([
+        "some-project",
+        "--check-overflow",
+        "http://127.0.0.1:3000",
+      ])
+    ).rejects.toThrow("--check-overflow does not accept a project path.");
   });
 
   it("renders a deterministic score bar when stdout is not a TTY", async () => {
@@ -624,6 +754,17 @@ describe("CLI contract", () => {
     expect(normalizeCliFailure(new Error("private runtime detail"))).toEqual({
       code: "AUDIT_FAILED",
       message: "shadscan could not complete the audit.",
+    });
+    expect(
+      normalizeCliFailure(
+        new OverflowCheckError(
+          "OVERFLOW_BROWSER_UNAVAILABLE",
+          "Install Chromium."
+        )
+      )
+    ).toEqual({
+      code: "OVERFLOW_BROWSER_UNAVAILABLE",
+      message: "Install Chromium.",
     });
   });
 });

@@ -330,6 +330,15 @@ const toProjectPath = (tracePath, tracedFile) => {
   return relativePath.split(path.sep).join("/");
 };
 
+const hostedScannerRuntime = await readFile(SHADSCAN_CLI_RUNTIME_PATH, "utf8");
+const PLAYWRIGHT_RUNTIME_IMPORT_PATTERN =
+  /(?:\b(?:import|require)\s*\(\s*["']playwright-core(?:\/[^"']*)?["']|\bimport\s*["']playwright-core(?:\/[^"']*)?["']|\b(?:import|export)\s+[^;\n]*?\bfrom\s*["']playwright-core(?:\/[^"']*)?["'])/;
+if (PLAYWRIGHT_RUNTIME_IMPORT_PATTERN.test(hostedScannerRuntime)) {
+  throw new Error(
+    "The local-only overflow browser dependency leaked into the hosted scanner runtime."
+  );
+}
+
 for (const { requiredRuntimeFiles, tracePath } of TRACE_TARGETS) {
   const trace = JSON.parse(await readFile(tracePath, "utf8"));
   const entryPath = path.resolve(tracePath.replace(/\.nft\.json$/, ""));
@@ -360,10 +369,18 @@ for (const { requiredRuntimeFiles, tracePath } of TRACE_TARGETS) {
     await findMissingNextRuntimeFiles(tracedPaths);
   const scannerDependencySymlinks =
     await findScannerDependencySymlinks(tracedPaths);
+  const playwrightTracePaths = tracedPaths
+    .map(toComparablePath)
+    .filter(
+      (filePath) =>
+        filePath.includes("/node_modules/playwright-core/") ||
+        filePath.includes("/node_modules/.pnpm/playwright-core@")
+    );
 
   if (
     missingRuntimeFiles.length > 0 ||
     missingNextRuntimeFiles.length > 0 ||
+    playwrightTracePaths.length > 0 ||
     scannerDependencySymlinks.length > 0 ||
     unrelatedFiles.length > 0
   ) {
@@ -373,6 +390,9 @@ for (const { requiredRuntimeFiles, tracePath } of TRACE_TARGETS) {
         : null,
       missingNextRuntimeFiles.length > 0
         ? `missing Next runtime: ${missingNextRuntimeFiles.join(", ")}`
+        : null,
+      playwrightTracePaths.length > 0
+        ? `local-only Playwright runtime: ${playwrightTracePaths.join(", ")}`
         : null,
       scannerDependencySymlinks.length > 0
         ? `scanner dependency symlinks: ${scannerDependencySymlinks.join(", ")}`

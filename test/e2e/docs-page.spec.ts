@@ -40,7 +40,22 @@ test("documents the CLI before the optional agent workflow", async ({
   await expect(
     page.locator("#options dt").getByText("--agent <agent>", { exact: true })
   ).toBeVisible();
+  await expect(
+    page
+      .locator("#options dt")
+      .getByText("--check-overflow <url>", { exact: true })
+  ).toBeVisible();
   await expect(page.getByText("production-polish")).toBeVisible();
+
+  const overflowCheck = page.locator("#overflow-check");
+  await expect(overflowCheck).toContainText(
+    "--check-overflow http://localhost:3000 --route /dashboard"
+  );
+  await expect(overflowCheck).toContainText("Mobile: 320 × 820");
+  await expect(overflowCheck).toContainText("Desktop: 1440 × 1000");
+  await expect(overflowCheck).toContainText(
+    "standalone rendered check, not another source-audit rule"
+  );
 
   const agentPrompt = page.locator("#agent-prompt");
   await agentPrompt.getByRole("tab", { name: "bun", exact: true }).click();

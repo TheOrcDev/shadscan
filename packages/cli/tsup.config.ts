@@ -21,6 +21,7 @@ export default defineConfig([
       index: "src/index.ts",
     },
     esbuildOptions: configureEsbuild,
+    external: ["playwright-core"],
     format: ["esm"],
     // The MCP SDK (and the validator family its server core imports) is a
     // devDependency bundled into dist, mirroring commander: users install
@@ -49,6 +50,7 @@ export default defineConfig([
       index: "src/index.ts",
     },
     esbuildOptions: configureEsbuild,
+    external: ["playwright-core"],
     format: ["esm"],
     noExternal: [/.*/],
     outDir: "../../.shadscan-runtime",

@@ -6,6 +6,18 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A standalone `--check-overflow <url>` CLI mode that opens an already-running
+  local or deployed app in isolated Chromium contexts and treats any
+  document-level horizontal overflow or forced root scrollbar as a critical
+  failure at fixed mobile (320 × 820) and desktop (1440 × 1000) viewports.
+  Repeatable `--route` options cover up to ten same-origin pages, human and
+  versioned JSON reports include bounded likely-culprit evidence, and
+  operational failures stay separate from product failures. This rendered
+  check does not add a catalog rule, score, or grade and leaves the static
+  source audit unchanged.
+
 ## 0.13.0 - 2026-08-10
 
 ### Fixed

@@ -113,6 +113,12 @@ pnpm exec shadscan --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
+
+# Check an already-running app for horizontal overflow
+pnpm dlx @shadscan/cli --check-overflow http://localhost:3000
+
+# Add same-origin routes to the target URL
+pnpm dlx @shadscan/cli --check-overflow http://localhost:3000 --route /dashboard --route /settings
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
@@ -120,6 +126,36 @@ needs to be explicit.
 
 Pin an exact package version in CI; unqualified commands resolve to the latest
 stable release. Run `pnpm dlx @shadscan/cli --help` for every option.
+
+## Rendered Horizontal Overflow
+
+`--check-overflow <url>` is a focused critical gate for an already-running
+local or deployed app. It opens isolated Chromium pages at two fixed CSS
+viewports — mobile at 320 × 820 and desktop at 1440 × 1000 — and fails on any
+document-level horizontal overflow, including a one-pixel overflow or a
+horizontal scrollbar forced on the root or body. The target URL is always
+checked; repeat `--route <path>` to add same-origin pages, up to ten pages in
+total. Each route must begin with `/` and cannot contain a query string or
+fragment.
+
+This is separate from the default static source audit. It does not add a rule,
+score, or grade, and the 62-rule catalog and existing
+`mobile-overflow-absent` advisory stay unchanged. Shadscan does not start or
+build the target app, and the command does not need a project directory.
+
+Use `--json` for its versioned standalone report. A clean result exits `0`.
+Detected overflow exits `1` with the complete report on stdout. Operational or
+argument errors exit `1`, keep stdout empty, and write the error to stderr. If
+Chromium is not available, install the matching managed browser with:
+
+```bash
+pnpm dlx playwright-core@1.61.1 install chromium
+```
+
+The overflow check performs GET navigations and executes page JavaScript in
+fresh isolated browser contexts. It reads no project source, invokes no package
+scripts, and saves no page data. In its first release it is available only in
+the local CLI, not through MCP, the GitHub Action, hosted API, or web scanner.
 
 ## Agent Handoff
 
@@ -208,7 +244,9 @@ generic React applications.
 
 ## Privacy And Exit Status
 
-Local scanning is static and stays on your machine.
+The default local scan is static and stays on your machine. The explicit
+`--check-overflow` mode navigates to the URL you provide under the separate
+rendered-check contract above.
 
 Findings return exit status `0` unless `--fail-under` is not satisfied.
 Discovery, audit, setup, and launched-agent failures return `1`. Use

@@ -24,7 +24,7 @@ const PAGE_METADATA = [
   {
     browserTitle: "Shadscan CLI documentation | shadscan",
     description:
-      "Run Shadscan, inspect a progress-bar score, launch a coding agent, enforce score thresholds, and add a safe pre-commit gate.",
+      "Run Shadscan, check rendered horizontal overflow, inspect a progress-bar score, launch a coding agent, and enforce score thresholds.",
     imagePath: "/docs/opengraph-image",
     path: "/docs",
     socialTitle: "Shadscan CLI documentation | shadscan",

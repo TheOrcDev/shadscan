@@ -44,6 +44,20 @@ const CLI_OPTIONS = [
   },
   {
     description:
+      "Check an already-running HTTP or HTTPS app for document-level horizontal overflow at fixed mobile and desktop viewports.",
+    option: "--check-overflow <url>",
+  },
+  {
+    description:
+      "Add a same-origin path beginning with /. Query strings and fragments are not accepted. Repeatable; ten total pages maximum.",
+    option: "--route <path>",
+  },
+  {
+    description: "Use a specific Chromium-family executable for overflow mode.",
+    option: "--browser-executable <path>",
+  },
+  {
+    description:
       "Choose human, json, or prompt output. Human output is the default.",
     option: "--format <format>",
   },
@@ -143,8 +157,8 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
 
 export const metadata = createPageMetadata({
   description:
-    "Run Shadscan, inspect a progress-bar score, launch a coding agent, enforce score thresholds, and add a safe pre-commit gate.",
-  imageAlt: "Shadscan CLI scoring, agent launch, and pre-commit setup",
+    "Run Shadscan, check rendered horizontal overflow, inspect a progress-bar score, launch a coding agent, and enforce score thresholds.",
+  imageAlt: "Shadscan CLI source audits and rendered overflow checks",
   imagePath: "/docs/opengraph-image",
   path: "/docs",
   title: "Shadscan CLI documentation",
@@ -185,7 +199,9 @@ export default function DocsPage() {
         <section id="usage">
           <h2>Usage</h2>
           <DocsCodeBlock
-            code="shadscan [path] [options]"
+            code={
+              "shadscan [path] [options]\nshadscan --check-overflow <url> [--route <path> ...]"
+            }
             label="Syntax"
             language="bash"
           />
@@ -262,6 +278,72 @@ export default function DocsPage() {
           </p>
         </section>
 
+        <section id="overflow-check">
+          <h2>Check rendered horizontal overflow</h2>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand
+              {...getCliCommands(
+                "--check-overflow http://localhost:3000 --route /dashboard"
+              )}
+            />
+          </div>
+          <p>
+            Start your app first, or pass a deployed URL. Shadscan does not
+            install dependencies, build the app, or run its dev or start
+            scripts. This mode checks the supplied URL from any directory, so it
+            does not need a project or <code>package.json</code>. The target URL
+            is always included; repeat <code>--route</code> to check more
+            same-origin paths beginning with <code>/</code>, up to ten pages in
+            total. Routes cannot contain query strings or fragments.
+          </p>
+          <p>The two fixed CSS viewports are:</p>
+          <ul>
+            <li>Mobile: 320 × 820.</li>
+            <li>Desktop: 1440 × 1000.</li>
+          </ul>
+          <p>
+            Any document-level horizontal overflow is a critical failure,
+            including a single CSS pixel or a horizontal scrollbar forced on the
+            root or body. Failed measurements include bounded likely culprit
+            selectors when Shadscan can identify them. Local scroll areas that
+            do not enlarge the document remain valid.
+          </p>
+          <p>
+            This is a standalone rendered check, not another source-audit rule.
+            It produces no score or grade and does not change the 62-rule
+            catalog, ruleset, audit schema, or existing{" "}
+            <code>mobile-overflow-absent</code> advisory.
+          </p>
+          <h3>Use it in automation</h3>
+          <div className="not-typeset mt-4">
+            <CodeBlockCommand
+              {...getCliCommands(
+                "--check-overflow https://preview.example.com --json"
+              )}
+            />
+          </div>
+          <p>
+            A clean result exits <code>0</code>. Detected overflow exits{" "}
+            <code>1</code> after writing the complete human or versioned JSON
+            report to stdout. Browser, target, timeout, response, stability, and
+            argument errors also exit <code>1</code>, but leave stdout empty and
+            write the error to stderr.
+          </p>
+          <h3>Install Chromium if needed</h3>
+          <DocsCodeBlock
+            code="pnpm dlx playwright-core@1.61.1 install chromium"
+            label="Browser install"
+            language="bash"
+          />
+          <p>
+            Overflow mode performs GET navigations and executes the target
+            page&apos;s JavaScript in fresh isolated Chromium contexts. It reads
+            no project source, invokes no package scripts, and saves no page
+            data. In its first release it is available only in the local CLI,
+            not through MCP, the GitHub Action, hosted API, or web scanner.
+          </p>
+        </section>
+
         <section id="options">
           <h2>Options</h2>
           <dl className="not-typeset mt-5 border-y">
@@ -287,7 +369,10 @@ export default function DocsPage() {
             and <code>production-polish</code>. The <code>--prompt</code> and{" "}
             <code>--json</code> aliases cannot be combined with each other or
             with <code>--format</code>. <code>--apply</code> requires human
-            output, and <code>--agent</code> requires <code>--apply</code>.
+            output, and <code>--agent</code> requires <code>--apply</code>. In
+            overflow mode, only human or JSON output is available; source-audit
+            paths, score, category, prompt, agent, project-selection, and roast
+            options are rejected.
           </p>
         </section>
 
