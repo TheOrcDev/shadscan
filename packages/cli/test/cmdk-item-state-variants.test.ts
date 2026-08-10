@@ -3,10 +3,13 @@ import { cmdkItemStateVariantsUseValuesRule } from "../src/rules/cmdk-item-state
 import { createRuleFixture, runRule } from "./rule-fixture";
 
 const fixtures: Awaited<ReturnType<typeof createRuleFixture>>[] = [];
+const OVERSIZED_STYLESHEET_BYTES = 2 * 1024 * 1024 + 1;
+const REPEATED_IMPORT_DEPTH = 8;
+const STYLESHEET_IMPORT_COUNT_BEYOND_ANALYSIS_LIMIT = 64;
 
-const createCmdkFixture = async (): Promise<
-  Awaited<ReturnType<typeof createRuleFixture>>
-> => {
+const createCmdkFixture = async (
+  writeStylesheet = true
+): Promise<Awaited<ReturnType<typeof createRuleFixture>>> => {
   const fixture = await createRuleFixture({
     cmdk: "1.1.1",
     react: "19.2.4",
@@ -24,6 +27,9 @@ const createCmdkFixture = async (): Promise<
       2
     )}\n`
   );
+  if (writeStylesheet) {
+    await fixture.write("src/globals.css", "");
+  }
   return fixture;
 };
 
@@ -71,6 +77,18 @@ describe("cmdk-item-state-variants-use-values", () => {
     expect(finding.evidence[0]?.filePath).toContain(
       "components/ui/command.tsx"
     );
+  });
+
+  it("returns an advisory when the configured stylesheet is missing", async () => {
+    const fixture = await createCmdkFixture(false);
+    await writeCommandItem(fixture, "data-selected:bg-muted");
+
+    const finding = await runRule(
+      fixture.rootDir,
+      cmdkItemStateVariantsUseValuesRule
+    );
+
+    expect(finding.status).toBe("advisory");
   });
 
   it("passes explicit selected=true arbitrary variants", async () => {
@@ -188,7 +206,10 @@ describe("cmdk-item-state-variants-use-values", () => {
   it("returns an advisory when stylesheet limits prevent contract verification", async () => {
     const fixture = await createCmdkFixture();
     await writeCommandItem(fixture, "data-selected:bg-muted");
-    const importIndexes = Array.from({ length: 64 }, (_, index) => index);
+    const importIndexes = Array.from(
+      { length: STYLESHEET_IMPORT_COUNT_BEYOND_ANALYSIS_LIMIT },
+      (_, index) => index
+    );
     await fixture.write(
       "src/globals.css",
       importIndexes.map((index) => `@import "./theme-${index}.css";`).join("\n")
@@ -201,6 +222,71 @@ describe("cmdk-item-state-variants-use-values", () => {
           : "@theme inline {}\n"
       );
     }
+
+    const finding = await runRule(
+      fixture.rootDir,
+      cmdkItemStateVariantsUseValuesRule
+    );
+
+    expect(finding.status).toBe("advisory");
+  });
+
+  it("returns an advisory when repeated imports exceed the visit budget", async () => {
+    const fixture = await createCmdkFixture();
+    await writeCommandItem(fixture, "data-selected:bg-muted");
+    await fixture.write(
+      "src/globals.css",
+      '@import "./level-0.css";\n@import "./level-0.css";\n'
+    );
+
+    for (let depth = 0; depth <= REPEATED_IMPORT_DEPTH; depth += 1) {
+      const content =
+        depth === REPEATED_IMPORT_DEPTH
+          ? '@import "shadcn/tailwind.css";\n'
+          : `@import "./level-${depth + 1}.css";\n@import "./level-${depth + 1}.css";\n`;
+      await fixture.write(`src/level-${depth}.css`, content);
+    }
+
+    const finding = await runRule(
+      fixture.rootDir,
+      cmdkItemStateVariantsUseValuesRule
+    );
+
+    expect(finding.status).toBe("advisory");
+  });
+
+  it("reapplies repeated imports in source order below the visit budget", async () => {
+    const fixture = await createCmdkFixture();
+    await writeCommandItem(fixture, "data-selected:bg-muted");
+    await fixture.write(
+      "src/globals.css",
+      '@import "./unsafe-branch.css";\n@import "./shared.css";\n'
+    );
+    await fixture.write(
+      "src/unsafe-branch.css",
+      '@import "./shared.css";\n@custom-variant data-selected (&[data-selected]);\n'
+    );
+    await fixture.write(
+      "src/shared.css",
+      '@custom-variant data-selected (&[data-selected="true"]);\n'
+    );
+
+    const finding = await runRule(
+      fixture.rootDir,
+      cmdkItemStateVariantsUseValuesRule
+    );
+
+    expect(finding.status).toBe("pass");
+  });
+
+  it("returns an advisory when a loaded stylesheet cannot be read", async () => {
+    const fixture = await createCmdkFixture();
+    await writeCommandItem(fixture, "data-selected:bg-muted");
+    await fixture.write("src/globals.css", '@import "./large.css";\n');
+    await fixture.write(
+      "src/large.css",
+      `@import "shadcn/tailwind.css";\n${" ".repeat(OVERSIZED_STYLESHEET_BYTES)}`
+    );
 
     const finding = await runRule(
       fixture.rootDir,
@@ -281,6 +367,38 @@ describe("cmdk-item-state-variants-use-values", () => {
     await fixture.write(
       "src/globals.css",
       '@custom-variant data-selected (&[data-selected="true"]);\n'
+    );
+
+    const finding = await runRule(
+      fixture.rootDir,
+      cmdkItemStateVariantsUseValuesRule
+    );
+
+    expect(finding.status).toBe("pass");
+  });
+
+  it("does not treat a suffixed custom variant as the selected contract", async () => {
+    const fixture = await createCmdkFixture();
+    await writeCommandItem(fixture, "data-selected:bg-muted");
+    await fixture.write(
+      "src/globals.css",
+      '@custom-variant data-selected-within (&[data-selected="true"]);\n'
+    );
+
+    const finding = await runRule(
+      fixture.rootDir,
+      cmdkItemStateVariantsUseValuesRule
+    );
+
+    expect(finding.status).toBe("fail");
+  });
+
+  it("does not let a suffixed custom variant override the disabled contract", async () => {
+    const fixture = await createCmdkFixture();
+    await writeCommandItem(fixture, "data-disabled:pointer-events-none");
+    await fixture.write(
+      "src/globals.css",
+      '@import "shadcn/tailwind.css";\n@custom-variant data-disabled-strict (&[data-disabled]);\n'
     );
 
     const finding = await runRule(

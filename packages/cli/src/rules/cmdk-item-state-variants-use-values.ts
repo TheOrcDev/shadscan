@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { lstat } from "node:fs/promises";
 import path from "node:path";
 import {
   isIdentifier,
@@ -63,19 +64,23 @@ interface StylesheetTraversal {
   activePaths: Set<string>;
   loadedBytes: number;
   loadedFiles: Map<string, SourceFile>;
+  visits: number;
 }
 
 const CMDK_MODULE = "cmdk";
 const SHADCN_TAILWIND_STYLESHEET = "shadcn/tailwind.css";
 const MAX_STYLESHEET_IMPORTS = 64;
+const MAX_STYLESHEET_VISITS = MAX_STYLESHEET_IMPORTS * 4;
 const MAX_STYLESHEET_BYTES = 8 * 1024 * 1024;
 const CSS_AT_RULE_NAMES = ["custom-variant", "import"] as const;
 const CSS_IMPORT_SPECIFIER_PATTERN =
   /^@import\s+(?:url\(\s*)?(?:"([^"]+)"|'([^']+)'|([^\s);]+))/i;
 const CSS_IDENTIFIER_CHARACTER_PATTERN = /[a-z0-9_-]/i;
 const CSS_NOT_FUNCTION_PATTERN = /:not\s*$/i;
-const CUSTOM_DATA_DISABLED_PATTERN = /^@custom-variant\s+data-disabled\b/i;
-const CUSTOM_DATA_SELECTED_PATTERN = /^@custom-variant\s+data-selected\b/i;
+const CUSTOM_DATA_DISABLED_PATTERN =
+  /^@custom-variant\s+data-disabled(?![a-z0-9_-])/i;
+const CUSTOM_DATA_SELECTED_PATTERN =
+  /^@custom-variant\s+data-selected(?![a-z0-9_-])/i;
 const QUERY_OR_HASH_PATTERN = /[?#]/;
 const STATE_VARIANT_PATTERN =
   /(?:^|:)(?:(?:group|peer)-)?data-(?:(selected|disabled)|\[(selected|disabled)\])(?:\/[^:\s]+)?(?=:)/;
@@ -532,6 +537,21 @@ const getLocalImportCandidates = (
   });
 };
 
+const stylesheetCandidateExists = async (
+  candidatePath: string
+): Promise<boolean> => {
+  try {
+    await lstat(candidatePath);
+    return true;
+  } catch (error) {
+    const errorCode =
+      typeof error === "object" && error !== null && "code" in error
+        ? error.code
+        : null;
+    return errorCode !== "ENOENT" && errorCode !== "ENOTDIR";
+  }
+};
+
 const readBoundedLocalStylesheetImport = async (
   project: ProjectDiscovery,
   importerPath: string,
@@ -549,6 +569,9 @@ const readBoundedLocalStylesheetImport = async (
     if (cachedFile) {
       return cachedFile;
     }
+    if (!(await stylesheetCandidateExists(candidate))) {
+      continue;
+    }
     if (traversal.loadedFiles.size >= MAX_STYLESHEET_IMPORTS) {
       contracts.complete = false;
       return null;
@@ -556,7 +579,8 @@ const readBoundedLocalStylesheetImport = async (
 
     const file = await readProjectSourceFile(project, candidate);
     if (!file) {
-      continue;
+      contracts.complete = false;
+      return null;
     }
 
     const importedBytes = Buffer.byteLength(file.content, "utf8");
@@ -580,13 +604,21 @@ const applyStylesheetInOrder = async (
   traversal: StylesheetTraversal
 ): Promise<void> => {
   const filePath = path.resolve(file.path);
-  if (traversal.activePaths.has(filePath)) {
+  if (!contracts.complete || traversal.activePaths.has(filePath)) {
     return;
   }
+  if (traversal.visits >= MAX_STYLESHEET_VISITS) {
+    contracts.complete = false;
+    return;
+  }
+  traversal.visits += 1;
 
   traversal.activePaths.add(filePath);
   try {
     for (const rule of getCssAtRules(file.content)) {
+      if (!contracts.complete) {
+        return;
+      }
       const state = getCustomVariantState(rule);
       if (state) {
         contracts[state] = definitionIsValueAware(rule.text, state);
@@ -635,21 +667,23 @@ const getStateVariantContracts = async (
 
   const entryFile = await readProjectSourceFile(project, entryPath);
   if (!entryFile) {
+    contracts.complete = false;
     return contracts;
   }
 
   const entryBytes = Buffer.byteLength(entryFile.content, "utf8");
+  if (entryBytes > MAX_STYLESHEET_BYTES) {
+    contracts.complete = false;
+    return contracts;
+  }
   const traversal: StylesheetTraversal = {
     activePaths: new Set<string>(),
     loadedBytes: entryBytes,
     loadedFiles: new Map<string, SourceFile>([
       [path.resolve(entryFile.path), entryFile],
     ]),
+    visits: 0,
   };
-  if (entryBytes > MAX_STYLESHEET_BYTES) {
-    contracts.complete = false;
-    return contracts;
-  }
 
   await applyStylesheetInOrder(project, entryFile, contracts, traversal);
 
@@ -716,8 +750,8 @@ const cmdkItemStateVariantsUseValuesRule: AuditRule = {
     if (!contracts.complete) {
       const unresolvedUse = uses[0];
       return advisory(
-        "The configured stylesheet import graph exceeded safe analysis limits, so cmdk's bare boolean state variants could not be verified.",
-        "Use explicit data-[selected=true] and data-[disabled=true] variants, or reduce the loaded CSS graph so Shadscan can verify its custom variants.",
+        "The configured stylesheet import graph could not be analyzed completely, so cmdk's bare boolean state variants could not be verified.",
+        "Use explicit data-[selected=true] and data-[disabled=true] variants, or ensure the configured CSS files are readable and within Shadscan's analysis limits.",
         unresolvedUse?.filePath,
         unresolvedUse?.line
       );
