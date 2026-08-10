@@ -8,6 +8,7 @@ a local install, a packed tarball, or npm through `npx`.
 ```text
 shadscan [path] [options]
 shadscan setup [path] --pre-commit [--dry-run | --yes]
+shadscan --check-overflow <url> [--route <path> ...]
 ```
 
 - `path` selects the React project to scan and defaults to the current working
@@ -24,6 +25,25 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
 - `setup --pre-commit` plans a version-pinned score gate from the current
   complete assessed score. `--dry-run` never writes; `--yes` confirms an
   automatic safe plan without a prompt.
+- `--check-overflow <url>` is a standalone rendered check. It requires an
+  absolute HTTP or HTTPS URL for an already-running local or deployed app and
+  does not resolve or discover a project. The supplied URL is always checked;
+  repeatable `--route <path>` values add same-origin paths that begin with
+  exactly one `/`, up to ten pages in total. Routes cannot contain a query
+  string, fragment, or backslash.
+- The overflow check uses fixed CSS viewports of 320 × 820 (mobile) and 1440 ×
+  1000 (desktop), both at device scale factor 1. It fails on any
+  document-level horizontal overflow or a horizontal scrollbar forced on the
+  root or body. It does not add an audit rule, score, or grade and does not
+  change the source audit, bundled rule count, ruleset, or audit schema.
+- The caller starts or deploys the target app. Shadscan does not run install,
+  dev, build, or start scripts for overflow mode. `--browser-executable <path>`
+  may select a Chromium-family executable explicitly.
+- Overflow mode accepts human or JSON output, `--route`,
+  `--browser-executable`, `--no-interactive`, and `--no-roast`. It rejects a
+  non-default project path and source-audit-only score, category, prompt, agent,
+  project-selection, listing, and positive-roast options. `--route` and
+  `--browser-executable` are invalid without `--check-overflow`.
 
 ## Output
 
@@ -34,6 +54,14 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
 - `--format json` and `--json` write one versioned JSON report to stdout.
 - `--format prompt` and `--prompt` write one deterministic agent handoff to
   stdout.
+- Overflow mode supports human output, `--format human`, `--format json`, and
+  `--json`. Its JSON output is a separate versioned `overflow-check` report,
+  not an audit report. It contains every requested page and viewport
+  measurement, bounded likely-culprit selectors for failures, and a summary,
+  but no score, grade, or rule result.
+- A detected overflow writes the complete human or JSON report to stdout before
+  exiting non-zero. An overflow operational failure leaves stdout empty and
+  writes a stable human or versioned JSON error to stderr.
 - Expected CLI failures write a stable message to stderr. JSON-selected
   failures write a versioned JSON error object to stderr.
 - Interactive scan progress, menus, warnings, confirmations, and launched-agent
@@ -63,6 +91,10 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
   `--fail-under` was not satisfied.
 - Findings do not fail the process unless the caller supplies `--fail-under`.
 - Launching an agent never clears an existing score-threshold failure.
+- In overflow mode, `0` means every requested page fit both fixed viewports.
+  Detected overflow is a critical failure and exits `1`. Invalid arguments,
+  an unavailable browser or target, unsupported response, unstable page,
+  timeout, redirect-policy violation, and measurement failure also exit `1`.
 
 ## Stability
 
@@ -77,6 +109,12 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
 - The scanner itself does not send project source, findings, or environment
   variables over the network. An explicitly launched external agent may read
   and edit files, run commands, and send the generated prompt to its provider.
+- Overflow mode is an explicit network exception: it performs GET navigations
+  to the supplied target and same-origin routes, follows only same-origin
+  redirects, and executes the target's page JavaScript in fresh isolated
+  Chromium contexts. It reads no project source, invokes no package
+  scripts, persists no cookies between measurements, and saves no page data.
+  Query strings and fragments are redacted from reports.
 - Agent discovery only trusts executables outside the project, validates their
   provider-specific `--version` output, passes argument arrays without building
   a user-controlled shell command, adds no approval-bypass flags, and
@@ -98,3 +136,5 @@ shadscan setup [path] --pre-commit [--dry-run | --yes]
   is `prepack`, which builds the distributable before packaging.
 - The hosted API is a separate opt-in surface with its own authentication and
   source-handling contract.
+- Overflow mode is local-CLI-only in its first release. It is not exposed by
+  MCP, the GitHub Action, hosted API, or web scanner.

@@ -4,6 +4,10 @@ import {
   ProjectDiscoveryError,
   type ProjectDiscoveryErrorCode,
 } from "./discovery";
+import {
+  OverflowCheckError,
+  type OverflowCheckErrorCode,
+} from "./overflow-check/error";
 import { PreCommitError, type PreCommitErrorCode } from "./pre-commit";
 
 const COMMANDER_ERROR_PREFIX_PATTERN = /^error:\s*/i;
@@ -14,12 +18,20 @@ interface CliFailure {
     | "INVALID_ARGUMENTS"
     | "INVALID_PROJECT_METADATA"
     | AgentCliErrorCode
+    | OverflowCheckErrorCode
     | PreCommitErrorCode
     | ProjectDiscoveryErrorCode;
   message: string;
 }
 
 const normalizeCliFailure = (error: unknown): CliFailure => {
+  if (error instanceof OverflowCheckError) {
+    return {
+      code: error.code,
+      message: error.message,
+    };
+  }
+
   if (error instanceof AgentCliError || error instanceof PreCommitError) {
     return {
       code: error.code,

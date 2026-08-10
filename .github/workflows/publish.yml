@@ -100,7 +100,10 @@ jobs:
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
           echo "sha512=$digest" >> "$GITHUB_OUTPUT"
       - name: Smoke test exact npm artifact
-        run: node packages/cli/scripts/smoke-package.mjs --tarball "${{ steps.pack.outputs.tarball }}"
+        shell: bash
+        run: |
+          browser_executable="$(node --input-type=module -e 'import { chromium } from "@playwright/test"; process.stdout.write(chromium.executablePath())')"
+          node packages/cli/scripts/smoke-package.mjs --tarball "${{ steps.pack.outputs.tarball }}" --browser-executable "$browser_executable"
       - name: Stage package for npm approval
         shell: bash
         run: |

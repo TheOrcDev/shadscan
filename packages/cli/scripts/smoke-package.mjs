@@ -8,6 +8,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,7 @@ const temporaryRoot = await mkdtemp(
   path.join(tmpdir(), "shadscan packed smoke ")
 );
 const npmCacheDirectory = path.join(temporaryRoot, "npm cache");
+let overflowFixtureServer;
 
 const getOptionValue = (optionName) => {
   const optionIndex = process.argv.indexOf(optionName);
@@ -62,6 +64,55 @@ const run = async (command, args, { cwd, expectedExitCode = 0 } = {}) => {
   );
 
   return result;
+};
+
+const startOverflowFixture = async () => {
+  overflowFixtureServer = createServer((request, response) => {
+    const requestUrl = new URL(
+      request.url ?? "/",
+      `http://${request.headers.host ?? "127.0.0.1"}`
+    );
+    const isOverflow = requestUrl.pathname === "/overflow";
+    const markup = isOverflow
+      ? '<div data-slot="packed-overflow" style="height:1px;width:calc(100vw + 1px)"></div>'
+      : "<main>Packed artifact fits</main>";
+
+    response.writeHead(200, {
+      "cache-control": "no-store",
+      "content-type": "text/html; charset=utf-8",
+    });
+    response.end(
+      `<!doctype html><html><head><style>html,body{margin:0;padding:0}</style><title>Packed overflow fixture</title></head><body>${markup}</body></html>`
+    );
+  });
+
+  await new Promise((resolveListen, rejectListen) => {
+    overflowFixtureServer.once("error", rejectListen);
+    overflowFixtureServer.listen(0, "127.0.0.1", resolveListen);
+  });
+
+  const address = overflowFixtureServer.address();
+  assert.ok(
+    address && typeof address !== "string",
+    "Expected the packed overflow fixture to bind to a TCP port."
+  );
+  return `http://127.0.0.1:${address.port}`;
+};
+
+const stopOverflowFixture = async () => {
+  if (!overflowFixtureServer?.listening) {
+    return;
+  }
+
+  await new Promise((resolveClose, rejectClose) => {
+    overflowFixtureServer.close((error) => {
+      if (error) {
+        rejectClose(error);
+        return;
+      }
+      resolveClose();
+    });
+  });
 };
 
 try {
@@ -148,6 +199,7 @@ try {
   });
   assert.match(helpResult.stdout, /--apply/);
   assert.match(helpResult.stdout, /--agent <agent>/);
+  assert.match(helpResult.stdout, /--check-overflow <url>/);
   assert.match(helpResult.stdout, /--no-interactive/);
   assert.match(helpResult.stdout, /setup/);
 
@@ -233,6 +285,75 @@ try {
     expectedExitCode: 1,
   });
   assert.match(invalidAgentResult.stderr, /--agent requires --apply/);
+
+  const invalidOverflowResult = await run(
+    executable,
+    ["--check-overflow", "not-a-url", "--json"],
+    {
+      cwd: consumerDirectory,
+      expectedExitCode: 1,
+    }
+  );
+  assert.equal(invalidOverflowResult.stdout, "");
+  assert.equal(
+    JSON.parse(invalidOverflowResult.stderr).error.code,
+    "INVALID_ARGUMENTS"
+  );
+
+  const browserExecutable =
+    getOptionValue("--browser-executable") ??
+    process.env.SHADSCAN_SMOKE_BROWSER_EXECUTABLE;
+  if (browserExecutable) {
+    await access(browserExecutable);
+    const overflowFixtureOrigin = await startOverflowFixture();
+    const browserArguments = [
+      "--browser-executable",
+      browserExecutable,
+      "--json",
+      "--no-interactive",
+    ];
+    const fittingOverflowResult = await run(
+      executable,
+      [
+        "--check-overflow",
+        `${overflowFixtureOrigin}/fits`,
+        ...browserArguments,
+      ],
+      { cwd: consumerDirectory }
+    );
+    assert.equal(fittingOverflowResult.stderr, "");
+    assert.deepEqual(
+      {
+        status: JSON.parse(fittingOverflowResult.stdout).status,
+        summary: JSON.parse(fittingOverflowResult.stdout).summary,
+      },
+      {
+        status: "pass",
+        summary: { failed: 0, maximumOverflowPx: 0, measurements: 2 },
+      }
+    );
+
+    const failingOverflowResult = await run(
+      executable,
+      [
+        "--check-overflow",
+        `${overflowFixtureOrigin}/overflow`,
+        ...browserArguments,
+      ],
+      { cwd: consumerDirectory, expectedExitCode: 1 }
+    );
+    assert.equal(failingOverflowResult.stderr, "");
+    assert.deepEqual(
+      {
+        status: JSON.parse(failingOverflowResult.stdout).status,
+        summary: JSON.parse(failingOverflowResult.stdout).summary,
+      },
+      {
+        status: "fail",
+        summary: { failed: 2, maximumOverflowPx: 1, measurements: 2 },
+      }
+    );
+  }
 
   const setupPreviewResult = await run(
     executable,
@@ -352,9 +473,14 @@ try {
   assert.ok(Number.isInteger(scanPayload.score));
   assert.ok(Array.isArray(scanPayload.actionables));
 
+  const overflowSummary = browserExecutable ? ", browser overflow" : "";
   process.stdout.write(
-    `Packed shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, import, MCP bundle-audit, and MCP stdio smoke tests.\n`
+    `Packed shadscan ${packageManifest.version} passed npx, install, bin, output, threshold, import${overflowSummary}, MCP bundle-audit, and MCP stdio smoke tests.\n`
   );
 } finally {
-  await rm(temporaryRoot, { force: true, recursive: true });
+  try {
+    await stopOverflowFixture();
+  } finally {
+    await rm(temporaryRoot, { force: true, recursive: true });
+  }
 }

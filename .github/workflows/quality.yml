@@ -91,5 +91,12 @@ jobs:
         run: pnpm install --frozen-lockfile --filter @shadscan/cli...
       - name: Build CLI
         run: pnpm cli:build
+      - name: Install Chromium for packed overflow smoke
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 18
+        shell: bash
+        run: |
+          pnpm --filter @shadscan/cli exec playwright-core install --with-deps chromium
+          browser_executable="$(pnpm --filter @shadscan/cli exec node --input-type=module -e 'import { chromium } from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          echo "SHADSCAN_SMOKE_BROWSER_EXECUTABLE=$browser_executable" >> "$GITHUB_ENV"
       - name: Smoke test packed CLI
         run: pnpm cli:smoke:built

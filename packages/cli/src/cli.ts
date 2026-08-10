@@ -30,6 +30,13 @@ import {
   resolveOutputFormat,
   wantsJsonOutput,
 } from "./output-format";
+import type {
+  OverflowBrowserCheckResult,
+  RunOverflowBrowserCheckOptions,
+} from "./overflow-check/browser";
+import { evaluateOverflowCheck } from "./overflow-check/evaluate";
+import { resolveOverflowCheckTarget } from "./overflow-check/options";
+import { renderOverflowCheckReport } from "./overflow-check/render-human";
 import {
   promptPostScanAction,
   resolveInteractiveMode,
@@ -59,7 +66,9 @@ const VERSION = packageJson.version;
 interface CliOptions {
   agent?: AgentId;
   apply?: boolean;
+  browserExecutable?: string;
   category?: AuditCategory;
+  checkOverflow?: string;
   failUnder?: number;
   format?: OutputFormat;
   interactive: boolean;
@@ -68,12 +77,21 @@ interface CliOptions {
   project?: string;
   prompt?: boolean;
   roast?: boolean;
+  route?: string[];
 }
 
 interface SetupOptions {
   dryRun?: boolean;
   preCommit: boolean;
   yes?: boolean;
+}
+
+type OverflowBrowserRunner = (
+  options: RunOverflowBrowserCheckOptions
+) => Promise<OverflowBrowserCheckResult>;
+
+interface OverflowCheckRuntime {
+  runBrowserCheck?: OverflowBrowserRunner;
 }
 
 const parseScore = (value: string): number => {
@@ -106,6 +124,11 @@ const parseAgent = (value: string): AgentId => {
   } catch {
     throw new InvalidArgumentError("Expected one of: claude, codex, grok.");
   }
+};
+
+const collectRoute = (value: string, routes: string[] = []): string[] => {
+  routes.push(value);
+  return routes;
 };
 
 const scoreFailsThreshold = (
@@ -473,6 +496,144 @@ const validateScanActionOptions = (
   }
 };
 
+const validateOverflowModeOptions = ({
+  command,
+  options,
+  outputFormat,
+  projectPath,
+}: {
+  command: Command;
+  options: CliOptions;
+  outputFormat: OutputFormat;
+  projectPath: string;
+}): void => {
+  if (projectPath !== ".") {
+    throw new InvalidArgumentError(
+      "--check-overflow does not accept a project path."
+    );
+  }
+
+  const incompatibleOption = [
+    options.category === undefined ? null : "--category",
+    options.failUnder === undefined ? null : "--fail-under",
+    options.apply ? "--apply" : null,
+    options.agent ? "--agent" : null,
+    options.prompt || outputFormat === "prompt" ? "--prompt" : null,
+    options.listProjects ? "--list-projects" : null,
+    options.project ? "--project" : null,
+    command.getOptionValueSource("roast") === "cli" && options.roast === true
+      ? "--roast"
+      : null,
+  ].find((option): option is string => option !== null);
+
+  if (incompatibleOption) {
+    throw new InvalidArgumentError(
+      `--check-overflow cannot be used with ${incompatibleOption}.`
+    );
+  }
+};
+
+const validateFocusedOptions = (options: CliOptions): void => {
+  if (options.checkOverflow !== undefined) {
+    return;
+  }
+
+  if ((options.route?.length ?? 0) > 0) {
+    throw new InvalidArgumentError("--route requires --check-overflow.");
+  }
+
+  if (options.browserExecutable !== undefined) {
+    throw new InvalidArgumentError(
+      "--browser-executable requires --check-overflow."
+    );
+  }
+};
+
+const rejectFocusedOptionsForSubcommand = (command: Command): void => {
+  const rootOptions = command.parent?.opts<CliOptions>();
+  if (
+    rootOptions?.checkOverflow !== undefined ||
+    rootOptions?.browserExecutable !== undefined ||
+    (rootOptions?.route?.length ?? 0) > 0
+  ) {
+    throw new InvalidArgumentError(
+      "--check-overflow and its related options cannot be used with subcommands."
+    );
+  }
+};
+
+const getOutputTerminalCapabilities = () =>
+  resolveTerminalCapabilities({
+    columns: process.stdout.columns,
+    env: {
+      CI: process.env.CI,
+      FORCE_COLOR: process.env.FORCE_COLOR,
+      NO_COLOR: process.env.NO_COLOR,
+      TERM: process.env.TERM,
+    },
+    isTTY: process.stdout.isTTY === true,
+  });
+
+const runOverflowCheckAction = async (
+  {
+    browserExecutable,
+    outputFormat,
+    routes,
+    target,
+  }: {
+    browserExecutable?: string;
+    outputFormat: OutputFormat;
+    routes?: string[];
+    target: string;
+  },
+  runtime: OverflowCheckRuntime = {}
+): Promise<void> => {
+  const resolvedTarget = resolveOverflowCheckTarget({ routes, target });
+  let runBrowserCheck = runtime.runBrowserCheck;
+
+  if (!runBrowserCheck) {
+    ({ runOverflowBrowserCheck: runBrowserCheck } = await import(
+      "./overflow-check/browser"
+    ));
+  }
+
+  const abortController = new AbortController();
+  const abortCheck = (): void => abortController.abort();
+  process.once("SIGINT", abortCheck);
+  process.once("SIGTERM", abortCheck);
+
+  try {
+    const browserResult = await runBrowserCheck({
+      browserExecutable,
+      origin: resolvedTarget.origin,
+      pages: resolvedTarget.pages,
+      signal: abortController.signal,
+    });
+    const report = evaluateOverflowCheck({
+      durationMs: browserResult.durationMs,
+      measurements: browserResult.measurements,
+      target: {
+        origin: resolvedTarget.origin,
+        pages: resolvedTarget.pages.map((page) => page.displayPath),
+      },
+    });
+    const output =
+      outputFormat === "json"
+        ? `${JSON.stringify(report, null, 2)}\n`
+        : renderOverflowCheckReport(report, {
+            terminal: getOutputTerminalCapabilities(),
+          });
+
+    process.stdout.write(output);
+    if (report.status === "fail") {
+      process.exitCode = 1;
+    }
+  } finally {
+    process.removeListener("SIGINT", abortCheck);
+    process.removeListener("SIGTERM", abortCheck);
+  }
+};
+
 /**
  * The classification heuristic decides which packages feed the score, so it
  * needs to be inspectable without running a full audit.
@@ -579,12 +740,30 @@ const runScanAction = async (
   options: CliOptions,
   command: Command
 ): Promise<void> => {
+  validateFocusedOptions(options);
+  const outputFormat = resolveOutputFormat(options);
+
+  if (options.checkOverflow !== undefined) {
+    validateOverflowModeOptions({
+      command,
+      options,
+      outputFormat,
+      projectPath,
+    });
+    await runOverflowCheckAction({
+      browserExecutable: options.browserExecutable,
+      outputFormat,
+      routes: options.route,
+      target: options.checkOverflow,
+    });
+    return;
+  }
+
   if (options.listProjects) {
     await runListProjectsAction(projectPath, options);
     return;
   }
 
-  const outputFormat = resolveOutputFormat(options);
   validateScanActionOptions(options, outputFormat);
   const roastWasSpecified = command.getOptionValueSource("roast") === "cli";
   const includeRoast =
@@ -778,6 +957,19 @@ const createProgram = (): Command => {
       "Run only one audit category.",
       parseCategory
     )
+    .option(
+      "--check-overflow <url>",
+      "Check a running page for horizontal overflow at mobile and desktop widths."
+    )
+    .option(
+      "--route <path>",
+      "Add a same-origin route to --check-overflow (repeatable).",
+      collectRoute
+    )
+    .option(
+      "--browser-executable <path>",
+      "Use a specific Chromium executable for --check-overflow."
+    )
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
     .option("--no-interactive", "Disable Shadscan follow-up prompts.")
@@ -806,7 +998,12 @@ const createProgram = (): Command => {
         "Apply the displayed pre-commit plan without prompting."
       ).conflicts("dryRun")
     )
-    .action(runSetupAction);
+    .action(
+      async (projectPath: string, options: SetupOptions, command: Command) => {
+        rejectFocusedOptionsForSubcommand(command);
+        await runSetupAction(projectPath, options);
+      }
+    );
 
   program
     .command("mcp")
@@ -814,7 +1011,8 @@ const createProgram = (): Command => {
       "Serve shadscan as an MCP server over stdio for coding agents."
     )
     .argument("[paths...]", "Root directories tool calls may scan.", undefined)
-    .action(async (paths: string[]) => {
+    .action(async (paths: string[], command: Command) => {
+      rejectFocusedOptionsForSubcommand(command);
       // stdout carries JSON-RPC exclusively in this mode; the server writes
       // its one startup line to stderr. Lazy import keeps the MCP bundle out
       // of ordinary scan startup.
@@ -849,5 +1047,6 @@ export {
   createProgram,
   resolveProjectPath,
   runCli,
+  runOverflowCheckAction,
   scoreFailsThreshold,
 };
