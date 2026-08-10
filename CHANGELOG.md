@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.13.0 - 2026-08-10
+
 ### Fixed
 
 - [`validation-wired-to-form` and `field-errors-rendered`](https://github.com/TheOrcDev/shadscan/issues/32)

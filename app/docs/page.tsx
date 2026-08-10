@@ -28,7 +28,7 @@ jobs:
       - uses: TheOrcDev/shadscan@main
         with:
           path: .
-          version: 0.12.0 # pin an exact CLI version
+          version: 0.13.0 # pin an exact CLI version
           fail-under: "80"
           create-issue: "true"`;
 
