@@ -6,6 +6,17 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- A new scored rule, `cmdk-item-state-variants-use-values` (ruleset
+  `2026.08.44`), detects command-item styles that treat cmdk's boolean
+  `data-selected` or `data-disabled` attributes as presence-only states. It
+  accepts explicit `=true` selectors and follows the configured Tailwind CSS
+  import graph so `shadcn/tailwind.css` and equivalent value-aware custom
+  variants remain valid. This catches command palettes where every row appears
+  selected because both `data-selected="true"` and `data-selected="false"`
+  match the same background utility.
+
 ## 0.11.0 - 2026-08-08
 
 ### Added

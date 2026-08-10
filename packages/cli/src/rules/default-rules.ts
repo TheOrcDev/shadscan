@@ -4,6 +4,7 @@ import { animationsRespectReducedMotionRule } from "./animations-respect-reduced
 import { asyncActionPendingStateRule } from "./async-action-pending-state";
 import { buttonGroupHoldsOnlyButtonsRule } from "./button-group-holds-only-buttons";
 import { buttonIconsHaveDataIconRule } from "./button-icons-have-data-icon";
+import { cmdkItemStateVariantsUseValuesRule } from "./cmdk-item-state-variants-use-values";
 import { colorContrastPassesRule } from "./color-contrast-passes";
 import { commandMenuHotkeyPresentRule } from "./command-menu-hotkey-present";
 import { commandMenuPresentRule } from "./command-menu-present";
@@ -61,6 +62,7 @@ const defaultRules = [
   noStarterCopyRule,
   commandMenuPresentRule,
   commandMenuHotkeyPresentRule,
+  cmdkItemStateVariantsUseValuesRule,
   globalHotkeysAreSafeRule,
   mobileNavPresentRule,
   focusVisibleNotSuppressedRule,

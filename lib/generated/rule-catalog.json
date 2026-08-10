@@ -244,6 +244,18 @@
         "core"
       ],
       "category": "interaction",
+      "confidence": "high",
+      "description": "Checks that cmdk selected and disabled styles distinguish true from false boolean data attributes.",
+      "id": "cmdk-item-state-variants-use-values",
+      "maxScore": 2,
+      "severity": "warning",
+      "title": "cmdk item state variants are value-aware"
+    },
+    {
+      "adapters": [
+        "core"
+      ],
+      "category": "interaction",
       "confidence": "medium",
       "description": "Checks global keyboard listeners for cleanup and typing-target guards.",
       "id": "global-hotkeys-are-safe",
@@ -781,5 +793,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.07.43"
+  "rulesetVersion": "2026.08.44"
 }
