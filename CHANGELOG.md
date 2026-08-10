@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.14.0 - 2026-08-10
+
 ### Added
 
 - A standalone `--check-overflow <url>` CLI mode that opens an already-running
