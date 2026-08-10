@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.12.0 - 2026-08-10
+
 ### Added
 
 - A new scored rule, `cmdk-item-state-variants-use-values` (ruleset
