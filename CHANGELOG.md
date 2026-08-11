@@ -14,6 +14,9 @@ stable releases published under `latest`.
   confirmed production deployments. It batches larger route manifests and
   reports dynamic, authenticated, or otherwise blocked coverage instead of
   inventing URLs or claiming an incomplete pass.
+- The landing-page and documentation prompt previews now show ten rows by
+  default, with accessible Read more and Read less controls that leave copied
+  prompt text complete.
 
 ## 0.14.0 - 2026-08-10
 

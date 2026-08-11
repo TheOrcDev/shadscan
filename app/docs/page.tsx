@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlockCommand } from "@/components/code-block-command";
+import { CollapsibleCode } from "@/components/collapsible-code";
 import { CopyButton } from "@/components/copy-button";
 import { DocsOnThisPage } from "@/components/docs-on-this-page";
 import { AGENT_AUDIT_PROMPT } from "@/lib/agent-prompt";
@@ -115,6 +116,7 @@ const CLI_OPTIONS = [
 
 interface DocsCodeBlockProps {
   code: string;
+  collapsible?: boolean;
   label: string;
   language: "bash" | "markdown" | "text";
 }
@@ -130,7 +132,12 @@ const getCliCommands = (cliArguments = "") => {
   } as const;
 };
 
-function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
+function DocsCodeBlock({
+  code,
+  collapsible = false,
+  label,
+  language,
+}: DocsCodeBlockProps) {
   return (
     <div className="not-typeset relative mt-4 overflow-hidden border bg-code">
       <div className="flex h-10 items-center justify-between border-b px-4">
@@ -143,14 +150,24 @@ function DocsCodeBlock({ code, label, language }: DocsCodeBlockProps) {
           variant="ghost"
         />
       </div>
-      <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-6">
-        <code
-          className="font-mono text-code-foreground"
-          data-language={language}
-        >
-          {code}
-        </code>
-      </pre>
+      {collapsible ? (
+        <CollapsibleCode
+          className="whitespace-pre-wrap break-words font-mono text-code-foreground"
+          code={code}
+          language={language}
+          preClassName="p-4 text-sm leading-6"
+        />
+      ) : (
+        <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-6">
+          <code
+            className="font-mono text-code-foreground"
+            data-language={language}
+            data-slot="code-block"
+          >
+            {code}
+          </code>
+        </pre>
+      )}
     </div>
   );
 }
@@ -212,6 +229,7 @@ export default function DocsPage() {
           <h3>Run with an AI agent (recommended)</h3>
           <DocsCodeBlock
             code={AGENT_AUDIT_PROMPT}
+            collapsible
             label="Prompt"
             language="text"
           />
