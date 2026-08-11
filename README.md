@@ -122,11 +122,11 @@ pnpm dlx @shadscan/cli --list-projects
 # Scan one package of a monorepo instead of pooling every application
 pnpm dlx @shadscan/cli --project apps/web
 
-# Check a running app for horizontal overflow at mobile and desktop widths
-pnpm dlx @shadscan/cli --check-overflow http://localhost:3000
+# Run rendered UI checks at mobile and desktop widths
+pnpm dlx @shadscan/cli --check-ui http://localhost:3000
 
 # Include more same-origin routes (the target URL is always checked)
-pnpm dlx @shadscan/cli --check-overflow http://localhost:3000 --route /dashboard --route /settings
+pnpm dlx @shadscan/cli --check-ui http://localhost:3000 --route /dashboard --route /settings
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
@@ -134,10 +134,11 @@ needs to be explicit. Pin an exact package version in CI; unqualified commands
 resolve to the latest stable release. Run `pnpm dlx @shadscan/cli --help` for
 every option.
 
-## Check Rendered Horizontal Overflow
+## Check Rendered UI
 
-The focused `--check-overflow` command opens an already-running local or
-deployed app in isolated Chromium pages and checks these fixed CSS viewports:
+`--check-ui` is the home for deterministic checks that need a rendered page.
+Horizontal overflow is its first check. It opens an already-running local or
+deployed app in isolated Chromium pages at these fixed CSS viewports:
 
 - mobile: 320 × 820;
 - desktop: 1440 × 1000.
@@ -145,22 +146,28 @@ deployed app in isolated Chromium pages and checks these fixed CSS viewports:
 It reports a critical failure if the document has even one CSS pixel of
 horizontal overflow, or if the root or body forces a horizontal scrollbar.
 Likely culprit selectors are included when Shadscan can identify them. The
-target URL is always checked; repeat `--route` to add up to ten
-same-origin paths beginning with `/`. Routes cannot contain a query string or
-fragment.
+target URL is always checked; repeat `--route` to add up to ten paths beginning
+with `/`. Routes cannot contain a query string or fragment. When the initial
+request returns a narrowly validated server-side canonical redirect, Shadscan
+can follow a conventional two-label apex-to-`www` or `www`-to-apex host change
+and an HTTP-to-HTTPS upgrade. It pins the resulting origin for every additional
+route. For multi-label public suffixes, pass the canonical origin directly. Other
+cross-origin redirects, HTTPS downgrades, and client-side cross-origin
+navigations remain blocked. Reports use the resolved origin as their target;
+human output also identifies the originally requested origin when it changed.
 
-This command is separate from the default static source audit. It does not add
-a rule, score, or grade, and it leaves the 62-rule catalog and existing
-`mobile-overflow-absent` advisory unchanged. Shadscan does not start or build
-the target app, so start it yourself first or pass a deployed URL. The command
-can run outside a project directory.
+This rendered UI suite is separate from the default static source audit. Its
+overflow check does not add a rule, score, or grade, and it leaves the 62-rule
+catalog and existing `mobile-overflow-absent` advisory unchanged. Shadscan does
+not start or build the target app, so start it yourself first or pass a deployed
+URL. The command can run outside a project directory.
 
 ```bash
 # Human report
-pnpm dlx @shadscan/cli --check-overflow http://localhost:3000
+pnpm dlx @shadscan/cli --check-ui http://localhost:3000
 
 # Versioned JSON for automation
-pnpm dlx @shadscan/cli --check-overflow https://preview.example.com --json
+pnpm dlx @shadscan/cli --check-ui https://preview.example.com --json
 ```
 
 A clean result exits `0`. Detected overflow exits `1` after writing the
@@ -172,11 +179,11 @@ supported Chromium installation is available, run:
 pnpm dlx playwright-core@1.61.1 install chromium
 ```
 
-The overflow check performs GET navigations and executes the target's page
+Rendered UI checks perform GET navigations and execute the target's page
 JavaScript in fresh isolated browser contexts. It reads no project source,
 invokes no package scripts, and saves no page data. This focused mode is
-available only in the local CLI in its first release, not through MCP, the
-GitHub Action, hosted API, or web scanner.
+available only in the local CLI, not through MCP, the GitHub Action, hosted API,
+or web scanner.
 
 ## GitHub Action
 

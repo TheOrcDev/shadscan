@@ -8,6 +8,7 @@ import type {
 } from "./contracts";
 
 interface RenderOverflowCheckReportOptions {
+  requestedOrigin?: string;
   terminal: TerminalCapabilities;
 }
 
@@ -66,15 +67,25 @@ const renderOverflowCheckReport = (
       ? colors.green(colors.bold("PASS"))
       : colors.red(colors.bold("CRITICAL FAIL"));
   const lines = [
-    colors.bold("shadscan overflow check"),
+    colors.bold("shadscan UI check"),
     "",
     status,
     `Target: ${sanitizeTerminalText(report.target.origin)}`,
+  ];
+  if (
+    options.requestedOrigin &&
+    options.requestedOrigin !== report.target.origin
+  ) {
+    lines.push(
+      `Canonical redirect: ${sanitizeTerminalText(options.requestedOrigin)} -> ${sanitizeTerminalText(report.target.origin)}`
+    );
+  }
+  lines.push(
     `Viewports: ${report.viewports
       .map((viewport) => renderViewport(viewport, options.terminal))
       .join(", ")}`,
-    `Pages: ${report.target.pages.map(sanitizeTerminalText).join(", ")}`,
-  ];
+    `Pages: ${report.target.pages.map(sanitizeTerminalText).join(", ")}`
+  );
 
   if (report.status === "pass") {
     lines.push(

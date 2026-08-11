@@ -71,7 +71,7 @@ test("shows and copies the full project-aware prompt from a ten-line preview", a
   await expect(readMore).toHaveAttribute("aria-expanded", "false");
   const controlledRegion = await getControlledRegion(page, readMore);
   expect(await controlledRegion.innerText()).toContain("--prompt");
-  expect(await controlledRegion.innerText()).not.toContain("--check-overflow");
+  expect(await controlledRegion.innerText()).not.toContain("--check-ui");
   const collapsedMetrics = await getPromptHeightMetrics(prompt);
   expect(collapsedMetrics.scrollHeight).toBeGreaterThan(
     collapsedMetrics.clientHeight
@@ -105,7 +105,8 @@ test("shows and copies the full project-aware prompt from a ten-line preview", a
   );
 
   await expect(prompt).toContainText("--prompt");
-  await expect(prompt).toContainText("--check-overflow");
+  await expect(prompt).toContainText("--check-ui");
+  await expect(prompt).not.toContainText("--check-overflow");
   await expect(prompt).toContainText("monorepo");
   await expect(prompt).toContainText("production");
   await expect(prompt).toContainText("approval");

@@ -336,7 +336,7 @@ describe("renderOverflowCheckReport", () => {
       terminal: PLAIN_TERMINAL,
     });
 
-    expect(output).toContain("shadscan overflow check");
+    expect(output).toContain("shadscan UI check");
     expect(output).toContain("CRITICAL FAIL");
     expect(output).toContain("mobile 320x820");
     expect(output).toContain("Likely culprit: #wide [31m (1px)");
@@ -355,5 +355,22 @@ describe("renderOverflowCheckReport", () => {
       "No horizontal overflow detected across 2 measurements."
     );
     expect(output).not.toContain("Remediation:");
+  });
+
+  it("shows a canonical server redirect in human output", () => {
+    const report = evaluateOverflowCheck({
+      durationMs: 1,
+      measurements: createMeasurementMatrix(),
+      target: { origin: "https://www.example.com", pages: ["/"] },
+    });
+    const output = renderOverflowCheckReport(report, {
+      requestedOrigin: "https://example.com",
+      terminal: PLAIN_TERMINAL,
+    });
+
+    expect(output).toContain("Target: https://www.example.com");
+    expect(output).toContain(
+      "Canonical redirect: https://example.com -> https://www.example.com"
+    );
   });
 });

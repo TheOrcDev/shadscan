@@ -71,7 +71,7 @@ test("expands and copies the full recommended prompt from a ten-line preview", a
   await expect(readMore).toHaveAttribute("aria-expanded", "false");
   const controlledRegion = await getControlledRegion(page, readMore);
   expect(await controlledRegion.innerText()).toContain("--prompt");
-  expect(await controlledRegion.innerText()).not.toContain("--check-overflow");
+  expect(await controlledRegion.innerText()).not.toContain("--check-ui");
   const collapsedMetrics = await getPromptHeightMetrics(prompt);
   expect(collapsedMetrics.scrollHeight).toBeGreaterThan(
     collapsedMetrics.clientHeight
@@ -139,7 +139,8 @@ test("documents the CLI before the optional agent workflow", async ({
     .getByRole("button", { exact: true, name: "Read more" })
     .click();
   await expect(publicAgentPrompt).toContainText("--prompt");
-  await expect(publicAgentPrompt).toContainText("--check-overflow");
+  await expect(publicAgentPrompt).toContainText("--check-ui");
+  await expect(publicAgentPrompt).not.toContainText("--check-overflow");
   await expect(publicAgentPrompt).toContainText("monorepo");
   await expect(publicAgentPrompt).toContainText("production");
   await expect(publicAgentPrompt).toContainText("approval");
@@ -163,20 +164,28 @@ test("documents the CLI before the optional agent workflow", async ({
     page.locator("#options dt").getByText("--agent <agent>", { exact: true })
   ).toBeVisible();
   await expect(
-    page
-      .locator("#options dt")
-      .getByText("--check-overflow <url>", { exact: true })
+    page.locator("#options dt").getByText("--check-ui <url>", { exact: true })
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { exact: true, name: "UI checks" })
+  ).toHaveAttribute("href", "#ui-check");
   await expect(page.getByText("production-polish")).toBeVisible();
 
-  const overflowCheck = page.locator("#overflow-check");
-  await expect(overflowCheck).toContainText(
-    "--check-overflow http://localhost:3000 --route /dashboard"
+  const uiCheck = page.locator("#ui-check");
+  await expect(uiCheck).toContainText(
+    "--check-ui http://localhost:3000 --route /dashboard"
   );
-  await expect(overflowCheck).toContainText("Mobile: 320 × 820");
-  await expect(overflowCheck).toContainText("Desktop: 1440 × 1000");
-  await expect(overflowCheck).toContainText(
-    "standalone rendered check, not another source-audit rule"
+  await expect(uiCheck).toContainText("Mobile: 320 × 820");
+  await expect(uiCheck).toContainText("Desktop: 1440 × 1000");
+  await expect(uiCheck).toContainText(
+    "rendered UI suite, not another source-audit rule"
+  );
+  await expect(uiCheck).toContainText("server-side canonical redirects");
+  await expect(uiCheck).toContainText(
+    "client-side cross-origin navigations remain blocked"
+  );
+  await expect(uiCheck).toContainText(
+    "human output also identifies the originally requested origin"
   );
 
   const agentPrompt = page.locator("#agent-prompt");

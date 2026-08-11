@@ -45,6 +45,10 @@ interface OverflowReport {
     maximumOverflowPx: number;
     measurements: number;
   };
+  target: {
+    origin: string;
+    pages: string[];
+  };
 }
 
 interface CliProcessError extends Error {
@@ -212,6 +216,12 @@ let fixtureServer: Server | undefined;
 let crossOriginServer: Server | undefined;
 let fixtureOrigin = "";
 let crossOrigin = "";
+let canonicalOrigin = "";
+let canonicalWwwOrigin = "";
+const canonicalRequests: Array<{ host: string; pathname: string }> = [];
+let crossOriginRequests = 0;
+let clientHopCanonicalRequests = 0;
+let clientReloadCanonicalRequests = 0;
 let emptyWorkingDirectory = "";
 
 const listenOnEphemeralPort = async (
@@ -252,6 +262,7 @@ test.beforeAll(async () => {
     join(tmpdir(), "shadscan-overflow-e2e-")
   );
   crossOriginServer = createServer((_request, response) => {
+    crossOriginRequests += 1;
     response.writeHead(200, {
       "cache-control": "no-store",
       "content-type": "text/html; charset=utf-8",
@@ -269,6 +280,123 @@ test.beforeAll(async () => {
       request.url ?? "/",
       `http://${request.headers.host ?? "127.0.0.1"}`
     );
+
+    if (
+      requestUrl.pathname === "/redirect-canonical" ||
+      requestUrl.pathname === "/fits" ||
+      requestUrl.pathname === "/vertical-only"
+    ) {
+      canonicalRequests.push({
+        host: request.headers.host ?? "",
+        pathname: requestUrl.pathname,
+      });
+    }
+
+    if (requestUrl.pathname === "/redirect-canonical") {
+      response.writeHead(308, {
+        "cache-control": "no-store",
+        location: `${canonicalWwwOrigin}/fits?redirected=private#result`,
+      });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === "/redirect-canonical-third") {
+      response.writeHead(308, {
+        "cache-control": "no-store",
+        location: `${canonicalWwwOrigin}/redirect-third`,
+      });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === "/redirect-third") {
+      response.writeHead(302, {
+        "cache-control": "no-store",
+        location: `${crossOrigin}/fits?token=must-not-leak#private`,
+      });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === "/client-canonical") {
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(
+        `<!doctype html><html><head><title>Fixture</title></head><body><main>Redirecting</main><script>setTimeout(()=>location.replace('${canonicalWwwOrigin}/fits?token=must-not-leak#private'),100)</script></body></html>`
+      );
+      return;
+    }
+
+    if (requestUrl.pathname === "/client-hop-canonical") {
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(
+        "<!doctype html><html><head><title>Fixture</title></head><body><main>Redirecting</main><script>location.replace('/client-hop-bounce?token=client-hop-secret')</script></body></html>"
+      );
+      return;
+    }
+
+    if (requestUrl.pathname === "/client-hop-bounce") {
+      response.writeHead(302, {
+        "cache-control": "no-store",
+        location: `${canonicalWwwOrigin}/client-hop-sink?token=client-hop-secret`,
+      });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === "/client-hop-sink") {
+      clientHopCanonicalRequests += 1;
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(
+        "<!doctype html><html><head><title>Fixture</title></head><body><main>Canonical sink</main></body></html>"
+      );
+      return;
+    }
+
+    if (requestUrl.pathname === "/client-reload-canonical") {
+      const hasReloadCookie = (request.headers.cookie ?? "")
+        .split(";")
+        .some((cookie) => cookie.trim() === "shadscan_client_reload=1");
+      if (hasReloadCookie) {
+        response.writeHead(302, {
+          "cache-control": "no-store",
+          location: `${canonicalWwwOrigin}/client-reload-sink?token=client-reload-secret`,
+        });
+        response.end();
+        return;
+      }
+
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "set-cookie": "shadscan_client_reload=1; Path=/; SameSite=Lax",
+      });
+      response.end(
+        "<!doctype html><html><head><title>Fixture</title></head><body><main>Reloading</main><script>location.replace(location.href)</script></body></html>"
+      );
+      return;
+    }
+
+    if (requestUrl.pathname === "/client-reload-sink") {
+      clientReloadCanonicalRequests += 1;
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(
+        "<!doctype html><html><head><title>Fixture</title></head><body><main>Canonical reload sink</main></body></html>"
+      );
+      return;
+    }
 
     if (requestUrl.pathname === "/redirect-same") {
       response.writeHead(302, {
@@ -320,6 +448,9 @@ test.beforeAll(async () => {
     fixtureServer,
     "The overflow fixture server"
   );
+  const fixturePort = new URL(fixtureOrigin).port;
+  canonicalOrigin = `http://localhost:${fixturePort}`;
+  canonicalWwwOrigin = `http://www.localhost:${fixturePort}`;
 });
 
 test.afterAll(async () => {
@@ -338,7 +469,7 @@ test.afterAll(async () => {
 test("passes fitting, contained, subpixel, vertical, and settled layouts", async () => {
   const secret = "must-not-appear";
   const result = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/fits?token=${secret}#private`,
     "--route",
     "/local-scroller",
@@ -354,8 +485,8 @@ test("passes fitting, contained, subpixel, vertical, and settled layouts", async
     "--no-interactive",
   ]);
 
-  expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
   expect(result.stdout).not.toContain(secret);
 
   const report = JSON.parse(result.stdout) as OverflowReport;
@@ -392,7 +523,7 @@ test("passes fitting, contained, subpixel, vertical, and settled layouts", async
 
 test("detects document overflow across layout and rendering mechanisms", async () => {
   const result = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/one-pixel`,
     "--route",
     "/forced-scrollbar",
@@ -501,7 +632,7 @@ test("detects document overflow across layout and rendering mechanisms", async (
 
 test("measures the default motion profile and document coordinates", async () => {
   const result = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/hash-overflow#target`,
     "--route",
     "/motion-overflow",
@@ -540,7 +671,7 @@ test("measures the default motion profile and document coordinates", async () =>
 
 test("waits for fonts and follows a same-origin HTTP redirect", async () => {
   const result = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/redirect-same`,
     "--route",
     "/delayed-font-ready",
@@ -574,6 +705,186 @@ test("waits for fonts and follows a same-origin HTTP redirect", async () => {
   ).toBe(true);
 });
 
+test("follows a canonical server redirect and pins later routes", async () => {
+  canonicalRequests.length = 0;
+  const result = await runOverflowCheck([
+    "--check-ui",
+    `${canonicalOrigin}/redirect-canonical?token=must-not-leak#private`,
+    "--route",
+    "/vertical-only",
+    "--browser-executable",
+    chromium.executablePath(),
+    "--json",
+    "--no-interactive",
+  ]);
+
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout).not.toContain("must-not-leak");
+
+  const report = JSON.parse(result.stdout) as OverflowReport;
+  expect(report).toMatchObject({
+    status: "pass",
+    summary: { failed: 0, maximumOverflowPx: 0, measurements: 4 },
+    target: { origin: canonicalWwwOrigin },
+  });
+  expect(
+    report.results.every(
+      ({ httpStatus, status }) => httpStatus === 200 && status === "pass"
+    )
+  ).toBe(true);
+  expect(
+    report.results
+      .filter(
+        ({ page }) => page === "/redirect-canonical?[redacted]#[redacted]"
+      )
+      .every(({ finalPath }) => finalPath === "/fits")
+  ).toBe(true);
+
+  const canonicalHost = new URL(canonicalOrigin).host;
+  const canonicalWwwHost = new URL(canonicalWwwOrigin).host;
+  expect(
+    canonicalRequests.filter(
+      ({ host, pathname }) =>
+        host === canonicalHost && pathname === "/redirect-canonical"
+    )
+  ).toHaveLength(2);
+  expect(
+    canonicalRequests.filter(
+      ({ host, pathname }) =>
+        host === canonicalWwwHost && pathname === "/vertical-only"
+    )
+  ).toHaveLength(2);
+});
+
+test("canonical navigation provenance rejects a client-side host alias", async () => {
+  canonicalRequests.length = 0;
+  const result = await runOverflowCheck([
+    "--check-ui",
+    `${canonicalOrigin}/client-canonical`,
+    "--browser-executable",
+    chromium.executablePath(),
+    "--json",
+    "--no-interactive",
+  ]);
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).not.toContain("must-not-leak");
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    error: {
+      code: "OVERFLOW_TARGET_UNAVAILABLE",
+    },
+    schemaVersion: 1,
+  });
+  expect(
+    canonicalRequests.filter(
+      ({ host, pathname }) =>
+        host === new URL(canonicalWwwOrigin).host && pathname === "/fits"
+    )
+  ).toHaveLength(0);
+});
+
+test("canonical navigation provenance rejects an alias after a client-side same-origin hop", async () => {
+  clientHopCanonicalRequests = 0;
+  const result = await runOverflowCheck([
+    "--check-ui",
+    `${canonicalOrigin}/client-hop-canonical`,
+    "--browser-executable",
+    chromium.executablePath(),
+    "--json",
+    "--no-interactive",
+  ]);
+
+  expect(
+    clientHopCanonicalRequests,
+    "the canonical destination must be blocked before network egress"
+  ).toBe(0);
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).not.toContain("client-hop-secret");
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    error: {
+      code: "OVERFLOW_TARGET_UNAVAILABLE",
+    },
+    schemaVersion: 1,
+  });
+});
+
+test("canonical navigation provenance rejects an alias after a client-side same-URL reload", async () => {
+  clientReloadCanonicalRequests = 0;
+  const result = await runOverflowCheck([
+    "--check-ui",
+    `${canonicalOrigin}/client-reload-canonical?token=client-reload-secret`,
+    "--browser-executable",
+    chromium.executablePath(),
+    "--json",
+    "--no-interactive",
+  ]);
+
+  expect(
+    clientReloadCanonicalRequests,
+    "the canonical destination must be blocked before network egress"
+  ).toBe(0);
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).not.toContain("client-reload-secret");
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    error: {
+      code: "OVERFLOW_TARGET_UNAVAILABLE",
+    },
+    schemaVersion: 1,
+  });
+});
+
+test("canonical navigation provenance rejects a third-origin server hop", async () => {
+  crossOriginRequests = 0;
+  const result = await runOverflowCheck([
+    "--check-ui",
+    `${canonicalOrigin}/redirect-canonical-third`,
+    "--browser-executable",
+    chromium.executablePath(),
+    "--json",
+    "--no-interactive",
+  ]);
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).not.toContain("must-not-leak");
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    error: {
+      code: "OVERFLOW_TARGET_UNAVAILABLE",
+    },
+    schemaVersion: 1,
+  });
+  expect(crossOriginRequests).toBe(0);
+});
+
+test("canonical origin pin rejects a later route that leaves the origin", async () => {
+  crossOriginRequests = 0;
+  const result = await runOverflowCheck([
+    "--check-ui",
+    `${canonicalOrigin}/redirect-canonical`,
+    "--route",
+    "/redirect-cross",
+    "--browser-executable",
+    chromium.executablePath(),
+    "--json",
+    "--no-interactive",
+  ]);
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).not.toContain("must-not-leak");
+  expect(JSON.parse(result.stderr)).toMatchObject({
+    error: {
+      code: "OVERFLOW_TARGET_UNAVAILABLE",
+    },
+    schemaVersion: 1,
+  });
+  expect(crossOriginRequests).toBe(0);
+});
+
 test("rejects unstable, cross-origin, non-HTML, and unavailable targets", async () => {
   const cases = [
     {
@@ -600,7 +911,7 @@ test("rejects unstable, cross-origin, non-HTML, and unavailable targets", async 
 
   for (const { expectedCode, expectedSecret, target } of cases) {
     const result = await runOverflowCheck([
-      "--check-overflow",
+      "--check-ui",
       target,
       "--browser-executable",
       chromium.executablePath(),
@@ -622,7 +933,7 @@ test("rejects unstable, cross-origin, non-HTML, and unavailable targets", async 
 
 test("keeps operational failures off stdout", async () => {
   const result = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/missing`,
     "--browser-executable",
     chromium.executablePath(),
@@ -640,7 +951,7 @@ test("keeps operational failures off stdout", async () => {
   });
 
   const clientRedirect = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/client-redirect`,
     "--browser-executable",
     chromium.executablePath(),
@@ -659,7 +970,7 @@ test("keeps operational failures off stdout", async () => {
   });
 
   const client404 = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/client-404`,
     "--browser-executable",
     chromium.executablePath(),
@@ -677,7 +988,7 @@ test("keeps operational failures off stdout", async () => {
   });
 
   const immediate404 = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/immediate-404`,
     "--browser-executable",
     chromium.executablePath(),
@@ -695,7 +1006,7 @@ test("keeps operational failures off stdout", async () => {
   });
 
   const clientBlob = await runOverflowCheck([
-    "--check-overflow",
+    "--check-ui",
     `${fixtureOrigin}/client-blob`,
     "--browser-executable",
     chromium.executablePath(),

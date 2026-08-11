@@ -3,9 +3,9 @@ import type {
   BrowserContext,
   BrowserContextOptions,
   BrowserType,
+  CDPSession,
   Page,
   Response,
-  Route,
 } from "playwright-core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -26,6 +26,14 @@ interface BrowserFixture {
   newContext: ReturnType<typeof vi.fn>;
 }
 
+interface MockRequestPausedEvent {
+  frameId: string;
+  redirectedRequestId?: string;
+  request: { url: string };
+  requestId: string;
+  resourceType: "Document";
+}
+
 const createBrowserFixture = ({
   crossOriginNavigation = false,
   failManagedLaunch = false,
@@ -37,21 +45,48 @@ const createBrowserFixture = ({
 } = {}): BrowserFixture => {
   const closeBrowser = vi.fn(() => Promise.resolve(undefined));
   const closeContexts: ReturnType<typeof vi.fn>[] = [];
-  const abortRequest = vi.fn(() => Promise.resolve(undefined));
-  const response = {
-    headers: () => ({ "content-type": "text/html; charset=utf-8" }),
-    request: () => ({
-      redirectedFrom: () => null,
-      url: () => `${TARGET_ORIGIN}/fits?token=private#account`,
-    }),
-    status: () => 200,
-  } as unknown as Response;
+  const abortRequest = vi.fn((_parameters?: unknown) =>
+    Promise.resolve(undefined)
+  );
 
   const newContext = vi.fn((options: BrowserContextOptions) => {
     const clientWidth = options.viewport?.width ?? 0;
     const closeContext = vi.fn(() => Promise.resolve(undefined));
     const mainFrame = {};
-    let routeHandler: ((route: Route) => Promise<unknown>) | undefined;
+    const mainFrameId = "main-frame";
+    let currentUrl = `${TARGET_ORIGIN}/`;
+    let requestPausedHandler:
+      | ((event: MockRequestPausedEvent) => void)
+      | undefined;
+    const sendCdpCommand = vi.fn(
+      (method: string, parameters?: { requestId?: string }) => {
+        if (method === "Page.getFrameTree") {
+          return Promise.resolve({ frameTree: { frame: { id: mainFrameId } } });
+        }
+        if (method === "Fetch.failRequest") {
+          return abortRequest(parameters);
+        }
+        return Promise.resolve({});
+      }
+    );
+    const cdpSession = {
+      on: vi.fn(
+        (event: string, handler: (request: MockRequestPausedEvent) => void) => {
+          if (event === "Fetch.requestPaused") {
+            requestPausedHandler = handler;
+          }
+        }
+      ),
+      send: sendCdpCommand,
+    } as unknown as CDPSession;
+    const response = {
+      headers: () => ({ "content-type": "text/html; charset=utf-8" }),
+      request: () => ({
+        redirectedFrom: () => null,
+        url: () => currentUrl,
+      }),
+      status: () => 200,
+    } as unknown as Response;
     closeContexts.push(closeContext);
     const page = {
       evaluate: vi.fn((pageFunction: unknown) => {
@@ -79,32 +114,31 @@ const createBrowserFixture = ({
           scrollWidth: clientWidth,
         });
       }),
-      goto: vi.fn(async () => {
-        if (crossOriginNavigation && routeHandler) {
-          await routeHandler({
-            abort: abortRequest,
-            continue: vi.fn(() => Promise.resolve(undefined)),
-            request: () => ({
-              frame: () => mainFrame,
-              isNavigationRequest: () => true,
-              url: () => "https://external.example/private",
-            }),
-          } as unknown as Route);
+      goto: vi.fn((requestedUrl: string) => {
+        currentUrl = requestedUrl;
+        requestPausedHandler?.({
+          frameId: mainFrameId,
+          request: { url: requestedUrl },
+          requestId: "initial-navigation",
+          resourceType: "Document",
+        });
+        if (crossOriginNavigation) {
+          requestPausedHandler?.({
+            frameId: mainFrameId,
+            request: { url: "https://external.example/private" },
+            requestId: "client-navigation",
+            resourceType: "Document",
+          });
         }
-        return response;
+        return Promise.resolve(response);
       }),
       mainFrame: () => mainFrame,
       on: vi.fn(),
-      route: vi.fn(
-        (_pattern: string, handler: (route: Route) => Promise<unknown>) => {
-          routeHandler = handler;
-          return Promise.resolve(undefined);
-        }
-      ),
-      url: () => `${TARGET_ORIGIN}/fits?token=private#account`,
+      url: () => currentUrl,
     } as unknown as Page;
     const browserContext = {
       close: closeContext,
+      newCDPSession: vi.fn(() => Promise.resolve(cdpSession)),
       newPage: vi.fn(() => Promise.resolve(page)),
       on: vi.fn(),
     } as unknown as BrowserContext;

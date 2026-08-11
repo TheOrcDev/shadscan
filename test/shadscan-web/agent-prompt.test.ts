@@ -13,7 +13,7 @@ const STOP_BEFORE_EDIT_PATTERN =
 describe("public agent audit prompt", () => {
   it("requests project-aware source and rendered checks without inventing targets", () => {
     expect(AGENT_AUDIT_PROMPT).toContain("--prompt");
-    expect(AGENT_AUDIT_PROMPT).toContain("--check-overflow");
+    expect(AGENT_AUDIT_PROMPT).toContain("--check-ui");
     expect(AGENT_AUDIT_PROMPT).toContain("--list-projects --json");
     expect(AGENT_AUDIT_PROMPT).toContain("--route");
 
@@ -33,12 +33,15 @@ describe("public agent audit prompt", () => {
     expect(AGENT_AUDIT_PROMPT).toContain("finalPath");
     expect(AGENT_AUDIT_PROMPT).toContain("httpStatus");
     expect(AGENT_AUDIT_PROMPT).toContain("public HTTPS origin");
+    expect(AGENT_AUDIT_PROMPT).toContain("final canonical origin");
+    expect(AGENT_AUDIT_PROMPT).toContain("client-side cross-origin");
     expect(AGENT_AUDIT_PROMPT).toContain("Never stop a reused");
     expect(AGENT_AUDIT_PROMPT).toContain("separate process argument");
     expect(AGENT_AUDIT_PROMPT).toContain("entire batch was not verified");
     expect(AGENT_AUDIT_PROMPT).toMatch(STOP_BEFORE_EDIT_PATTERN);
 
     expect(AGENT_AUDIT_PROMPT).not.toContain("localhost");
+    expect(AGENT_AUDIT_PROMPT).not.toContain("--check-overflow");
     expect(AGENT_AUDIT_PROMPT).not.toMatch(DASHBOARD_ROUTE_PATTERN);
     expect(AGENT_AUDIT_PROMPT).not.toMatch(LITERAL_URL_PATTERN);
     expect(AGENT_AUDIT_PROMPT).not.toMatch(DOMAIN_PATTERN);

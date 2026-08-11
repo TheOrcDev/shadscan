@@ -69,6 +69,7 @@ interface CliOptions {
   browserExecutable?: string;
   category?: AuditCategory;
   checkOverflow?: string;
+  checkUi?: string;
   failUnder?: number;
   format?: OutputFormat;
   interactive: boolean;
@@ -90,7 +91,7 @@ type OverflowBrowserRunner = (
   options: RunOverflowBrowserCheckOptions
 ) => Promise<OverflowBrowserCheckResult>;
 
-interface OverflowCheckRuntime {
+interface UiCheckRuntime {
   runBrowserCheck?: OverflowBrowserRunner;
 }
 
@@ -496,7 +497,10 @@ const validateScanActionOptions = (
   }
 };
 
-const validateOverflowModeOptions = ({
+const getUiCheckTarget = (options: CliOptions): string | undefined =>
+  options.checkUi ?? options.checkOverflow;
+
+const validateUiModeOptions = ({
   command,
   options,
   outputFormat,
@@ -509,7 +513,7 @@ const validateOverflowModeOptions = ({
 }): void => {
   if (projectPath !== ".") {
     throw new InvalidArgumentError(
-      "--check-overflow does not accept a project path."
+      "--check-ui does not accept a project path."
     );
   }
 
@@ -528,36 +532,34 @@ const validateOverflowModeOptions = ({
 
   if (incompatibleOption) {
     throw new InvalidArgumentError(
-      `--check-overflow cannot be used with ${incompatibleOption}.`
+      `--check-ui cannot be used with ${incompatibleOption}.`
     );
   }
 };
 
 const validateFocusedOptions = (options: CliOptions): void => {
-  if (options.checkOverflow !== undefined) {
+  if (getUiCheckTarget(options) !== undefined) {
     return;
   }
 
   if ((options.route?.length ?? 0) > 0) {
-    throw new InvalidArgumentError("--route requires --check-overflow.");
+    throw new InvalidArgumentError("--route requires --check-ui.");
   }
 
   if (options.browserExecutable !== undefined) {
-    throw new InvalidArgumentError(
-      "--browser-executable requires --check-overflow."
-    );
+    throw new InvalidArgumentError("--browser-executable requires --check-ui.");
   }
 };
 
 const rejectFocusedOptionsForSubcommand = (command: Command): void => {
   const rootOptions = command.parent?.opts<CliOptions>();
   if (
-    rootOptions?.checkOverflow !== undefined ||
+    (rootOptions && getUiCheckTarget(rootOptions) !== undefined) ||
     rootOptions?.browserExecutable !== undefined ||
     (rootOptions?.route?.length ?? 0) > 0
   ) {
     throw new InvalidArgumentError(
-      "--check-overflow and its related options cannot be used with subcommands."
+      "--check-ui and its related options cannot be used with subcommands."
     );
   }
 };
@@ -574,7 +576,7 @@ const getOutputTerminalCapabilities = () =>
     isTTY: process.stdout.isTTY === true,
   });
 
-const runOverflowCheckAction = async (
+const runUiCheckAction = async (
   {
     browserExecutable,
     outputFormat,
@@ -586,7 +588,7 @@ const runOverflowCheckAction = async (
     routes?: string[];
     target: string;
   },
-  runtime: OverflowCheckRuntime = {}
+  runtime: UiCheckRuntime = {}
 ): Promise<void> => {
   const resolvedTarget = resolveOverflowCheckTarget({ routes, target });
   let runBrowserCheck = runtime.runBrowserCheck;
@@ -613,7 +615,7 @@ const runOverflowCheckAction = async (
       durationMs: browserResult.durationMs,
       measurements: browserResult.measurements,
       target: {
-        origin: resolvedTarget.origin,
+        origin: browserResult.origin,
         pages: resolvedTarget.pages.map((page) => page.displayPath),
       },
     });
@@ -621,6 +623,7 @@ const runOverflowCheckAction = async (
       outputFormat === "json"
         ? `${JSON.stringify(report, null, 2)}\n`
         : renderOverflowCheckReport(report, {
+            requestedOrigin: resolvedTarget.origin,
             terminal: getOutputTerminalCapabilities(),
           });
 
@@ -738,24 +741,29 @@ const runProjectScanPhases = async ({
 const runScanAction = async (
   projectPath: string,
   options: CliOptions,
-  command: Command
+  command: Command,
+  runtime: UiCheckRuntime = {}
 ): Promise<void> => {
   validateFocusedOptions(options);
   const outputFormat = resolveOutputFormat(options);
 
-  if (options.checkOverflow !== undefined) {
-    validateOverflowModeOptions({
+  const uiCheckTarget = getUiCheckTarget(options);
+  if (uiCheckTarget !== undefined) {
+    validateUiModeOptions({
       command,
       options,
       outputFormat,
       projectPath,
     });
-    await runOverflowCheckAction({
-      browserExecutable: options.browserExecutable,
-      outputFormat,
-      routes: options.route,
-      target: options.checkOverflow,
-    });
+    await runUiCheckAction(
+      {
+        browserExecutable: options.browserExecutable,
+        outputFormat,
+        routes: options.route,
+        target: uiCheckTarget,
+      },
+      runtime
+    );
     return;
   }
 
@@ -907,7 +915,7 @@ const runSetupAction = async (
   );
 };
 
-const createProgram = (): Command => {
+const createProgram = (runtime: UiCheckRuntime = {}): Command => {
   const program = new Command();
 
   program
@@ -957,18 +965,26 @@ const createProgram = (): Command => {
       "Run only one audit category.",
       parseCategory
     )
-    .option(
-      "--check-overflow <url>",
-      "Check a running page for horizontal overflow at mobile and desktop widths."
+    .addOption(
+      new Option(
+        "--check-ui <url>",
+        "Run rendered UI checks at mobile and desktop widths."
+      ).conflicts("checkOverflow")
+    )
+    .addOption(
+      new Option(
+        "--check-overflow <url>",
+        "Legacy alias for --check-ui."
+      ).hideHelp()
     )
     .option(
       "--route <path>",
-      "Add a same-origin route to --check-overflow (repeatable).",
+      "Add a same-origin route to --check-ui (repeatable).",
       collectRoute
     )
     .option(
       "--browser-executable <path>",
-      "Use a specific Chromium executable for --check-overflow."
+      "Use a specific Chromium executable for --check-ui."
     )
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
@@ -981,7 +997,11 @@ const createProgram = (): Command => {
       "--project <path>",
       "Scan one workspace package instead of pooling every application."
     )
-    .action(runScanAction);
+    .action(
+      async (projectPath: string, options: CliOptions, command: Command) => {
+        await runScanAction(projectPath, options, command, runtime);
+      }
+    );
 
   program
     .command("setup")
@@ -1047,6 +1067,6 @@ export {
   createProgram,
   resolveProjectPath,
   runCli,
-  runOverflowCheckAction,
+  runUiCheckAction,
   scoreFailsThreshold,
 };
