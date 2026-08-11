@@ -114,11 +114,11 @@ pnpm exec shadscan --fail-under 80 --no-interactive --no-roast
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
 
-# Check an already-running app for horizontal overflow
-pnpm dlx @shadscan/cli --check-overflow http://localhost:3000
+# Run rendered UI checks against an already-running app
+pnpm dlx @shadscan/cli --check-ui http://localhost:3000
 
 # Add same-origin routes to the target URL
-pnpm dlx @shadscan/cli --check-overflow http://localhost:3000 --route /dashboard --route /settings
+pnpm dlx @shadscan/cli --check-ui http://localhost:3000 --route /dashboard --route /settings
 ```
 
 Use `--format human`, `--format json`, or `--format prompt` when output selection
@@ -127,16 +127,24 @@ needs to be explicit.
 Pin an exact package version in CI; unqualified commands resolve to the latest
 stable release. Run `pnpm dlx @shadscan/cli --help` for every option.
 
-## Rendered Horizontal Overflow
+## Rendered UI Checks
 
-`--check-overflow <url>` is a focused critical gate for an already-running
-local or deployed app. It opens isolated Chromium pages at two fixed CSS
-viewports — mobile at 320 × 820 and desktop at 1440 × 1000 — and fails on any
-document-level horizontal overflow, including a one-pixel overflow or a
-horizontal scrollbar forced on the root or body. The target URL is always
-checked; repeat `--route <path>` to add same-origin pages, up to ten pages in
-total. Each route must begin with `/` and cannot contain a query string or
-fragment.
+`--check-ui <url>` is the home for deterministic checks that need a rendered
+page. Horizontal overflow is its first check. It opens an already-running local
+or deployed app in isolated Chromium pages at two fixed CSS viewports — mobile
+at 320 × 820 and desktop at 1440 × 1000 — and fails on any document-level
+horizontal overflow, including a one-pixel overflow or a horizontal scrollbar
+forced on the root or body. The target URL is always checked; repeat
+`--route <path>` to add pages, up to ten pages in total. Each route must begin
+with `/` and cannot contain a query string or fragment.
+
+The initial request may follow narrowly validated server-side canonical
+redirects between a conventional two-label apex host and its `www` host, and
+from HTTP to HTTPS. For multi-label public suffixes, pass the canonical origin
+directly. The resolved origin is then pinned for every additional route. Other cross-origin
+redirects, HTTPS downgrades, and client-side cross-origin navigations remain
+blocked. Reports use the resolved origin as their target; human output also
+identifies the originally requested origin when it changed.
 
 This is separate from the default static source audit. It does not add a rule,
 score, or grade, and the 62-rule catalog and existing
@@ -152,10 +160,10 @@ Chromium is not available, install the matching managed browser with:
 pnpm dlx playwright-core@1.61.1 install chromium
 ```
 
-The overflow check performs GET navigations and executes page JavaScript in
+Rendered UI checks perform GET navigations and execute page JavaScript in
 fresh isolated browser contexts. It reads no project source, invokes no package
-scripts, and saves no page data. In its first release it is available only in
-the local CLI, not through MCP, the GitHub Action, hosted API, or web scanner.
+scripts, and saves no page data. It is available only in the local CLI, not
+through MCP, the GitHub Action, hosted API, or web scanner.
 
 ## Agent Handoff
 
@@ -245,8 +253,8 @@ generic React applications.
 ## Privacy And Exit Status
 
 The default local scan is static and stays on your machine. The explicit
-`--check-overflow` mode navigates to the URL you provide under the separate
-rendered-check contract above.
+`--check-ui` mode navigates to the URL you provide under the separate rendered
+UI contract above.
 
 Findings return exit status `0` unless `--fail-under` is not satisfied.
 Discovery, audit, setup, and launched-agent failures return `1`. Use

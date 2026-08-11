@@ -6,17 +6,33 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- `--check-ui <url>` is now the public entry point for deterministic rendered
+  UI checks, with horizontal overflow as its first check and room for more
+  browser-based checks under the same command. The existing
+  `--check-overflow` flag remains a compatibility alias while help,
+  documentation, and agent prompts use the broader command.
+
 ### Changed
 
 - The public copy-paste AI prompt now combines the deterministic source audit
-  with project-aware horizontal-overflow verification across every detected
+  with project-aware rendered UI verification across every detected
   application, including monorepo apps, their concrete local pages, and their
-  confirmed production deployments. It batches larger route manifests and
-  reports dynamic, authenticated, or otherwise blocked coverage instead of
-  inventing URLs or claiming an incomplete pass.
+  confirmed production deployments. It uses `--check-ui`, batches larger route
+  manifests, and reports dynamic, authenticated, or otherwise blocked coverage
+  instead of inventing URLs or claiming an incomplete pass.
 - The landing-page and documentation prompt previews now show ten rows by
   default, with accessible Read more and Read less controls that leave copied
   prompt text complete.
+
+### Fixed
+
+- Rendered UI checks now follow narrowly validated canonical server redirects
+  between a conventional two-label apex host and its `www` host or from HTTP
+  to HTTPS, then pin the resolved origin for every requested route. HTTPS
+  downgrades, unrelated origins, project subdomains, and client-side
+  cross-origin navigations remain blocked.
 
 ## 0.14.0 - 2026-08-10
 

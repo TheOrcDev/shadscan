@@ -2,7 +2,7 @@ import type { DocsSection } from "@/components/docs-on-this-page";
 
 const DOCS_SECTIONS = [
   { href: "#usage", label: "Usage" },
-  { href: "#overflow-check", label: "Overflow check" },
+  { href: "#ui-check", label: "UI checks" },
   { href: "#options", label: "Options" },
   { href: "#agent-prompt", label: "Agent prompt" },
   { href: "#apply", label: "Apply with an agent" },

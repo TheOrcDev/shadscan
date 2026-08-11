@@ -45,16 +45,17 @@ const CLI_OPTIONS = [
   },
   {
     description:
-      "Check an already-running HTTP or HTTPS app for document-level horizontal overflow at fixed mobile and desktop viewports.",
-    option: "--check-overflow <url>",
+      "Run deterministic rendered UI checks against an already-running HTTP or HTTPS app. Horizontal overflow is the first check.",
+    option: "--check-ui <url>",
   },
   {
     description:
-      "Add a same-origin path beginning with /. Query strings and fragments are not accepted. Repeatable; ten total pages maximum.",
+      "Add a path beginning with / against the resolved origin. Query strings and fragments are not accepted. Repeatable; ten total pages maximum.",
     option: "--route <path>",
   },
   {
-    description: "Use a specific Chromium-family executable for overflow mode.",
+    description:
+      "Use a specific Chromium-family executable for rendered UI mode.",
     option: "--browser-executable <path>",
   },
   {
@@ -174,8 +175,8 @@ function DocsCodeBlock({
 
 export const metadata = createPageMetadata({
   description:
-    "Run Shadscan, check rendered horizontal overflow, inspect a progress-bar score, launch a coding agent, and enforce score thresholds.",
-  imageAlt: "Shadscan CLI source audits and rendered overflow checks",
+    "Run Shadscan, check rendered UI at mobile and desktop widths, inspect a progress-bar score, launch a coding agent, and enforce score thresholds.",
+  imageAlt: "Shadscan CLI source audits and rendered UI checks",
   imagePath: "/docs/opengraph-image",
   path: "/docs",
   title: "Shadscan CLI documentation",
@@ -217,7 +218,7 @@ export default function DocsPage() {
           <h2>Usage</h2>
           <DocsCodeBlock
             code={
-              "shadscan [path] [options]\nshadscan --check-overflow <url> [--route <path> ...]"
+              "shadscan [path] [options]\nshadscan --check-ui <url> [--route <path> ...]"
             }
             label="Syntax"
             language="bash"
@@ -237,7 +238,7 @@ export default function DocsPage() {
             The recommended way to start is to hand the audit to your AI coding
             agent. Copy the prompt above and paste it in — it runs one source
             audit across every detected application, inventories each app's
-            concrete page routes, and checks those pages for horizontal overflow
+            concrete page routes, and runs the rendered UI suite on those pages
             both locally and in production. Missing deployment URLs, dynamic
             values, or authenticated access remain explicit coverage gaps. The
             agent then proposes one prioritized plan for you to approve before
@@ -299,12 +300,12 @@ export default function DocsPage() {
           </p>
         </section>
 
-        <section id="overflow-check">
-          <h2>Check rendered horizontal overflow</h2>
+        <section id="ui-check">
+          <h2>Check rendered UI</h2>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
               {...getCliCommands(
-                "--check-overflow http://localhost:3000 --route /dashboard"
+                "--check-ui http://localhost:3000 --route /dashboard"
               )}
             />
           </div>
@@ -313,9 +314,20 @@ export default function DocsPage() {
             install dependencies, build the app, or run its dev or start
             scripts. This mode checks the supplied URL from any directory, so it
             does not need a project or <code>package.json</code>. The target URL
-            is always included; repeat <code>--route</code> to check more
-            same-origin paths beginning with <code>/</code>, up to ten pages in
-            total. Routes cannot contain query strings or fragments.
+            is always included; repeat <code>--route</code> to check more paths
+            beginning with <code>/</code>, up to ten pages in total. Routes
+            cannot contain query strings or fragments.
+          </p>
+          <p>
+            The initial request may follow narrowly validated server-side
+            canonical redirects between a conventional two-label apex host and
+            its <code>www</code> host, and from HTTP to HTTPS. For multi-label
+            public suffixes, pass the canonical origin directly. Shadscan pins
+            the resolved origin for every additional route. Other cross-origin
+            redirects, HTTPS downgrades, and client-side cross-origin
+            navigations remain blocked. Reports use the resolved origin as their
+            target; human output also identifies the originally requested origin
+            when it changed.
           </p>
           <p>The two fixed CSS viewports are:</p>
           <ul>
@@ -330,16 +342,18 @@ export default function DocsPage() {
             do not enlarge the document remain valid.
           </p>
           <p>
-            This is a standalone rendered check, not another source-audit rule.
-            It produces no score or grade and does not change the 62-rule
-            catalog, ruleset, audit schema, or existing{" "}
-            <code>mobile-overflow-absent</code> advisory.
+            This is a rendered UI suite, not another source-audit rule.
+            Horizontal overflow is its first check, and more deterministic UI
+            checks can be added to the same command. The current check produces
+            no score or grade and does not change the 62-rule catalog, ruleset,
+            audit schema, or existing <code>mobile-overflow-absent</code>{" "}
+            advisory.
           </p>
           <h3>Use it in automation</h3>
           <div className="not-typeset mt-4">
             <CodeBlockCommand
               {...getCliCommands(
-                "--check-overflow https://preview.example.com --json"
+                "--check-ui https://preview.example.com --json"
               )}
             />
           </div>
@@ -357,11 +371,11 @@ export default function DocsPage() {
             language="bash"
           />
           <p>
-            Overflow mode performs GET navigations and executes the target
+            Rendered UI mode performs GET navigations and executes the target
             page&apos;s JavaScript in fresh isolated Chromium contexts. It reads
             no project source, invokes no package scripts, and saves no page
-            data. In its first release it is available only in the local CLI,
-            not through MCP, the GitHub Action, hosted API, or web scanner.
+            data. It is available only in the local CLI, not through MCP, the
+            GitHub Action, hosted API, or web scanner.
           </p>
         </section>
 
@@ -391,9 +405,9 @@ export default function DocsPage() {
             <code>--json</code> aliases cannot be combined with each other or
             with <code>--format</code>. <code>--apply</code> requires human
             output, and <code>--agent</code> requires <code>--apply</code>. In
-            overflow mode, only human or JSON output is available; source-audit
-            paths, score, category, prompt, agent, project-selection, and roast
-            options are rejected.
+            rendered UI mode, only human or JSON output is available;
+            source-audit paths, score, category, prompt, agent,
+            project-selection, and roast options are rejected.
           </p>
         </section>
 

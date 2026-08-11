@@ -10,7 +10,7 @@ import {
   createProgram,
   resolveProjectPath,
   runCli,
-  runOverflowCheckAction,
+  runUiCheckAction,
   scoreFailsThreshold,
 } from "../src/cli";
 import { normalizeCliFailure } from "../src/cli-error";
@@ -136,11 +136,16 @@ describe("CLI contract", () => {
 
   it("documents interactive apply and setup entry points", () => {
     const program = createProgram();
+    const help = program.helpInformation();
 
-    expect(program.helpInformation()).toContain("--apply");
-    expect(program.helpInformation()).toContain("--agent <agent>");
-    expect(program.helpInformation()).toContain("--check-overflow <url>");
-    expect(program.helpInformation()).toContain("--no-interactive");
+    expect(help).toContain("--apply");
+    expect(help).toContain("--agent <agent>");
+    expect(help).toContain("--check-ui <url>");
+    expect(help).not.toContain("--check-overflow");
+    expect(help).toContain("Add a same-origin route to --check-ui");
+    expect(help).toContain("--browser-executable <path>");
+    expect(help).toContain("--check-ui.");
+    expect(help).toContain("--no-interactive");
     expect(program.commands.map((command) => command.name())).toContain(
       "setup"
     );
@@ -174,7 +179,7 @@ describe("CLI contract", () => {
     }
   });
 
-  it("renders focused overflow JSON and exits on a completed finding", async () => {
+  it("renders focused UI-check JSON and exits on a completed finding", async () => {
     let stdout = "";
     const write = vi
       .spyOn(process.stdout, "write")
@@ -219,10 +224,11 @@ describe("CLI contract", () => {
           } as const,
         },
       ],
+      origin: "http://www.example.test",
     }));
 
     try {
-      await runOverflowCheckAction(
+      await runUiCheckAction(
         {
           outputFormat: "json",
           target: "http://127.0.0.1:3000",
@@ -239,20 +245,155 @@ describe("CLI contract", () => {
       schemaVersion: 1,
       status: "fail",
       summary: { failed: 1, maximumOverflowPx: 1, measurements: 2 },
+      target: { origin: "http://www.example.test" },
     });
     expect(process.exitCode).toBe(1);
   });
 
-  it("rejects focused overflow-only options during static scans", async () => {
+  it("uses --check-ui as the primary rendered UI command", async () => {
+    await expect(
+      captureOutput([
+        "--check-ui",
+        "http://127.0.0.1:3000",
+        "--route",
+        "/dashboard",
+        "--browser-executable",
+        "/tmp/chromium",
+        "--category",
+        "forms",
+      ])
+    ).rejects.toThrow("--check-ui cannot be used with --category.");
+  });
+
+  it.each([
+    "--check-ui",
+    "--check-overflow",
+  ])("forwards routes and browser selection through %s", async (uiFlag) => {
+    const runBrowserCheck = vi.fn(async () => ({
+      browser: { name: "chromium", version: "123" },
+      durationMs: 12,
+      measurements: ["/", "/dashboard"].flatMap((page) => [
+        {
+          clientWidth: 320,
+          finalPath: page,
+          forcedScrollbar: false,
+          httpStatus: 200,
+          page,
+          scrollWidth: 320,
+          viewport: { height: 820, name: "mobile", width: 320 } as const,
+        },
+        {
+          clientWidth: 1440,
+          finalPath: page,
+          forcedScrollbar: false,
+          httpStatus: 200,
+          page,
+          scrollWidth: 1440,
+          viewport: {
+            height: 1000,
+            name: "desktop",
+            width: 1440,
+          } as const,
+        },
+      ]),
+      origin: "http://127.0.0.1:3000",
+    }));
+    const program = createProgram({ runBrowserCheck });
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    try {
+      await program.parseAsync([
+        "node",
+        "shadscan",
+        uiFlag,
+        "http://127.0.0.1:3000",
+        "--route",
+        "/dashboard",
+        "--browser-executable",
+        "/tmp/chromium",
+        "--json",
+      ]);
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(runBrowserCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        browserExecutable: "/tmp/chromium",
+        origin: "http://127.0.0.1:3000",
+        pages: [
+          {
+            displayPath: "/",
+            requestedUrl: "http://127.0.0.1:3000/",
+          },
+          {
+            displayPath: "/dashboard",
+            requestedUrl: "http://127.0.0.1:3000/dashboard",
+          },
+        ],
+        signal: expect.any(AbortSignal),
+      })
+    );
+  });
+
+  it.each([
+    ["--check-ui", "--check-overflow"],
+    ["--check-overflow", "--check-ui"],
+  ])("rejects %s together with %s", async (firstFlag, secondFlag) => {
+    const program = createProgram().exitOverride();
+    program.configureOutput({ writeErr: () => undefined });
+
+    await expect(
+      program.parseAsync([
+        "node",
+        "shadscan",
+        firstFlag,
+        "http://127.0.0.1:3000",
+        secondFlag,
+        "http://127.0.0.1:3000",
+      ])
+    ).rejects.toMatchObject({ code: "commander.conflictingOption" });
+  });
+
+  it("keeps stderr clean when JSON mode rejects both UI flags", async () => {
+    const writeError = vi.spyOn(process.stderr, "write");
+
+    let failure: unknown;
+    try {
+      await runCli([
+        "node",
+        "shadscan",
+        "--check-ui",
+        "http://127.0.0.1:3000",
+        "--check-overflow",
+        "http://127.0.0.1:3000",
+        "--json",
+      ]);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(writeError).not.toHaveBeenCalled();
+    expect(normalizeCliFailure(failure)).toMatchObject({
+      code: "INVALID_ARGUMENTS",
+      message: expect.stringContaining(
+        "option '--check-ui <url>' cannot be used with option '--check-overflow <url>'"
+      ),
+    });
+  });
+
+  it("rejects rendered UI-only options during static scans", async () => {
     await expect(captureOutput(["--route", "/dashboard"])).rejects.toThrow(
-      "--route requires --check-overflow."
+      "--route requires --check-ui."
     );
     await expect(
       captureOutput(["--browser-executable", "/tmp/chromium"])
-    ).rejects.toThrow("--browser-executable requires --check-overflow.");
+    ).rejects.toThrow("--browser-executable requires --check-ui.");
   });
 
-  it("rejects static scan controls in focused overflow mode before launch", async () => {
+  it("keeps the legacy alias compatible while rejecting static scan controls", async () => {
     const conflicts = [
       { arguments: ["--category", "forms"], option: "--category" },
       { arguments: ["--fail-under", "90"], option: "--fail-under" },
@@ -269,15 +410,17 @@ describe("CLI contract", () => {
         captureOutput([
           "--check-overflow",
           "http://127.0.0.1:3000",
+          "--route",
+          "/dashboard",
+          "--browser-executable",
+          "/tmp/chromium",
           ...conflict.arguments,
         ])
-      ).rejects.toThrow(
-        `--check-overflow cannot be used with ${conflict.option}.`
-      );
+      ).rejects.toThrow(`--check-ui cannot be used with ${conflict.option}.`);
     }
   });
 
-  it("does not let focused overflow flags leak into subcommands", async () => {
+  it("does not let rendered UI flags leak into subcommands", async () => {
     await expect(
       captureOutput([
         "--check-overflow",
@@ -287,18 +430,18 @@ describe("CLI contract", () => {
         "--dry-run",
       ])
     ).rejects.toThrow(
-      "--check-overflow and its related options cannot be used with subcommands."
+      "--check-ui and its related options cannot be used with subcommands."
     );
   });
 
-  it("rejects a project path in focused overflow mode", async () => {
+  it("rejects a project path in rendered UI mode", async () => {
     await expect(
       captureOutput([
         "some-project",
         "--check-overflow",
         "http://127.0.0.1:3000",
       ])
-    ).rejects.toThrow("--check-overflow does not accept a project path.");
+    ).rejects.toThrow("--check-ui does not accept a project path.");
   });
 
   it("renders a deterministic score bar when stdout is not a TTY", async () => {

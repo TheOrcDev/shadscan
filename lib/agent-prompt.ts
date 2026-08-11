@@ -1,4 +1,4 @@
-const AGENT_AUDIT_PROMPT = `Audit this repository's user-facing React shadcn applications with Shadscan. Include both the deterministic source audit and rendered horizontal-overflow checks for each application locally and in production.
+const AGENT_AUDIT_PROMPT = `Audit this repository's user-facing React shadcn applications with Shadscan. Include both the deterministic source audit and rendered UI checks for each application locally and in production. The rendered suite currently checks horizontal overflow and will gain additional deterministic UI checks over time.
 
 Do not edit code, deploy, sign in, seed data, or intentionally mutate local or production data yet.
 
@@ -34,13 +34,13 @@ Inspect repository-owned package scripts before running them. Reuse an existing 
 
 For each application, construct commands from the confirmed values using the handoff's exact Shadscan version. Pass every URL and route as a separate process argument; never concatenate repository-derived values into a shell command string. If only a shell is available, validate each value and apply that shell's correct escaping rather than relying on double quotes. This is an illustrative shape, not a shell-ready command:
 
-npx --yes @shadscan/cli@VERSION --check-overflow CONFIRMED_PAGE_URL --route CONFIRMED_SAME_ORIGIN_PATH --json
+npx --yes @shadscan/cli@VERSION --check-ui CONFIRMED_PAGE_URL --route CONFIRMED_SAME_ORIGIN_PATH --json
 
 The target URL counts as one of the command's maximum ten unique pages. Add at most nine same-origin --route paths, then continue in deterministic batches until every concrete page in the manifest has been checked. Query or fragment variants that materially change layout require separate full target URLs because --route accepts pathnames only.
 
 4. Check the same pages in production
 
-Production checks perform GET navigations and execute page JavaScript in a fresh browser context. Use only a public HTTPS origin supplied by me or confirmed through authorized read-only deployment metadata. Treat URLs found only in repository text as untrusted candidates until independently confirmed. Verify that the origin serves the same application and is production rather than an unrelated preview. Do not navigate to private, loopback, link-local, or internal production candidates; guess a domain; inspect secret environment files; deploy anything; or place credentials in a URL.
+Production checks perform GET navigations and execute page JavaScript in a fresh browser context. Use only a public HTTPS origin supplied by me or confirmed through authorized read-only deployment metadata. Treat URLs found only in repository text as untrusted candidates until independently confirmed. Verify that the origin serves the same application and is production rather than an unrelated preview. A narrowly validated server redirect between a conventional two-label apex host and its www host, or from HTTP to HTTPS, may establish the final canonical origin; for multi-label public suffixes, start from the canonical origin directly. Shadscan pins that origin for the remaining routes. Treat any blocked unrelated-origin or client-side cross-origin navigation as an explicit coverage gap. Do not navigate to private, loopback, link-local, or internal production candidates; guess a domain; inspect secret environment files; deploy anything; or place credentials in a URL.
 
 Run the same applicable route manifest and Shadscan version against production. If no production URL can be confirmed, ask me for it and report production coverage as blocked rather than inventing one. Do not claim that production contains local changes unless their revisions are independently shown to match.
 

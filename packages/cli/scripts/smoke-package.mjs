@@ -199,7 +199,8 @@ try {
   });
   assert.match(helpResult.stdout, /--apply/);
   assert.match(helpResult.stdout, /--agent <agent>/);
-  assert.match(helpResult.stdout, /--check-overflow <url>/);
+  assert.match(helpResult.stdout, /--check-ui <url>/);
+  assert.ok(!helpResult.stdout.includes("--check-overflow"));
   assert.match(helpResult.stdout, /--no-interactive/);
   assert.match(helpResult.stdout, /setup/);
 
@@ -286,7 +287,7 @@ try {
   });
   assert.match(invalidAgentResult.stderr, /--agent requires --apply/);
 
-  const invalidOverflowResult = await run(
+  const legacyOverflowAliasResult = await run(
     executable,
     ["--check-overflow", "not-a-url", "--json"],
     {
@@ -294,11 +295,11 @@ try {
       expectedExitCode: 1,
     }
   );
-  assert.equal(invalidOverflowResult.stdout, "");
-  assert.equal(
-    JSON.parse(invalidOverflowResult.stderr).error.code,
-    "INVALID_ARGUMENTS"
-  );
+  assert.equal(legacyOverflowAliasResult.stdout, "");
+  assert.deepEqual(JSON.parse(legacyOverflowAliasResult.stderr).error, {
+    code: "INVALID_ARGUMENTS",
+    message: "The overflow target must be an absolute HTTP or HTTPS URL.",
+  });
 
   const browserExecutable =
     getOptionValue("--browser-executable") ??
@@ -314,11 +315,7 @@ try {
     ];
     const fittingOverflowResult = await run(
       executable,
-      [
-        "--check-overflow",
-        `${overflowFixtureOrigin}/fits`,
-        ...browserArguments,
-      ],
+      ["--check-ui", `${overflowFixtureOrigin}/fits`, ...browserArguments],
       { cwd: consumerDirectory }
     );
     assert.equal(fittingOverflowResult.stderr, "");
@@ -335,11 +332,7 @@ try {
 
     const failingOverflowResult = await run(
       executable,
-      [
-        "--check-overflow",
-        `${overflowFixtureOrigin}/overflow`,
-        ...browserArguments,
-      ],
+      ["--check-ui", `${overflowFixtureOrigin}/overflow`, ...browserArguments],
       { cwd: consumerDirectory, expectedExitCode: 1 }
     );
     assert.equal(failingOverflowResult.stderr, "");
