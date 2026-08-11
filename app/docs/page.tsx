@@ -327,10 +327,11 @@ export default function DocsPage() {
           />
           <p>
             Interactive human runs write this checklist to stderr and leave the
-            completed phases visible above the final report. JSON, CI, non-TTY
-            stderr, and <code>--no-interactive</code> output stay quiet.
-            Redirecting stdout keeps the report clean while progress remains on
-            an eligible stderr terminal.
+            completed phases visible above the final report. JSON, CI,{" "}
+            <code>TERM=dumb</code>, non-TTY stderr, and{" "}
+            <code>--no-interactive</code> output stay quiet. Redirecting stdout
+            keeps the report clean while progress remains on an eligible stderr
+            terminal.
           </p>
           <p>
             The initial request may follow narrowly validated server-side

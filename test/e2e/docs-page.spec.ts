@@ -191,6 +191,7 @@ test("documents the CLI before the optional agent workflow", async ({
   await expect(uiCheck).toContainText("Checking mobile and desktop layouts");
   await expect(uiCheck).toContainText("Preparing UI report");
   await expect(uiCheck).toContainText("Interactive human runs");
+  await expect(uiCheck).toContainText("TERM=dumb");
   await expect(uiCheck).toContainText("non-TTY stderr");
   await expect(uiCheck).toContainText("--no-interactive");
   await expect(uiCheck).toContainText(

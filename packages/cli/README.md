@@ -74,9 +74,9 @@ Rendered UI checks use phases specific to browser work:
 ```
 
 Both checklists are written to stderr for interactive human output only. JSON,
-CI, non-TTY stderr, and `--no-interactive` output stay quiet; prompt output also
-stays quiet. Redirecting stdout keeps the report clean while progress remains on
-an eligible stderr terminal.
+CI, `TERM=dumb`, non-TTY stderr, and `--no-interactive` output stay quiet;
+prompt output also stays quiet. Redirecting stdout keeps the report clean while
+progress remains on an eligible stderr terminal.
 
 ## What You Get
 

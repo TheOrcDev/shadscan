@@ -10,8 +10,8 @@ stable releases published under `latest`.
 
 - Interactive human `--check-ui` runs now show an immediate three-phase stderr
   checklist: `Resolving UI target`, `Checking mobile and desktop layouts`, and
-  `Preparing UI report`. JSON, CI, non-TTY stderr, and `--no-interactive` runs
-  remain quiet.
+  `Preparing UI report`. JSON, CI, `TERM=dumb`, non-TTY stderr, and
+  `--no-interactive` runs remain quiet.
 
 ## 0.15.0 - 2026-08-11
 

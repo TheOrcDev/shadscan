@@ -82,8 +82,8 @@ shadscan --check-ui <url> [--route <path> ...]
   intact. Progress begins immediately, keeps completed phases visible, and
   depends on stderr terminal capabilities rather than stdin or stdout TTY state.
   Rendered UI checks use `Resolving UI target`, `Checking mobile and desktop
-  layouts`, and `Preparing UI report`. JSON, prompt, CI, non-TTY stderr, and
-  `--no-interactive` commands suppress progress.
+  layouts`, and `Preparing UI report`. JSON, prompt, CI, `TERM=dumb`, non-TTY
+  stderr, and `--no-interactive` commands suppress progress.
 - Under `shadscan mcp`, stdout carries JSON-RPC exclusively; stderr carries a
   single startup line and abnormal-exit diagnostics. Tool errors return as
   MCP error results with the same stable public messages as CLI failures,
