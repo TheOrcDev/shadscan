@@ -579,25 +579,25 @@ const getOutputTerminalCapabilities = () =>
 const runUiCheckAction = async (
   {
     browserExecutable,
+    interactive,
     outputFormat,
     routes,
     target,
   }: {
     browserExecutable?: string;
+    interactive: boolean;
     outputFormat: OutputFormat;
     routes?: string[];
     target: string;
   },
   runtime: UiCheckRuntime = {}
 ): Promise<void> => {
-  const resolvedTarget = resolveOverflowCheckTarget({ routes, target });
-  let runBrowserCheck = runtime.runBrowserCheck;
-
-  if (!runBrowserCheck) {
-    ({ runOverflowBrowserCheck: runBrowserCheck } = await import(
-      "./overflow-check/browser"
-    ));
-  }
+  const progress = createCliScanProgress(
+    outputFormat === "human" && interactive
+  );
+  const resolvedTarget = await progress.run("Resolving UI target", () =>
+    resolveOverflowCheckTarget({ routes, target })
+  );
 
   const abortController = new AbortController();
   const abortCheck = (): void => abortController.abort();
@@ -605,28 +605,46 @@ const runUiCheckAction = async (
   process.once("SIGTERM", abortCheck);
 
   try {
-    const browserResult = await runBrowserCheck({
-      browserExecutable,
-      origin: resolvedTarget.origin,
-      pages: resolvedTarget.pages,
-      signal: abortController.signal,
-    });
-    const report = evaluateOverflowCheck({
-      durationMs: browserResult.durationMs,
-      measurements: browserResult.measurements,
-      target: {
-        origin: browserResult.origin,
-        pages: resolvedTarget.pages.map((page) => page.displayPath),
-      },
-    });
-    const output =
-      outputFormat === "json"
-        ? `${JSON.stringify(report, null, 2)}\n`
-        : renderOverflowCheckReport(report, {
-            requestedOrigin: resolvedTarget.origin,
-            terminal: getOutputTerminalCapabilities(),
-          });
+    const browserResult = await progress.run(
+      "Checking mobile and desktop layouts",
+      async () => {
+        let runBrowserCheck = runtime.runBrowserCheck;
 
+        if (!runBrowserCheck) {
+          ({ runOverflowBrowserCheck: runBrowserCheck } = await import(
+            "./overflow-check/browser"
+          ));
+        }
+
+        return await runBrowserCheck({
+          browserExecutable,
+          origin: resolvedTarget.origin,
+          pages: resolvedTarget.pages,
+          signal: abortController.signal,
+        });
+      }
+    );
+    const { output, report } = await progress.run("Preparing UI report", () => {
+      const preparedReport = evaluateOverflowCheck({
+        durationMs: browserResult.durationMs,
+        measurements: browserResult.measurements,
+        target: {
+          origin: browserResult.origin,
+          pages: resolvedTarget.pages.map((page) => page.displayPath),
+        },
+      });
+      const preparedOutput =
+        outputFormat === "json"
+          ? `${JSON.stringify(preparedReport, null, 2)}\n`
+          : renderOverflowCheckReport(preparedReport, {
+              requestedOrigin: resolvedTarget.origin,
+              terminal: getOutputTerminalCapabilities(),
+            });
+
+      return { output: preparedOutput, report: preparedReport };
+    });
+
+    progress.finish();
     process.stdout.write(output);
     if (report.status === "fail") {
       process.exitCode = 1;
@@ -758,6 +776,7 @@ const runScanAction = async (
     await runUiCheckAction(
       {
         browserExecutable: options.browserExecutable,
+        interactive: options.interactive,
         outputFormat,
         routes: options.route,
         target: uiCheckTarget,
@@ -988,7 +1007,10 @@ const createProgram = (runtime: UiCheckRuntime = {}): Command => {
     )
     .option("--no-roast", "Use neutral human output.")
     .option("--roast", "Force roast copy in CI and JSON output.")
-    .option("--no-interactive", "Disable Shadscan follow-up prompts.")
+    .option(
+      "--no-interactive",
+      "Disable terminal progress and follow-up prompts."
+    )
     .option(
       "--list-projects",
       "List the workspace packages shadscan found, without scanning."

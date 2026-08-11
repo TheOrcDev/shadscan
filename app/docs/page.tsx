@@ -101,8 +101,7 @@ const CLI_OPTIONS = [
     option: "--roast",
   },
   {
-    description:
-      "Disable the local post-scan menu and all Shadscan follow-up prompts.",
+    description: "Disable terminal progress and follow-up prompts.",
     option: "--no-interactive",
   },
   {
@@ -318,6 +317,21 @@ export default function DocsPage() {
             beginning with <code>/</code>, up to ten pages in total. Routes
             cannot contain query strings or fragments.
           </p>
+          <h3>Follow progress in the terminal</h3>
+          <DocsCodeBlock
+            code={
+              "✓ Resolving UI target\n✓ Checking mobile and desktop layouts\n✓ Preparing UI report"
+            }
+            label="Interactive UI-check progress"
+            language="text"
+          />
+          <p>
+            Interactive human runs write this checklist to stderr and leave the
+            completed phases visible above the final report. JSON, CI, non-TTY
+            stderr, and <code>--no-interactive</code> output stay quiet.
+            Redirecting stdout keeps the report clean while progress remains on
+            an eligible stderr terminal.
+          </p>
           <p>
             The initial request may follow narrowly validated server-side
             canonical redirects between a conventional two-label apex host and
@@ -532,9 +546,9 @@ export default function DocsPage() {
             blocking Shadscan hook protects the project yet. Pick with the arrow
             keys and Enter — the handoff is highlighted first, so a single Enter
             grabs it. Press <code>Esc</code> to keep just the score, or use{" "}
-            <code>--no-interactive</code> to suppress the menu entirely.
-            Category-scoped scans do not offer a hook because their score cannot
-            establish a full-project floor.
+            <code>--no-interactive</code> to suppress terminal progress and the
+            menu entirely. Category-scoped scans do not offer a hook because
+            their score cannot establish a full-project floor.
           </p>
           <h3>Preview the exact hook plan</h3>
           <div className="not-typeset mt-4">

@@ -55,8 +55,8 @@ bunx @shadscan/cli
 Shadscan requires Node.js 18 or newer. Commands resolve to the latest stable
 release; prereleases are published under the `next` tag (`@shadscan/cli@next`).
 
-Interactive human scans show progress immediately and keep each completed phase
-above the final report:
+Interactive human source audits show progress immediately and keep each
+completed phase above the final report:
 
 ```text
 ✓ Resolving project
@@ -65,9 +65,18 @@ above the final report:
 ✓ Preparing report
 ```
 
-JSON, prompt, CI, non-TTY stderr, and `--no-interactive` output stay quiet.
-Redirecting stdout keeps the report clean while progress remains on an eligible
-stderr terminal.
+Rendered UI checks use phases specific to browser work:
+
+```text
+✓ Resolving UI target
+✓ Checking mobile and desktop layouts
+✓ Preparing UI report
+```
+
+Both checklists are written to stderr for interactive human output only. JSON,
+CI, non-TTY stderr, and `--no-interactive` output stay quiet; prompt output also
+stays quiet. Redirecting stdout keeps the report clean while progress remains on
+an eligible stderr terminal.
 
 ## What You Get
 
