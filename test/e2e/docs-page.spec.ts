@@ -167,6 +167,16 @@ test("documents the CLI before the optional agent workflow", async ({
     page.locator("#options dt").getByText("--check-ui <url>", { exact: true })
   ).toBeVisible();
   await expect(
+    page.locator("#options dt").getByText("--no-interactive", { exact: true })
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("#options dd")
+      .getByText("Disable terminal progress and follow-up prompts.", {
+        exact: true,
+      })
+  ).toBeVisible();
+  await expect(
     page.getByRole("link", { exact: true, name: "UI checks" })
   ).toHaveAttribute("href", "#ui-check");
   await expect(page.getByText("production-polish")).toBeVisible();
@@ -177,6 +187,13 @@ test("documents the CLI before the optional agent workflow", async ({
   );
   await expect(uiCheck).toContainText("Mobile: 320 × 820");
   await expect(uiCheck).toContainText("Desktop: 1440 × 1000");
+  await expect(uiCheck).toContainText("Resolving UI target");
+  await expect(uiCheck).toContainText("Checking mobile and desktop layouts");
+  await expect(uiCheck).toContainText("Preparing UI report");
+  await expect(uiCheck).toContainText("Interactive human runs");
+  await expect(uiCheck).toContainText("TERM=dumb");
+  await expect(uiCheck).toContainText("non-TTY stderr");
+  await expect(uiCheck).toContainText("--no-interactive");
   await expect(uiCheck).toContainText(
     "rendered UI suite, not another source-audit rule"
   );

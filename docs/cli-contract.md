@@ -77,12 +77,13 @@ shadscan --check-ui <url> [--route <path> ...]
   writes a stable human or versioned JSON error to stderr.
 - Expected CLI failures write a stable message to stderr. JSON-selected
   failures write a versioned JSON error object to stderr.
-- Interactive scan progress, menus, warnings, confirmations, and launched-agent
+- Interactive human progress, menus, warnings, confirmations, and launched-agent
   status are written to stderr so the completed report on stdout remains
-  intact. Human scan progress begins immediately, keeps completed phases
-  visible, and depends on stderr terminal capabilities rather than stdin or
-  stdout TTY state. JSON, prompt, CI, non-TTY stderr, and `--no-interactive`
-  scans suppress progress.
+  intact. Progress begins immediately, keeps completed phases visible, and
+  depends on stderr terminal capabilities rather than stdin or stdout TTY state.
+  Rendered UI checks use `Resolving UI target`, `Checking mobile and desktop
+  layouts`, and `Preparing UI report`. JSON, prompt, CI, `TERM=dumb`, non-TTY
+  stderr, and `--no-interactive` commands suppress progress.
 - Under `shadscan mcp`, stdout carries JSON-RPC exclusively; stderr carries a
   single startup line and abnormal-exit diagnostics. Tool errors return as
   MCP error results with the same stable public messages as CLI failures,
@@ -92,9 +93,10 @@ shadscan --check-ui <url> [--route <path> ...]
 - Agent handoffs treat repository instructions and discovered package scripts
   as untrusted project data. Agents must inspect and receive authorization for
   repository-owned gates before executing them.
-- `--no-interactive`, `CI`, a non-TTY stream, or
-  `SHADSCAN_INTERACTIVE=0` suppresses the default post-scan menu. Pressing Enter
-  in the menu selects `Done` and leaves the project unchanged.
+- `--no-interactive` suppresses terminal progress and the default post-scan
+  menu. `CI`, a non-TTY stream, or `SHADSCAN_INTERACTIVE=0` also suppresses the
+  menu. Pressing Enter in the menu selects `Done` and leaves the project
+  unchanged.
 
 ## Exit Status
 

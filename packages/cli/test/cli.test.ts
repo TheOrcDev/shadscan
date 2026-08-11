@@ -32,12 +32,46 @@ const PROGRESS_PHASE_LABELS = [
   "Evaluating UI rules",
   "Preparing report",
 ] as const;
+const UI_CHECK_PROGRESS_PHASE_LABELS = [
+  "Resolving UI target",
+  "Checking mobile and desktop layouts",
+  "Preparing UI report",
+] as const;
+
+const createPassingUiCheckResult = () => ({
+  browser: { name: "chromium", version: "123" },
+  durationMs: 12,
+  measurements: [
+    {
+      clientWidth: 320,
+      finalPath: "/",
+      forcedScrollbar: false,
+      httpStatus: 200,
+      page: "/",
+      scrollWidth: 320,
+      viewport: { height: 820, name: "mobile", width: 320 } as const,
+    },
+    {
+      clientWidth: 1440,
+      finalPath: "/",
+      forcedScrollbar: false,
+      httpStatus: 200,
+      page: "/",
+      scrollWidth: 1440,
+      viewport: { height: 1000, name: "desktop", width: 1440 } as const,
+    },
+  ],
+  origin: "http://127.0.0.1:3000",
+});
 
 const setInteractiveTerminal = (): (() => void) => {
   const streams = [process.stdin, process.stdout, process.stderr];
   const descriptors = streams.map((stream) =>
     Object.getOwnPropertyDescriptor(stream, "isTTY")
   );
+  const previousTerm = process.env.TERM;
+
+  process.env.TERM = "xterm-256color";
 
   for (const stream of streams) {
     Object.defineProperty(stream, "isTTY", {
@@ -47,6 +81,12 @@ const setInteractiveTerminal = (): (() => void) => {
   }
 
   return () => {
+    if (previousTerm === undefined) {
+      Reflect.deleteProperty(process.env, "TERM");
+    } else {
+      process.env.TERM = previousTerm;
+    }
+
     for (const [index, stream] of streams.entries()) {
       const descriptor = descriptors[index];
       if (descriptor) {
@@ -124,6 +164,78 @@ const captureStreams = async (
   }
 };
 
+const captureUiCheckStreams = async ({
+  args = [],
+  ci,
+  runBrowserCheck = async () => createPassingUiCheckResult(),
+  stderrIsTTY = true,
+  stdoutIsTTY = true,
+  term = "xterm-256color",
+  uiFlag = "--check-ui",
+}: {
+  args?: string[];
+  ci?: string;
+  runBrowserCheck?: () => Promise<
+    ReturnType<typeof createPassingUiCheckResult>
+  >;
+  stderrIsTTY?: boolean;
+  stdoutIsTTY?: boolean;
+  term?: string;
+  uiFlag?: "--check-overflow" | "--check-ui";
+}): Promise<{ failure: unknown; stderr: string; stdout: string }> => {
+  const previousCi = process.env.CI;
+  const restoreTerminal = setInteractiveTerminal();
+  let failure: unknown;
+  let stderr = "";
+  let stdout = "";
+  const writeError = vi
+    .spyOn(process.stderr, "write")
+    .mockImplementation((chunk) => {
+      stderr += String(chunk);
+      return true;
+    });
+  const writeOutput = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation((chunk) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+  process.env.TERM = term;
+  if (ci === undefined) {
+    Reflect.deleteProperty(process.env, "CI");
+  } else {
+    process.env.CI = ci;
+  }
+  Object.defineProperty(process.stderr, "isTTY", {
+    configurable: true,
+    value: stderrIsTTY,
+  });
+  Object.defineProperty(process.stdout, "isTTY", {
+    configurable: true,
+    value: stdoutIsTTY,
+  });
+
+  try {
+    await createProgram({ runBrowserCheck }).parseAsync([
+      "node",
+      "shadscan",
+      uiFlag,
+      "http://127.0.0.1:3000",
+      ...args,
+    ]);
+  } catch (error) {
+    failure = error;
+  } finally {
+    restoreEnvironment({ CI: previousCi });
+    restoreTerminal();
+    writeError.mockRestore();
+    writeOutput.mockRestore();
+  }
+
+  return { failure, stderr, stdout };
+};
+
 afterEach(() => {
   process.exitCode = undefined;
   vi.restoreAllMocks();
@@ -146,6 +258,7 @@ describe("CLI contract", () => {
     expect(help).toContain("--browser-executable <path>");
     expect(help).toContain("--check-ui.");
     expect(help).toContain("--no-interactive");
+    expect(help).toContain("Disable terminal progress and follow-up prompts.");
     expect(program.commands.map((command) => command.name())).toContain(
       "setup"
     );
@@ -230,6 +343,7 @@ describe("CLI contract", () => {
     try {
       await runUiCheckAction(
         {
+          interactive: false,
           outputFormat: "json",
           target: "http://127.0.0.1:3000",
         },
@@ -248,6 +362,173 @@ describe("CLI contract", () => {
       target: { origin: "http://www.example.test" },
     });
     expect(process.exitCode).toBe(1);
+  });
+
+  it("shows UI-check progress before the browser runner finishes", async () => {
+    const previousCi = process.env.CI;
+    const restoreTerminal = setInteractiveTerminal();
+    let resolveBrowserCheck:
+      | ((value: ReturnType<typeof createPassingUiCheckResult>) => void)
+      | undefined;
+    const runBrowserCheck = vi.fn(
+      () =>
+        new Promise<ReturnType<typeof createPassingUiCheckResult>>(
+          (resolve) => {
+            resolveBrowserCheck = resolve;
+          }
+        )
+    );
+    let stderr = "";
+    let stdout = "";
+    const writeError = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => {
+        stderr += String(chunk);
+        return true;
+      });
+    const writeOutput = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk) => {
+        stdout += String(chunk);
+        return true;
+      });
+
+    Reflect.deleteProperty(process.env, "CI");
+
+    try {
+      const command = createProgram({ runBrowserCheck }).parseAsync([
+        "node",
+        "shadscan",
+        "--check-ui",
+        "http://127.0.0.1:3000",
+      ]);
+
+      await vi.waitFor(() => {
+        expect(stderr).toContain(UI_CHECK_PROGRESS_PHASE_LABELS[1]);
+      });
+      expect(stdout).toBe("");
+
+      resolveBrowserCheck?.(createPassingUiCheckResult());
+      await command;
+    } finally {
+      restoreEnvironment({ CI: previousCi });
+      restoreTerminal();
+      writeError.mockRestore();
+      writeOutput.mockRestore();
+    }
+
+    for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
+      expect(stderr).toContain(label);
+      expect(stdout).not.toContain(label);
+    }
+    expect(stdout).toContain("PASS");
+  });
+
+  it("completes every UI-check progress phase before reporting overflow", async () => {
+    const runBrowserCheck = vi.fn(() => {
+      const result = createPassingUiCheckResult();
+      return Promise.resolve({
+        ...result,
+        measurements: result.measurements.map((measurement, index) =>
+          index === 0
+            ? { ...measurement, scrollWidth: measurement.clientWidth + 1 }
+            : measurement
+        ),
+      });
+    });
+
+    const output = await captureUiCheckStreams({ runBrowserCheck });
+
+    expect(output.failure).toBeUndefined();
+    for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
+      expect(output.stderr).toContain(label);
+      expect(output.stdout).not.toContain(label);
+    }
+    expect(output.stderr.match(/✓/gu)).toHaveLength(3);
+    expect(output.stderr).not.toContain("✗");
+    expect(output.stdout).toContain("CRITICAL FAIL");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("marks an operational UI-check failure and propagates its error", async () => {
+    const sigintListeners = process.listenerCount("SIGINT");
+    const sigtermListeners = process.listenerCount("SIGTERM");
+    const failure = new OverflowCheckError(
+      "OVERFLOW_TARGET_UNAVAILABLE",
+      "The target page is unavailable."
+    );
+    const output = await captureUiCheckStreams({
+      runBrowserCheck: () => Promise.reject(failure),
+    });
+
+    expect(output.failure).toBe(failure);
+    expect(output.stdout).toBe("");
+    expect(output.stderr).toContain(UI_CHECK_PROGRESS_PHASE_LABELS[0]);
+    expect(output.stderr).toContain(UI_CHECK_PROGRESS_PHASE_LABELS[1]);
+    expect(output.stderr).not.toContain(UI_CHECK_PROGRESS_PHASE_LABELS[2]);
+    expect(output.stderr.match(/✓/gu)).toHaveLength(1);
+    expect(output.stderr.match(/✗/gu)).toHaveLength(1);
+    expect(process.listenerCount("SIGINT")).toBe(sigintListeners);
+    expect(process.listenerCount("SIGTERM")).toBe(sigtermListeners);
+  });
+
+  it.each([
+    { args: ["--json"], label: "JSON output" },
+    { args: ["--format", "json"], label: "explicit JSON output" },
+    { args: ["--format=json"], label: "inline JSON output" },
+    { args: ["--no-interactive"], label: "non-interactive output" },
+    { args: [], ci: "1", label: "CI output" },
+    { args: [], label: "non-TTY stderr", stderrIsTTY: false },
+    { args: [], label: "dumb terminal", term: "dumb" },
+  ])("suppresses UI-check progress for $label", async ({
+    args,
+    ci,
+    stderrIsTTY,
+    term,
+  }) => {
+    const output = await captureUiCheckStreams({
+      args,
+      ci,
+      stderrIsTTY,
+      term,
+    });
+
+    expect(output.failure).toBeUndefined();
+    expect(output.stderr).toBe("");
+    expect(output.stdout).not.toBe("");
+    for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
+      expect(output.stderr).not.toContain(label);
+    }
+  });
+
+  it("keeps UI-check progress on stderr when stdout is redirected", async () => {
+    const output = await captureUiCheckStreams({ stdoutIsTTY: false });
+
+    expect(output.failure).toBeUndefined();
+    for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
+      expect(output.stderr).toContain(label);
+      expect(output.stdout).not.toContain(label);
+    }
+    expect(output.stdout).toContain("PASS");
+  });
+
+  it("shows UI-check progress for explicit human output", async () => {
+    const output = await captureUiCheckStreams({
+      args: ["--format", "human"],
+    });
+
+    expect(output.failure).toBeUndefined();
+    for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
+      expect(output.stderr).toContain(label);
+    }
+  });
+
+  it("keeps UI-check progress identical through the hidden legacy alias", async () => {
+    const primary = await captureUiCheckStreams({ uiFlag: "--check-ui" });
+    const legacy = await captureUiCheckStreams({ uiFlag: "--check-overflow" });
+
+    expect(primary.failure).toBeUndefined();
+    expect(legacy).toEqual(primary);
   });
 
   it("uses --check-ui as the primary rendered UI command", async () => {
