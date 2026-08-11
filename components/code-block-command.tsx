@@ -3,6 +3,7 @@
 import { ScrollArea } from "@base-ui/react/scroll-area";
 import { TerminalIcon, TextAlignLeftIcon } from "@phosphor-icons/react";
 import { useMemo, useState } from "react";
+import { CollapsibleCode } from "@/components/collapsible-code";
 import { CopyButton } from "@/components/copy-button";
 import { IconSwap, IconSwapItem } from "@/components/icon-swap";
 import {
@@ -52,7 +53,10 @@ export function CodeBlockCommand({
   );
 
   const tabsFiltered = useMemo(
-    () => Object.entries(tabs).filter(([, value]) => !!value),
+    () =>
+      Object.entries(tabs).filter((entry): entry is [PackageManager, string] =>
+        Boolean(entry[1])
+      ),
     [tabs]
   );
 
@@ -104,21 +108,30 @@ export function CodeBlockCommand({
 
         {tabsFiltered.map(([key, value]) => (
           <TabsContent key={key} value={key}>
-            <pre
-              className="group/tabs-content-pre not-data-[pm=prompt]:overflow-x-auto overscroll-x-contain p-4 leading-6"
-              data-pm={key}
-            >
-              <code
-                className="font-mono text-muted-foreground text-sm/none group-data-[pm=prompt]/tabs-content-pre:whitespace-pre-wrap"
-                data-language="bash"
-                data-slot="code-block"
+            {key === "prompt" ? (
+              <div data-pm={key}>
+                <CollapsibleCode
+                  className="whitespace-pre-wrap font-mono text-muted-foreground text-sm leading-6"
+                  code={value}
+                  language="bash"
+                  preClassName="overscroll-x-contain p-4 leading-6"
+                />
+              </div>
+            ) : (
+              <pre
+                className="overflow-x-auto overscroll-x-contain p-4 leading-6"
+                data-pm={key}
               >
-                <span className="select-none group-data-[pm=prompt]/tabs-content-pre:hidden">
-                  ${" "}
-                </span>
-                {value}
-              </code>
-            </pre>
+                <code
+                  className="font-mono text-muted-foreground text-sm/none"
+                  data-language="bash"
+                  data-slot="code-block"
+                >
+                  <span className="select-none">$ </span>
+                  {value}
+                </code>
+              </pre>
+            )}
           </TabsContent>
         ))}
       </Tabs>
