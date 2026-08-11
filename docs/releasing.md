@@ -144,7 +144,7 @@ repository is public.
 - npm one-off: `npx --yes @shadscan/cli`
 - pnpm one-off: `pnpm dlx @shadscan/cli`
 - Monorepo target: `pnpm dlx @shadscan/cli ./apps/web`
-- Reproducible CI: `pnpm dlx @shadscan/cli@0.14.0 --fail-under 80`
+- Reproducible CI: `pnpm dlx @shadscan/cli@0.15.0 --fail-under 80`
 - Lockfile-managed CI: install with
   `npm install --save-dev @shadscan/cli` or `pnpm add --save-dev @shadscan/cli`,
   then run the installed `shadscan` binary through a package script or

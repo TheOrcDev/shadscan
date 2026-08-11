@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.15.0 - 2026-08-11
+
 ### Added
 
 - `--check-ui <url>` is now the public entry point for deterministic rendered
