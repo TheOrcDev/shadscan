@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.16.0 - 2026-08-11
+
 ### Added
 
 - Interactive human `--check-ui` runs now show an immediate three-phase stderr
