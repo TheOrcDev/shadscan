@@ -4,7 +4,7 @@ import type { ProjectDiscovery } from "../discovery";
 import { getAstroSourceFiles } from "./astro-mounts";
 import { fail, notApplicable, pass } from "./rule-result";
 import {
-  findFiles,
+  findProjectFiles,
   getProjectSourceFiles,
   getTextLineNumber,
   readProjectSourceFile,
@@ -24,7 +24,7 @@ const TANSTACK_SOCIAL_CONTENT_PATTERN = /\bcontent\s*:\s*["'`][^"'`]+["'`]/;
 const evaluateAppRouterSocialPreview = async (
   project: ProjectDiscovery
 ): Promise<AuditRuleResult> => {
-  const socialImageFiles = await findFiles(project.rootDir, [
+  const socialImageFiles = await findProjectFiles(project, [
     "app/**/opengraph-image.*",
     "app/**/twitter-image.*",
     "src/app/**/opengraph-image.*",

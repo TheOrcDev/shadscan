@@ -36,7 +36,7 @@ import {
 import { fail, notApplicable, pass } from "./rule-result";
 import {
   fileExists,
-  findFiles,
+  findProjectFiles,
   findSourceMatch,
   getProjectSourceFiles,
   getTextLineNumber,
@@ -364,7 +364,7 @@ const runTanstackStartCheck = async (
 
   const relativeRoutesDir = path.relative(project.rootDir, routesDir);
   const routePaths = (
-    await findFiles(project.rootDir, [
+    await findProjectFiles(project, [
       path.join(relativeRoutesDir, "**/*.{js,jsx,ts,tsx}"),
       path.join(relativeRoutesDir, "*.{js,jsx,ts,tsx}"),
     ])
@@ -573,7 +573,7 @@ const routeLoadingBoundaryPresentRule: AuditRule = {
 
     const relativeAppDir = path.relative(project.rootDir, appDir);
     const pagePaths = (
-      await findFiles(project.rootDir, [
+      await findProjectFiles(project, [
         path.join(relativeAppDir, "**/page.{js,jsx,ts,tsx}"),
         path.join(relativeAppDir, "page.{js,jsx,ts,tsx}"),
       ])

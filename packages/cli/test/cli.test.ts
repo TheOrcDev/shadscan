@@ -257,6 +257,7 @@ describe("CLI contract", () => {
     expect(help).toContain("Add a same-origin route to --check-ui");
     expect(help).toContain("--browser-executable <path>");
     expect(help).toContain("--check-ui.");
+    expect(help).toContain("--ignore <glob>");
     expect(help).toContain("--no-interactive");
     expect(help).toContain("Disable terminal progress and follow-up prompts.");
     expect(program.commands.map((command) => command.name())).toContain(
@@ -287,6 +288,27 @@ describe("CLI contract", () => {
         ...jsonFormat,
         durationMs: 0,
       });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("applies --ignore to JSON coverage and source discovery", async () => {
+    const fixture = await createRuleFixture();
+
+    try {
+      await fixture.write(
+        "src/api/hooks/use-session.ts",
+        "export function useAdminDisableSession() { return useMutation(); }\n"
+      );
+      const report = JSON.parse(
+        await captureOutput(
+          ["--json", "--ignore", "src/api/**"],
+          fixture.rootDir
+        )
+      ) as { coverage: { ignorePatterns: string[] } };
+
+      expect(report.coverage.ignorePatterns).toEqual(["src/api/**"]);
     } finally {
       await fixture.cleanup();
     }
@@ -683,6 +705,7 @@ describe("CLI contract", () => {
       { arguments: ["--format", "prompt"], option: "--prompt" },
       { arguments: ["--list-projects"], option: "--list-projects" },
       { arguments: ["--project", "apps/web"], option: "--project" },
+      { arguments: ["--ignore", "src/api/**"], option: "--ignore" },
       { arguments: ["--roast"], option: "--roast" },
     ];
 

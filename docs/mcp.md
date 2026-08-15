@@ -93,7 +93,7 @@ A real filtered response, trimmed to one actionable:
 {
   "engineVersion": "0.8.0",
   "rulesetVersion": "2026.07.41",
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "actionables": [
     {
       "findingId": "theme-provider-configured",

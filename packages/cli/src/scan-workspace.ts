@@ -6,6 +6,7 @@ import {
   type WorkspaceReport,
   type WorkspaceReportProject,
 } from "./audit";
+import { compareCodeUnits } from "./deterministic-order";
 import {
   discoverProject,
   type ProjectDiscovery,
@@ -89,13 +90,15 @@ const toWorkspaceReportProject = (
 const createWorkspaceRootProject = (
   rootDir: string,
   representative: ProjectDiscovery,
-  adapter: PooledAdapter
+  adapter: PooledAdapter,
+  ignorePatterns: string[]
 ): ProjectDiscovery => ({
   ...representative,
   framework: {
     ...representative.framework,
     adapter: adapter as ProjectDiscovery["framework"]["adapter"],
   },
+  ignorePatterns,
   packageName: null,
   rootDir,
   selectedProjectPath: ".",
@@ -165,7 +168,7 @@ const scanWorkspace = async (
     representativeDir === "."
       ? workspace.rootDir
       : path.join(workspace.rootDir, representativeDir),
-    { filesystemRoot }
+    { filesystemRoot, ignorePatterns: options.ignorePatterns }
   );
 
   const workspaceReport: WorkspaceReport = {
@@ -177,6 +180,11 @@ const scanWorkspace = async (
     skipped: workspace.skipped,
     truncated: workspace.truncated,
   };
+  const ignorePatterns = [
+    ...new Set(
+      scanned.flatMap((entry) => entry.report.coverage.ignorePatterns)
+    ),
+  ].sort(compareCodeUnits);
 
   return createAuditReport({
     category: options.category,
@@ -185,7 +193,8 @@ const scanWorkspace = async (
     project: createWorkspaceRootProject(
       workspace.rootDir,
       representative,
-      getPooledAdapter(applications)
+      getPooledAdapter(applications),
+      ignorePatterns
     ),
     rulesetVersion: BUNDLED_RULESET_VERSION,
     source: options.source,

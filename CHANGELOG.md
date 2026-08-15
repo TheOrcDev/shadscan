@@ -6,6 +6,13 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Added
+
+- Source audits now accept extra ignore globs from `--ignore`,
+  `shadscan.config.jsonc`, `shadscan.config.json`, or `package.json#shadscan`.
+  They merge with the built-in exclusions, apply at source discovery, and
+  appear on the report as `coverage.ignorePatterns` (`schemaVersion` 10).
+
 ## 0.16.0 - 2026-08-11
 
 ### Added

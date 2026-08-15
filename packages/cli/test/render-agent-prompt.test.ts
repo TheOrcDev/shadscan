@@ -16,6 +16,7 @@ const createProject = (): ProjectDiscovery => ({
     adapter: "generic-react",
     evidence: ["react dependency found"],
   },
+  ignorePatterns: [],
   packageManager: "pnpm",
   packageManagerRoot: PROJECT_ROOT,
   packageName: "prompt-fixture",

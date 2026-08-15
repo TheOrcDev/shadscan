@@ -733,6 +733,7 @@ describe("createAuditReport", () => {
         adapter: "generic-react",
         evidence: [],
       },
+      ignorePatterns: [],
       packageManager: "unknown",
       packageManagerRoot: "/tmp",
       packageName: null,

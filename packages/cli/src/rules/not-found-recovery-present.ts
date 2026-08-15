@@ -22,7 +22,7 @@ import {
   createConfinedTypeScriptHost,
 } from "../typescript-host";
 import { fail, notApplicable, pass } from "./rule-result";
-import { findFiles, getTextLineNumber } from "./source-files";
+import { findProjectFiles, getTextLineNumber } from "./source-files";
 
 const RECOVERY_CONTROL_PATTERN =
   /<(?:a|Link)\b[^>]*href=|<(?:button|Button)\b[^>]*onClick\s*=\s*\{[^}]*(?:back|push|replace)|<(?:form|Search|SearchInput)(?:\s|>)/i;
@@ -220,7 +220,7 @@ const notFoundRecoveryPresentRule: AuditRule = {
       return notApplicable("No supported Next route directory was found.");
     }
 
-    const notFoundFiles = await findFiles(project.rootDir, patterns);
+    const notFoundFiles = await findProjectFiles(project, patterns);
 
     if (notFoundFiles.length === 0) {
       return notApplicable("No Next not-found UI file was found.");

@@ -118,6 +118,10 @@ describe("hosted API OpenAPI document", () => {
       PUBLIC_CONTRACT_VERSIONS.report
     );
     expect(schemas.AuditReport.required).toContain("coverage");
+    expect(schemas.AuditReport.properties.coverage.required).toEqual([
+      "ignorePatterns",
+      "source",
+    ]);
     expect(
       schemas.AuditReport.properties.coverage.properties.source.enum
     ).toEqual(["complete", "partial"]);

@@ -1,6 +1,6 @@
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
-import { findFiles, getProjectSourceFiles } from "./source-files";
+import { findProjectFiles, getProjectSourceFiles } from "./source-files";
 
 const PRIVATE_INDEXING_PATTERN =
   /\bnoindex\b|\bindex\s*:\s*false\b|Disallow\s*:\s*\/(?:\s|$)/i;
@@ -44,8 +44,8 @@ const publicAppSeoFilesPresentRule: AuditRule = {
       );
     }
 
-    const robotsFiles = await findFiles(project.rootDir, ROBOTS_PATTERNS);
-    const sitemapFiles = await findFiles(project.rootDir, SITEMAP_PATTERNS);
+    const robotsFiles = await findProjectFiles(project, ROBOTS_PATTERNS);
+    const sitemapFiles = await findProjectFiles(project, SITEMAP_PATTERNS);
     const missingFiles: string[] = [];
 
     if (robotsFiles.length === 0) {

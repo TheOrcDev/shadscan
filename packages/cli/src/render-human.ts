@@ -435,6 +435,11 @@ const renderHumanReport = (
     report.workspace
       ? `Packages: ${report.workspace.projects.length} discovered`
       : `Package: ${sanitizeTerminalText(report.packageName ?? "unknown")}`,
+    ...(report.coverage.ignorePatterns.length > 0
+      ? [
+          `Ignoring: ${report.coverage.ignorePatterns.map(sanitizeTerminalText).join(", ")}`,
+        ]
+      : []),
     "",
     "Categories:",
     ...renderCategories(report),

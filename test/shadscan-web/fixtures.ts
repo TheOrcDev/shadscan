@@ -177,6 +177,7 @@ const WEB_SCAN_COMPLETE_FIXTURE = {
         },
       ],
       coverage: {
+        ignorePatterns: [],
         source: "complete",
       },
       durationMs: 1420,

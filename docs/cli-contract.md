@@ -13,6 +13,11 @@ shadscan --check-ui <url> [--route <path> ...]
 
 - `path` selects the React project to scan and defaults to the current working
   directory.
+- Repeatable `--ignore <glob>` values exclude matching source paths from the
+  audit. They merge with built-in ignores and with `ignore` from
+  `shadscan.config.jsonc`, `shadscan.config.json`, or `package.json#shadscan`
+  in the scanned package. Negation globs and absolute or parent paths are
+  rejected. `--category` and `--project` remain orthogonal filters.
 - Relative paths resolve from the invoking process's working directory.
 - Supported adapters are Next.js App Router, Next.js Pages Router, hybrid Next.js
   projects containing both router trees, Vite React, and generic React projects.
@@ -63,6 +68,8 @@ shadscan --check-ui <url> [--route <path> ...]
   a deterministic ASCII bar with color disabled by default. `NO_COLOR` always
   wins, while `FORCE_COLOR` can explicitly color the ASCII fallback.
 - `--format json` and `--json` write one versioned JSON report to stdout.
+  `coverage.ignorePatterns` lists the extra user ignore globs that were
+  applied, or an empty array when none were configured.
 - `--format prompt` and `--prompt` write one deterministic agent handoff to
   stdout.
 - Rendered UI mode supports human output, `--format human`, `--format json`,

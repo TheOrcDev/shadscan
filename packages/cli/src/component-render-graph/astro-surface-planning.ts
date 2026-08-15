@@ -5,7 +5,7 @@ import {
   templateRendersTag,
 } from "../astro-frontmatter";
 import { compareCodeUnits } from "../deterministic-order";
-import { findFiles, getProjectSourceFiles } from "../rules/source-files";
+import { findProjectFiles, getProjectSourceFiles } from "../rules/source-files";
 import { addSurfacePlan } from "./surface-plan-budget";
 import { getRecordDefault, getRecordNamed } from "./symbol-resolution";
 import type {
@@ -139,7 +139,7 @@ const addAstroSurfacePlans = async (
     .sort((left, right) => compareCodeUnits(left.path, right.path));
   // Markdown pages are routes too, but carry no React surface; they are not
   // part of the scanned source set, so they are globbed directly.
-  const mdxPages = await findFiles(state.project.rootDir, [
+  const mdxPages = await findProjectFiles(state.project, [
     "src/pages/**/*.{md,mdx}",
   ]);
 

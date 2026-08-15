@@ -125,6 +125,9 @@ pnpm dlx @shadscan/cli@0.16.0 --fail-under 80 --no-interactive --no-roast
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
 
+# Skip generated API clients that are not UI source
+pnpm dlx @shadscan/cli --ignore "src/api/**"
+
 # See which workspace packages shadscan found, without scanning
 pnpm dlx @shadscan/cli --list-projects
 
@@ -142,6 +145,13 @@ Use `--format human`, `--format json`, or `--format prompt` when output selectio
 needs to be explicit. Pin an exact package version in CI; unqualified commands
 resolve to the latest stable release. Run `pnpm dlx @shadscan/cli --help` for
 every option.
+
+Generated API clients and other non-UI trees can be excluded with repeatable
+`--ignore` globs, or with an `ignore` array in `shadscan.config.jsonc`,
+`shadscan.config.json`, or `package.json#shadscan`. Extra patterns merge with
+the built-in skips (`node_modules`, `dist`, `**/generated/**`, and similar).
+They cannot re-include those paths. JSON reports list the extra patterns on
+`coverage.ignorePatterns`.
 
 ## Check Rendered UI
 
