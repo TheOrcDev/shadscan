@@ -72,6 +72,7 @@ interface CliOptions {
   checkUi?: string;
   failUnder?: number;
   format?: OutputFormat;
+  ignore?: string[];
   interactive: boolean;
   json?: boolean;
   listProjects?: boolean;
@@ -125,6 +126,15 @@ const parseAgent = (value: string): AgentId => {
   } catch {
     throw new InvalidArgumentError("Expected one of: claude, codex, grok.");
   }
+};
+
+const collectIgnore = (value: string, patterns: string[] = []): string[] => {
+  if (value.trim().length === 0) {
+    throw new InvalidArgumentError("Expected a non-empty ignore glob.");
+  }
+
+  patterns.push(value);
+  return patterns;
 };
 
 const collectRoute = (value: string, routes: string[] = []): string[] => {
@@ -525,6 +535,7 @@ const validateUiModeOptions = ({
     options.prompt || outputFormat === "prompt" ? "--prompt" : null,
     options.listProjects ? "--list-projects" : null,
     options.project ? "--project" : null,
+    (options.ignore?.length ?? 0) > 0 ? "--ignore" : null,
     command.getOptionValueSource("roast") === "cli" && options.roast === true
       ? "--roast"
       : null,
@@ -736,10 +747,12 @@ const renderScanOutput = ({
 
 const runProjectScanPhases = async ({
   category,
+  ignorePatterns,
   progress,
   projectPath,
 }: {
   category?: AuditCategory;
+  ignorePatterns?: readonly string[];
   progress: ScanProgress;
   projectPath: string;
 }): Promise<{ project: ProjectDiscovery; report: AuditReport }> => {
@@ -747,10 +760,10 @@ const runProjectScanPhases = async ({
     resolveProjectPath(projectPath)
   );
   const project = await progress.run("Discovering app structure", () =>
-    discoverProject(resolvedProjectPath)
+    discoverProject(resolvedProjectPath, { ignorePatterns })
   );
   const report = await progress.run("Evaluating UI rules", () =>
-    scanProject(project.rootDir, { category })
+    scanProject(project.rootDir, { category, ignorePatterns })
   );
 
   return { project, report };
@@ -838,15 +851,21 @@ const runScanAction = async (
 
       return {
         kind: "project" as const,
-        project: await discoverProject(selectedPath),
+        project: await discoverProject(selectedPath, {
+          ignorePatterns: options.ignore,
+        }),
       };
     }
   );
   const report = await progress.run("Evaluating UI rules", () =>
     scanTarget.kind === "workspace"
-      ? scanWorkspace(scanTarget.rootDir, { category: options.category })
+      ? scanWorkspace(scanTarget.rootDir, {
+          category: options.category,
+          ignorePatterns: options.ignore,
+        })
       : scanProject(scanTarget.project.rootDir, {
           category: options.category,
+          ignorePatterns: options.ignore,
         })
   );
   const output = await progress.run("Preparing report", () =>
@@ -1010,6 +1029,11 @@ const createProgram = (runtime: UiCheckRuntime = {}): Command => {
     .option(
       "--no-interactive",
       "Disable terminal progress and follow-up prompts."
+    )
+    .option(
+      "--ignore <glob>",
+      "Exclude matching source paths from the audit (repeatable).",
+      collectIgnore
     )
     .option(
       "--list-projects",

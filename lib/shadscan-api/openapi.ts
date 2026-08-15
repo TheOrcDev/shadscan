@@ -615,8 +615,12 @@ const OPENAPI_DOCUMENT = {
           coverage: {
             type: "object",
             additionalProperties: false,
-            required: ["source"],
+            required: ["ignorePatterns", "source"],
             properties: {
+              ignorePatterns: {
+                items: { type: "string" },
+                type: "array",
+              },
               source: {
                 enum: ["complete", "partial"],
                 type: "string",

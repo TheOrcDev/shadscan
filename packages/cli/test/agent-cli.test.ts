@@ -92,6 +92,7 @@ const createProject = (projectRoot: string): ProjectDiscovery => ({
     adapter: "generic-react",
     evidence: ["react dependency found"],
   },
+  ignorePatterns: [],
   packageManager: "pnpm",
   packageManagerRoot: projectRoot,
   packageName: "agent-fixture",

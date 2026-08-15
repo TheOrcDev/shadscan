@@ -123,6 +123,9 @@ pnpm exec shadscan --fail-under 80 --no-interactive --no-roast
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
 
+# Skip generated API clients that are not UI source
+pnpm dlx @shadscan/cli --ignore "src/api/**"
+
 # Run rendered UI checks against an already-running app
 pnpm dlx @shadscan/cli --check-ui http://localhost:3000
 

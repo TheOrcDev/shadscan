@@ -45,7 +45,7 @@ import {
 } from "./react-router-modules";
 import {
   fileExists,
-  findFiles,
+  findProjectFiles,
   findSourceMatch,
   getAppRelativePatterns,
   getProjectSourceFiles,
@@ -347,10 +347,10 @@ const findFirstSourceMatch = async (
   findSourceMatch(context.project, pattern);
 
 const hasAnyFile = async (
-  rootDir: string,
+  project: ProjectDiscovery,
   patterns: string[]
 ): Promise<string | null> => {
-  const matches = await findFiles(rootDir, patterns, 4);
+  const matches = await findProjectFiles(project, patterns, 4);
 
   return matches[0] ?? null;
 };
@@ -617,7 +617,7 @@ const evaluateReactRouterNotFound = async (
 ): Promise<AuditRuleResult> => {
   const appDir = context.project.paths.reactRouterAppDir;
   const splatRoute = appDir
-    ? await hasAnyFile(context.project.rootDir, [
+    ? await hasAnyFile(context.project, [
         "app/routes/$.{js,jsx,ts,tsx}",
         "app/routes/**/$.{js,jsx,ts,tsx}",
       ])
@@ -799,7 +799,7 @@ const faviconPresentRule: AuditRule = {
   maxScore: 2,
   run: async (context) => {
     const rootDir = context.project.rootDir;
-    const filePath = await hasAnyFile(rootDir, [
+    const filePath = await hasAnyFile(context.project, [
       "app/favicon.ico",
       "app/icon.*",
       "src/app/favicon.ico",
@@ -889,7 +889,7 @@ const faviconPresentRule: AuditRule = {
 const evaluateAstroNotFoundPage = async (
   context: AuditContext
 ): Promise<AuditRuleResult> => {
-  const astroNotFound = await hasAnyFile(context.project.rootDir, [
+  const astroNotFound = await hasAnyFile(context.project, [
     "src/pages/404.{astro,md,mdx}",
   ]);
 
@@ -931,7 +931,7 @@ const notFoundRoutePresentRule: AuditRule = {
     }
 
     if (context.project.versions.inertia && context.project.versions.laravel) {
-      const errorSurface = await hasAnyFile(context.project.rootDir, [
+      const errorSurface = await hasAnyFile(context.project, [
         "resources/views/errors/404.blade.php",
         "resources/js/pages/{error,Error}*.{jsx,tsx}",
         "resources/js/Pages/{error,Error}*.{jsx,tsx}",
@@ -953,7 +953,7 @@ const notFoundRoutePresentRule: AuditRule = {
 
     if (context.project.versions.next && context.project.paths.appDir) {
       const appNotFound = await hasAnyFile(
-        context.project.rootDir,
+        context.project,
         getAppRelativePatterns(context, "not-found.{js,jsx,ts,tsx}")
       );
 
@@ -968,7 +968,7 @@ const notFoundRoutePresentRule: AuditRule = {
     }
 
     if (context.project.versions.next && context.project.paths.pagesDir) {
-      const pagesNotFound = await hasAnyFile(context.project.rootDir, [
+      const pagesNotFound = await hasAnyFile(context.project, [
         "pages/404.{js,jsx,ts,tsx}",
         "src/pages/404.{js,jsx,ts,tsx}",
       ]);
@@ -1034,7 +1034,7 @@ const errorBoundaryPresentRule: AuditRule = {
 
     if (context.project.versions.next && context.project.paths.appDir) {
       const appError = await hasAnyFile(
-        context.project.rootDir,
+        context.project,
         getAppRelativePatterns(context, "error.{js,jsx,ts,tsx}")
       );
 
@@ -1046,7 +1046,7 @@ const errorBoundaryPresentRule: AuditRule = {
     }
 
     if (context.project.versions.next && context.project.paths.pagesDir) {
-      const pagesError = await hasAnyFile(context.project.rootDir, [
+      const pagesError = await hasAnyFile(context.project, [
         "pages/_error.{js,jsx,ts,tsx}",
         "src/pages/_error.{js,jsx,ts,tsx}",
       ]);

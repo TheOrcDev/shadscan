@@ -2,6 +2,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { type ParseError, parse } from "jsonc-parser";
 import { glob } from "tinyglobby";
+import { resolveProjectIgnorePatterns } from "./scan-ignores";
 
 type JsonObject = Record<string, unknown>;
 
@@ -23,6 +24,7 @@ type SourceCoverage = "complete" | "partial";
 
 interface DiscoverProjectOptions {
   filesystemRoot?: string;
+  ignorePatterns?: readonly string[];
 }
 
 interface FrameworkDiscovery {
@@ -69,6 +71,8 @@ interface ProjectVersions {
 interface ProjectDiscovery {
   dependencies: Record<string, string>;
   framework: FrameworkDiscovery;
+  /** Extra user ignore globs merged on top of the built-in source ignores. */
+  ignorePatterns: string[];
   packageManager: PackageManager;
   packageManagerRoot: string;
   packageName: string | null;
@@ -807,10 +811,15 @@ const discoverProject = async (
       .relative(packageManagerDiscovery.rootDir, rootDir)
       .split(path.sep)
       .join("/") || ".";
+  const ignorePatterns = await resolveProjectIgnorePatterns({
+    cliIgnorePatterns: options.ignorePatterns,
+    rootDir,
+  });
 
   return {
     dependencies,
     framework,
+    ignorePatterns,
     packageManager: packageManagerDiscovery.packageManager,
     packageManagerRoot: packageManagerDiscovery.rootDir,
     packageName,

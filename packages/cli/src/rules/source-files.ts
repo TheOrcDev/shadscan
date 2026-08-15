@@ -4,6 +4,7 @@ import { glob } from "tinyglobby";
 import type { AuditContext } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
+import { getAppliedIgnorePatterns } from "../scan-ignores";
 import { SCAN_SOURCE_LIMITS } from "../source-requirements";
 
 interface SourceFile {
@@ -49,23 +50,6 @@ const APP_NON_PAGE_SOURCE_PATTERN =
   /(?:^|[/\\])(?:src[/\\])?app[/\\](?:.*[/\\])?(?:apple-icon|icon|opengraph-image|route|twitter-image)\.[cm]?[jt]sx?$/i;
 const PAGES_API_SOURCE_PATTERN =
   /(?:^|[/\\])(?:src[/\\])?pages[/\\]api[/\\].+\.[cm]?[jt]sx?$/i;
-const PROJECT_IGNORES = [
-  "**/.astro/**",
-  "**/.next/**",
-  "**/__fixtures__/**",
-  "**/__mocks__/**",
-  "**/__tests__/**",
-  "**/coverage/**",
-  "**/dist/**",
-  "**/fixtures/**",
-  "**/generated/**",
-  "**/node_modules/**",
-  "**/routeTree.gen.ts",
-  "**/vendor/**",
-  "**/*.{spec,test}.{js,jsx,ts,tsx}",
-  "**/*.stories.{js,jsx,ts,tsx}",
-  "**/*.generated.{js,jsx,ts,tsx}",
-];
 const MAX_PROJECT_FILES = SCAN_SOURCE_LIMITS.maxFiles;
 const MAX_SOURCE_FILE_BYTES = SCAN_SOURCE_LIMITS.maxFileBytes;
 const MAX_TOTAL_SOURCE_BYTES = SCAN_SOURCE_LIMITS.maxTotalBytes;
@@ -129,14 +113,20 @@ const resolveSafeFile = async (
 const findSafeFiles = async (
   rootDir: string,
   patterns: string[],
-  deep?: number
+  {
+    deep,
+    ignorePatterns = [],
+  }: {
+    deep?: number;
+    ignorePatterns?: readonly string[];
+  } = {}
 ): Promise<SafeFileSearch> => {
   const candidates = await glob(patterns, {
     absolute: true,
     cwd: rootDir,
     deep,
     followSymbolicLinks: false,
-    ignore: PROJECT_IGNORES,
+    ignore: getAppliedIgnorePatterns(ignorePatterns),
     onlyFiles: true,
   });
   const files: SafeFile[] = [];
@@ -192,7 +182,9 @@ const loadSourceFiles = async (
   patterns: string[],
   kind: "source" | "style"
 ): Promise<SourceFile[]> => {
-  const search = await findSafeFiles(project.rootDir, patterns);
+  const search = await findSafeFiles(project.rootDir, patterns, {
+    ignorePatterns: project.ignorePatterns,
+  });
   const sourceFiles: SourceFile[] = [];
   let skippedLarge = 0;
   let skippedForBudget = 0;
@@ -316,11 +308,22 @@ const findSourceMatch = async (
 const findFiles = async (
   rootDir: string,
   patterns: string[],
-  deep?: number
+  deep?: number,
+  ignorePatterns: readonly string[] = []
 ): Promise<string[]> => {
-  const search = await findSafeFiles(rootDir, patterns, deep);
+  const search = await findSafeFiles(rootDir, patterns, {
+    deep,
+    ignorePatterns,
+  });
   return search.files.map((file) => file.path);
 };
+
+const findProjectFiles = (
+  project: ProjectDiscovery,
+  patterns: string[],
+  deep?: number
+): Promise<string[]> =>
+  findFiles(project.rootDir, patterns, deep, project.ignorePatterns);
 
 const getAppRelativePatterns = (
   context: AuditContext,
@@ -344,6 +347,7 @@ export type { SourceFile };
 export {
   fileExists,
   findFiles,
+  findProjectFiles,
   findSourceMatch,
   getAppRelativePatterns,
   getProjectSourceFiles,

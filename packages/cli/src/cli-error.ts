@@ -9,6 +9,7 @@ import {
   type OverflowCheckErrorCode,
 } from "./overflow-check/error";
 import { PreCommitError, type PreCommitErrorCode } from "./pre-commit";
+import { ScanConfigError } from "./scan-ignores";
 
 const COMMANDER_ERROR_PREFIX_PATTERN = /^error:\s*/i;
 
@@ -20,7 +21,8 @@ interface CliFailure {
     | AgentCliErrorCode
     | OverflowCheckErrorCode
     | PreCommitErrorCode
-    | ProjectDiscoveryErrorCode;
+    | ProjectDiscoveryErrorCode
+    | "INVALID_SCAN_CONFIG";
   message: string;
 }
 
@@ -33,6 +35,13 @@ const normalizeCliFailure = (error: unknown): CliFailure => {
   }
 
   if (error instanceof AgentCliError || error instanceof PreCommitError) {
+    return {
+      code: error.code,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof ScanConfigError) {
     return {
       code: error.code,
       message: error.message,

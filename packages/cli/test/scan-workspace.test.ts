@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { AUDIT_REPORT_SCHEMA_VERSION } from "../src/audit";
 import { renderHumanReport } from "../src/render-human";
 import { scanProject } from "../src/scan";
 import { scanWorkspace } from "../src/scan-workspace";
@@ -32,7 +33,7 @@ describe("workspace scanning", () => {
 
     const report = await scanWorkspace(rootDir);
 
-    expect(report.schemaVersion).toBe(9);
+    expect(report.schemaVersion).toBe(AUDIT_REPORT_SCHEMA_VERSION);
     expect(report.workspace?.applicationCount).toBe(2);
     expect(report.score).not.toBeNull();
     expect(getProject(report, "apps/web")?.score).not.toBeNull();

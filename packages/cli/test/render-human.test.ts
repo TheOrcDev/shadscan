@@ -105,6 +105,7 @@ const createReport = (): AuditReport => ({
     },
   ],
   coverage: {
+    ignorePatterns: [],
     source: "complete",
   },
   durationMs: 4,

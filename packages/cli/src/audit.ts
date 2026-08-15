@@ -20,10 +20,11 @@ const AUDIT_CATEGORIES = [
   "production-polish",
 ] as const;
 
-const AUDIT_REPORT_SCHEMA_VERSION = 9 as const;
+const AUDIT_REPORT_SCHEMA_VERSION = 10 as const;
 const ENGINE_VERSION = packageJson.version;
 const CUSTOM_RULESET_VERSION = "custom";
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
+const SHELL_UNSAFE_IGNORE_PATTERN = /[\s"'\\]/;
 
 const CATEGORY_DETAILS = {
   accessibility: {
@@ -209,6 +210,7 @@ interface AuditReport {
   agentHandoff: AgentHandoff;
   categories: AuditCategoryScore[];
   coverage: {
+    ignorePatterns: string[];
     source: ProjectDiscovery["sourceCoverage"];
   };
   durationMs: number;
@@ -240,6 +242,7 @@ interface AuditReport {
 interface RunAuditOptions {
   category?: AuditCategory;
   filesystemRoot?: string;
+  ignorePatterns?: readonly string[];
   rules: AuditRule[];
   rulesetVersion?: string;
   signal?: AbortSignal;
@@ -370,6 +373,7 @@ const AuditReportSchema = z.object({
     })
   ),
   coverage: z.object({
+    ignorePatterns: z.array(z.string()),
     source: z.enum(["complete", "partial"]),
   }),
   durationMs: z.number(),
@@ -904,8 +908,15 @@ const getShadscanCommand = (
   const categoryOption = category ? ` --category ${category}` : "";
   const projectArgument = getSelectedProjectArgument(project);
   const projectOption = projectArgument ? ` ${projectArgument}` : "";
+  const ignoreOptions = project.ignorePatterns
+    .map((pattern) =>
+      SHELL_UNSAFE_IGNORE_PATTERN.test(pattern)
+        ? ` --ignore ${JSON.stringify(pattern)}`
+        : ` --ignore ${pattern}`
+    )
+    .join("");
   const packageSpecifier = `@shadscan/cli@${ENGINE_VERSION}`;
-  return `${executor(packageSpecifier)}${projectOption} --json${categoryOption}`;
+  return `${executor(packageSpecifier)}${projectOption} --json${categoryOption}${ignoreOptions}`;
 };
 
 const uniqueEvidence = (actionables: AgentActionable[]): AuditEvidence[] => {
@@ -1282,6 +1293,9 @@ const createAgentHandoff = ({
       `Package manager: ${project.packageManager}`,
       `Selected project directory: ${project.selectedProjectPath} (relative to the package-manager root)`,
       `Source coverage: ${project.sourceCoverage}`,
+      project.ignorePatterns.length > 0
+        ? `Extra ignore patterns: ${project.ignorePatterns.join(", ")}`
+        : "Extra ignore patterns: none",
       `shadcn confidence: ${project.shadcn.confidence}; config: ${configPath}`,
       `Warnings: ${warnings}`,
     ],
@@ -1333,6 +1347,7 @@ const createAuditReport = ({
     }),
     categories,
     coverage: {
+      ignorePatterns: project.ignorePatterns,
       source: project.sourceCoverage,
     },
     durationMs,
@@ -1374,6 +1389,7 @@ const runAudit = async (
   options.signal?.throwIfAborted();
   const project = await discoverProject(cwd, {
     filesystemRoot: options.filesystemRoot,
+    ignorePatterns: options.ignorePatterns,
   });
   options.signal?.throwIfAborted();
   const context: AuditContext = {

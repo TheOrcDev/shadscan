@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { AuditRule } from "../audit";
 import { fail, notApplicable, pass } from "./rule-result";
-import { findFiles, getTextLineNumber } from "./source-files";
+import { findProjectFiles, getTextLineNumber } from "./source-files";
 
 const RETRY_CALLBACK_PATTERN =
   /\b(?:unstable_retry|resetErrorBoundary|reset|onRetry|retry)\b/;
@@ -41,8 +41,8 @@ const errorStateRetryPresentRule: AuditRule = {
   id: "error-state-retry-present",
   maxScore: 4,
   run: async ({ project }) => {
-    const errorFiles = await findFiles(
-      project.rootDir,
+    const errorFiles = await findProjectFiles(
+      project,
       getErrorFilePatterns(project.rootDir, project.paths.appDir)
     );
 
