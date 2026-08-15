@@ -348,6 +348,62 @@ const getExternalComponentBinding = (
   return binding ? { binding, memberNames } : null;
 };
 
+/**
+ * Providers from third-party packages that render nothing but their children.
+ * Their own source is not in the project, so expansion cannot prove the
+ * projection — but the composition below them is ours, and stopping here hides
+ * every surface a route actually renders. Keyed by module so a same-named
+ * export from elsewhere does not qualify.
+ */
+const CHILDREN_TRANSPARENT_PROVIDERS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map([
+  // React's own wrappers render their children verbatim. Suspense also takes a
+  // `fallback`, but that is a prop rather than a child, so expanding children
+  // describes the resolved render — which is the one every rule reasons about.
+  ["react", new Set(["Fragment", "Profiler", "StrictMode", "Suspense"])],
+  ["nuqs/adapters/next", new Set(["NuqsAdapter"])],
+  ["nuqs/adapters/next/app", new Set(["NuqsAdapter"])],
+  ["nuqs/adapters/next/pages", new Set(["NuqsAdapter"])],
+  ["nuqs/adapters/react", new Set(["NuqsAdapter"])],
+  ["nuqs/adapters/react-router", new Set(["NuqsAdapter"])],
+  ["nuqs/adapters/react-router/v6", new Set(["NuqsAdapter"])],
+  ["nuqs/adapters/react-router/v7", new Set(["NuqsAdapter"])],
+]);
+
+const isChildrenTransparentProvider = (
+  item: RenderElementTemplate,
+  buildState: GraphBuildState
+): boolean => {
+  const componentBinding = getExternalComponentBinding(item, buildState);
+  if (!componentBinding) {
+    return false;
+  }
+
+  const { binding, memberNames } = componentBinding;
+  const expected = CHILDREN_TRANSPARENT_PROVIDERS.get(binding.moduleName);
+  if (!expected) {
+    return false;
+  }
+
+  const [memberName] = memberNames;
+
+  if (binding.kind === "namespace") {
+    return (
+      memberNames.length === 1 &&
+      Boolean(memberName) &&
+      expected.has(memberName as string)
+    );
+  }
+
+  return (
+    memberNames.length === 0 &&
+    binding.importedName !== null &&
+    expected.has(binding.importedName)
+  );
+};
+
 const isNextThemesProvider = (
   item: RenderElementTemplate,
   buildState: GraphBuildState
@@ -456,7 +512,8 @@ const expandElementTarget = (
 
   if (
     isNextThemesProvider(item, buildState) ||
-    isRadixNavigationMenuRoot(item, buildState)
+    isRadixNavigationMenuRoot(item, buildState) ||
+    isChildrenTransparentProvider(item, buildState)
   ) {
     expandTemplate(
       item.children,

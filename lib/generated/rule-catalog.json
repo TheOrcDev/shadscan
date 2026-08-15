@@ -563,9 +563,9 @@
       ],
       "category": "forms",
       "confidence": "medium",
-      "description": "Checks that ButtonGroup joins buttons rather than wrapping a text input, whose focus ring would cover only part of the joined control.",
+      "description": "Checks rendered ButtonGroup compositions for text controls whose per-control focus treatment splits the joined surface.",
       "id": "button-group-holds-only-buttons",
-      "maxScore": 0,
+      "maxScore": 2,
       "severity": "warning",
       "title": "ButtonGroup holds buttons, not text inputs"
     },
@@ -793,5 +793,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.08.45"
+  "rulesetVersion": "2026.08.46"
 }
