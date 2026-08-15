@@ -6,6 +6,8 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.17.0 - 2026-08-16
+
 ### Fixed
 
 - Render surfaces now expand through children-transparent wrappers that the

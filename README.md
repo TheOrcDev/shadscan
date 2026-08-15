@@ -120,7 +120,7 @@ pnpm dlx @shadscan/cli --prompt
 pnpm dlx @shadscan/cli --apply --agent codex
 
 # Fail CI when the complete assessed score is below the floor
-pnpm dlx @shadscan/cli@0.16.0 --fail-under 80 --no-interactive --no-roast
+pnpm dlx @shadscan/cli@0.17.0 --fail-under 80 --no-interactive --no-roast
 
 # Audit one category while investigating a focused area
 pnpm dlx @shadscan/cli --category accessibility
@@ -219,7 +219,7 @@ jobs:
       - uses: TheOrcDev/shadscan@main
         with:
           path: .
-          version: 0.16.0 # pin an exact CLI version in CI
+          version: 0.17.0 # pin an exact CLI version in CI
           fail-under: "80"
           create-issue: "true"
 ```
