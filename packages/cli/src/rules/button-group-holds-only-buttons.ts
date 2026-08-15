@@ -780,22 +780,51 @@ const findRenderedButtonGroups = (
   return groups;
 };
 
-const findFormFieldRenderButtonGroups = (
-  form: JsxElement,
+/**
+ * shadcn's `FormField` is a thin wrapper over react-hook-form's `Controller`,
+ * and plenty of projects reach for `Controller` directly. Both hide their
+ * composition behind a `render` prop, so both have to be followed or the
+ * subtree below them is invisible.
+ */
+const isRenderPropField = (
+  element: JsxOpeningLikeElement,
+  context: FileContext
+): boolean => {
+  const tagName = getJsxTagName(element);
+  if (!tagName) {
+    return false;
+  }
+
+  if (resolveUiTagName(tagName, context.formImports) === "FormField") {
+    return true;
+  }
+
+  const binding = getImportBinding(tagName, context.imports);
+  if (binding?.moduleName !== "react-hook-form") {
+    return false;
+  }
+
+  return binding.kind === "namespace"
+    ? tagName.split(".")[1] === "Controller"
+    : binding.importedName === "Controller";
+};
+
+/**
+ * Searches a rendered subtree for render-prop fields and collects the joined
+ * groups inside them. Runs from whatever instance the render graph could
+ * establish: the graph does not emit an instance for a `Controller`, since its
+ * content lives in a prop rather than in children, so waiting for one to
+ * arrive means never seeing the group at all.
+ */
+const findRenderPropButtonGroups = (
+  root: JsxElement,
   context: FileContext
 ): JsxElement[] => {
   const groups: JsxElement[] = [];
 
-  visitRenderedJsx(form, (node) => {
+  visitRenderedJsx(root, (node) => {
     const element = getOpeningElement(node);
-    const tagName = element ? getJsxTagName(element) : null;
-    if (
-      !(
-        element &&
-        tagName &&
-        resolveUiTagName(tagName, context.formImports) === "FormField"
-      )
-    ) {
+    if (!(element && isRenderPropField(element, context))) {
       return;
     }
 
@@ -819,12 +848,6 @@ const isFormFieldInstance = (
   context: FileContext
 ): boolean =>
   resolveUiTagName(instance.tagName, context.formImports) === "FormField";
-
-const isFormProviderInstance = (
-  instance: RenderedJsxInstance,
-  context: FileContext
-): boolean =>
-  resolveUiTagName(instance.tagName, context.formImports) === "Form";
 
 const getInstanceElement = (
   instance: RenderedJsxInstance
@@ -896,11 +919,11 @@ const getButtonGroupCandidates = (
   }
 
   if (!isFormFieldInstance(instance, context)) {
-    const form = isFormProviderInstance(instance, context)
-      ? getInstanceElement(instance)
-      : null;
-    return form
-      ? findFormFieldRenderButtonGroups(form, context).map((group) => ({
+    // Any rendered element may contain a render-prop field below it. Duplicate
+    // groups reached from several ancestors are filtered by callsite upstream.
+    const element = getInstanceElement(instance);
+    return element
+      ? findRenderPropButtonGroups(element, context).map((group) => ({
           contract: projectContract,
           group,
         }))

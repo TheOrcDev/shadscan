@@ -82,6 +82,102 @@ afterEach(async () => {
 });
 
 describe("button-group-holds-only-buttons", () => {
+  it("fails a ButtonGroup inside a bare react-hook-form Controller", async () => {
+    // shadcn's FormField wraps Controller, and plenty of projects use
+    // Controller directly. The graph emits no instance for it, because its
+    // composition lives in a prop rather than in children.
+    const fixture = await createShadcnFixture();
+    await fixture.write(
+      "app/page.tsx",
+      `
+        import { Controller, useForm } from "react-hook-form";
+        import { Button } from "@/components/ui/button";
+        import { ButtonGroup } from "@/components/ui/button-group";
+        import { Field, FieldGroup } from "@/components/ui/field";
+        import { Input } from "@/components/ui/input";
+
+        export default function Page() {
+          const form = useForm();
+          return (
+            <form>
+              <FieldGroup>
+                <Controller
+                  control={form.control}
+                  name="url"
+                  render={({ field }) => (
+                    <Field>
+                      <ButtonGroup>
+                        <Input {...field} placeholder="Repo" />
+                        <Button type="submit">Go</Button>
+                      </ButtonGroup>
+                    </Field>
+                  )}
+                />
+              </FieldGroup>
+            </form>
+          );
+        }
+      `
+    );
+
+    const result = await runRule(
+      fixture.rootDir,
+      buttonGroupHoldsOnlyButtonsRule
+    );
+
+    expect(result.status).toBe("fail");
+    expect(result.impactsScore).toBe(true);
+  });
+
+  it("sees through a third-party children-transparent provider", async () => {
+    // A layout that wraps {children} in an opaque provider used to hide every
+    // page below it, and reported the surface as complete while doing so.
+    const fixture = await createShadcnFixture();
+    await fixture.write(
+      "app/layout.tsx",
+      `
+        import { NuqsAdapter } from "nuqs/adapters/next/app";
+
+        export default function Layout({ children }: { children: React.ReactNode }) {
+          return (
+            <html lang="en">
+              <body>
+                <NuqsAdapter>{children}</NuqsAdapter>
+              </body>
+            </html>
+          );
+        }
+      `
+    );
+    await fixture.write(
+      "app/page.tsx",
+      `
+        import { Suspense } from "react";
+        import { Button } from "@/components/ui/button";
+        import { ButtonGroup } from "@/components/ui/button-group";
+        import { Input } from "@/components/ui/input";
+
+        export default async function Page() {
+          return (
+            <Suspense>
+              <ButtonGroup>
+                <Input placeholder="Email" />
+                <Button type="submit">Subscribe</Button>
+              </ButtonGroup>
+            </Suspense>
+          );
+        }
+      `
+    );
+
+    const result = await runRule(
+      fixture.rootDir,
+      buttonGroupHoldsOnlyButtonsRule
+    );
+
+    expect(result.status).toBe("fail");
+  });
+
   it("fails a ButtonGroup returned by a mounted FormField render prop", async () => {
     const fixture = await createShadcnFixture();
     await fixture.write(
