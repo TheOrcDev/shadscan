@@ -6,6 +6,14 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Changed
+
+- `button-group-holds-only-buttons` is now a two-point scored rule (ruleset
+  `2026.08.46`). It evaluates mounted Next.js and Vite render surfaces,
+  follows shadcn `FormField` render props plus transparent `FormControl` and
+  Radix `Slot` wrappers, and reports uncertain or customized compositions as
+  advisories instead of reducing the score.
+
 ## 0.16.0 - 2026-08-11
 
 ### Added
