@@ -7,6 +7,7 @@ import { CommandMenu } from "@/components/command-menu";
 import { GitHubStars } from "@/components/github-stars";
 import { ModeSwitcher } from "@/components/mode-switcher";
 import { ShadscanMark } from "@/components/shadscan-mark";
+import { SponsorButton } from "@/components/sponsor-button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +74,11 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
               repo={githubRepository.name}
               stargazersCount={githubRepository.stargazersCount}
             />
+          </div>
+          {/* Hidden on mobile alongside the stars: the header already crowds
+              at 320px, and /sponsors stays reachable from the nav link. */}
+          <div className="hidden sm:block">
+            <SponsorButton />
           </div>
           <ModeSwitcher />
         </div>
