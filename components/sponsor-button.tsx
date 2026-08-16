@@ -11,7 +11,7 @@ function SponsorButton() {
   return (
     <Button asChild className="gap-1.5 px-2" size="sm" variant="ghost">
       <Link href="/sponsors">
-        <HeartIcon weight="fill" />
+        <HeartIcon data-icon="inline-start" weight="fill" />
         <span className="text-[0.8125rem]/none text-muted-foreground normal-case tracking-normal">
           Sponsor
         </span>
