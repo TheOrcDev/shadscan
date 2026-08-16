@@ -1,34 +1,22 @@
-"use client";
-
-import { HeartIcon } from "@phosphor-icons/react";
+import { HeartIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 /**
- * A heart on its own does not say "sponsor", so the tooltip carries the label
- * for pointer users and the sr-only text carries it for everyone else.
+ * Sized to sit alongside GitHubStars rather than the icon-only theme toggle,
+ * since the label is visible. That label is also the accessible name, so no
+ * tooltip or sr-only text is needed to explain the heart.
  */
 function SponsorButton() {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button asChild className="size-8 px-0" variant="ghost">
-            <Link href="/sponsors">
-              <HeartIcon weight="fill" />
-              <span className="sr-only">Sponsor shadscan</span>
-            </Link>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Sponsor shadscan</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Button asChild className="gap-1.5 px-2" size="sm" variant="ghost">
+      <Link href="/sponsors">
+        <HeartIcon weight="fill" />
+        <span className="text-[0.8125rem]/none text-muted-foreground normal-case tracking-normal">
+          Sponsor
+        </span>
+      </Link>
+    </Button>
   );
 }
 
