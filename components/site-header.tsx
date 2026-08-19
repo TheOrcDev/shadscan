@@ -69,15 +69,19 @@ function SiteHeader({ githubRepository }: SiteHeaderProps) {
           <CommandMenu
             repositoryUrl={`https://github.com/${githubRepository.name}`}
           />
-          <div className="hidden sm:block">
+          <div className="hidden lg:block">
             <GitHubStars
               repo={githubRepository.name}
               stargazersCount={githubRepository.stargazersCount}
             />
           </div>
-          {/* Hidden on mobile alongside the stars: the header already crowds
-              at 320px, and /sponsors stays reachable from the nav link. */}
-          <div className="hidden sm:block">
+          {/* The stars and this button only appear at lg. The nav and the
+              search trigger do not shrink, so revealing them any earlier
+              overlaps the nav across the whole 640-785px band — the header
+              needs 768px to fit them, and sm starts at 640px. Both remain
+              reachable: /sponsors from the nav link, the repo from the
+              command menu. */}
+          <div className="hidden lg:block">
             <SponsorButton />
           </div>
           <ModeSwitcher />
