@@ -20,7 +20,7 @@ const toastProviderMountedRule: AuditRule = {
     if (!analysis.hasDependency) {
       return fail(
         "A toast-like component is mounted without a recognized toast runtime dependency.",
-        "Install a toast runtime such as Sonner or Radix Toast and mount its provider from the app shell.",
+        "Install a toast runtime such as Base UI Toast, Sonner, or Radix Toast and mount its provider from the app shell.",
         { filePath: analysis.shell.path }
       );
     }
@@ -35,7 +35,7 @@ const toastProviderMountedRule: AuditRule = {
 
     return fail(
       "Toast infrastructure with recognized runtime provenance is not mounted from the app shell.",
-      "Render a provider imported from Sonner, Radix Toast, or React Hot Toast in the root shell, directly or through a mounted wrapper.",
+      "Render a provider imported from Base UI Toast, Sonner, Radix Toast, or React Hot Toast in the root shell, directly or through a mounted wrapper.",
       {
         filePath: analysis.shell.path,
         roast:

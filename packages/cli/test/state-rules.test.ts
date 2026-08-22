@@ -576,6 +576,38 @@ describe("state rules", () => {
     }
   });
 
+  it("follows a mounted toaster to Base UI primitives", async () => {
+    const fixture = await createRuleFixture({
+      "@base-ui/react": "1.6.0",
+      next: "16.2.6",
+      react: "19.2.4",
+    });
+
+    try {
+      await fixture.write(
+        "tsconfig.json",
+        JSON.stringify({
+          compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
+        })
+      );
+      await fixture.write(
+        "app/layout.tsx",
+        'import { Toaster } from "@/components/ui/toast"; export default function Layout({ children }) { return <html><body>{children}<Toaster /></body></html>; }'
+      );
+      await fixture.write(
+        "components/ui/toast.tsx",
+        'import { Toast } from "@base-ui/react/toast"; export function Toaster() { return <Toast.Provider><Toast.Portal><Toast.Viewport /></Toast.Portal></Toast.Provider>; }'
+      );
+
+      const finding = await runRule(fixture.rootDir, toastProviderMountedRule);
+
+      expect(finding.status).toBe("pass");
+      expect(finding.evidence[0]?.message).toContain("@base-ui/react/toast");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("accepts direct Radix providers and terminates cyclic wrappers", async () => {
     const directFixture = await createRuleFixture({
       "@radix-ui/react-toast": "1.2.0",

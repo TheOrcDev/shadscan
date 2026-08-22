@@ -1109,7 +1109,7 @@ const toastProviderPresentRule: AuditRule = {
     if (!analysis.hasDependency) {
       return fail(
         "No recognized toast runtime dependency was found.",
-        "Install a toast runtime such as Sonner or Radix Toast, then mount its provider from the app shell."
+        "Install a toast runtime such as Base UI Toast, Sonner, or Radix Toast, then mount its provider from the app shell."
       );
     }
 

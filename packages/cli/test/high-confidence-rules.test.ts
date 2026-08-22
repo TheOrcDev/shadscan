@@ -28,7 +28,7 @@ const writeNextPackage = async (
   rootDir: string,
   options: {
     includeToastDependency?: boolean;
-    toastDependency?: "radix-ui" | "sonner";
+    toastDependency?: "@base-ui/react" | "radix-ui" | "sonner";
   } = {}
 ): Promise<void> => {
   const toastDependency =
@@ -524,6 +524,75 @@ describe("high confidence rules", () => {
       report.findings.find((finding) => finding.id === "toast-provider-present")
         ?.status
     ).toBe("pass");
+  });
+
+  it("recognizes a mounted Base UI toast wrapper", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir, { toastDependency: "@base-ui/react" });
+    await writeComponentsJson(rootDir);
+    await writeAliasTsconfig(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/layout.tsx",
+      `
+        import { Toaster } from "@/components/ui/toast";
+        export default function Layout({ children }: { children: React.ReactNode }) {
+          return <html><body>{children}<Toaster /></body></html>;
+        }
+      `
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/ui/toast.tsx",
+      `
+        import { Toast as ToastPrimitives } from "@base-ui/react/toast";
+        export function Toaster() {
+          return (
+            <ToastPrimitives.Provider>
+              <ToastPrimitives.Portal>
+                <ToastPrimitives.Viewport />
+              </ToastPrimitives.Portal>
+            </ToastPrimitives.Provider>
+          );
+        }
+      `
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+    const finding = report.findings.find(
+      (candidate) => candidate.id === "toast-provider-present"
+    );
+
+    expect(finding?.status).toBe("pass");
+    expect(finding?.evidence[0]?.message).toContain("@base-ui/react/toast");
+  });
+
+  it("rejects unrelated Base UI imports in toast-like wrappers", async () => {
+    const rootDir = await createFixture();
+    await writeNextPackage(rootDir, { toastDependency: "@base-ui/react" });
+    await writeComponentsJson(rootDir);
+    await writeAliasTsconfig(rootDir);
+    await writeFixtureFile(
+      rootDir,
+      "app/layout.tsx",
+      'import { Toaster } from "@/components/toaster"; export default function Layout() { return <html><body><Toaster /></body></html>; }'
+    );
+    await writeFixtureFile(
+      rootDir,
+      "components/toaster.tsx",
+      'import { Button } from "@base-ui/react/button"; export function Toaster() { return <Button>Toast</Button>; }'
+    );
+
+    const report = await runAudit(rootDir, {
+      rules: highConfidenceRules,
+    });
+
+    expect(
+      report.findings.find((finding) => finding.id === "toast-provider-present")
+        ?.status
+    ).toBe("fail");
   });
 
   it("rejects unrelated Radix umbrella imports in toast-like wrappers", async () => {
