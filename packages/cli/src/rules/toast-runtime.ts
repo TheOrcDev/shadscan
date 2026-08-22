@@ -63,11 +63,18 @@ interface ParsedProjectFile {
 const MAX_LOCAL_IMPORT_DEPTH = 3;
 const SCRIPT_FILE_PATTERN = /\.[cm]?[jt]sx?$/;
 const TOAST_NAME_PATTERN = /(?:sonner|toast)/i;
-const TOAST_DEPENDENCIES = [
-  "@radix-ui/react-toast",
-  "radix-ui",
-  "react-hot-toast",
-  "sonner",
+const TOAST_RUNTIMES = [
+  {
+    dependencyName: "@base-ui/react",
+    moduleName: "@base-ui/react/toast",
+  },
+  {
+    dependencyName: "@radix-ui/react-toast",
+    moduleName: "@radix-ui/react-toast",
+  },
+  { dependencyName: "radix-ui", moduleName: "radix-ui" },
+  { dependencyName: "react-hot-toast", moduleName: "react-hot-toast" },
+  { dependencyName: "sonner", moduleName: "sonner" },
 ] as const;
 const analysisCache = new WeakMap<
   ProjectDiscovery,
@@ -221,13 +228,21 @@ const isRuntimeImport = (
   referencedIdentifiers: Set<string>,
   project: ProjectDiscovery
 ): boolean => {
-  if (!project.dependencies[reference.moduleName]) {
+  const runtime = TOAST_RUNTIMES.find(
+    (candidate) => candidate.moduleName === reference.moduleName
+  );
+
+  if (!(runtime && project.dependencies[runtime.dependencyName])) {
     return false;
   }
 
   const usedBindings = reference.bindings.filter((binding) =>
     referencedIdentifiers.has(binding.localName)
   );
+
+  if (reference.moduleName === "@base-ui/react/toast") {
+    return usedBindings.some((binding) => binding.importedName === "Toast");
+  }
 
   if (reference.moduleName === "radix-ui") {
     return usedBindings.some((binding) => binding.importedName === "Toast");
@@ -567,8 +582,8 @@ const runToastRuntimeAnalysis = async (
   filesystemRoot: string
 ): Promise<ToastRuntimeAnalysis> => {
   const resolver = getProjectModuleResolver(project, filesystemRoot);
-  const hasDependency = TOAST_DEPENDENCIES.some(
-    (dependency) => project.dependencies[dependency]
+  const hasDependency = TOAST_RUNTIMES.some(
+    (runtime) => project.dependencies[runtime.dependencyName]
   );
   const shells = await readShells(project);
   const firstShell = shells[0] ?? null;
