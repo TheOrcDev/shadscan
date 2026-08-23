@@ -6,6 +6,16 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+## 0.17.1 - 2026-08-23
+
+### Fixed
+
+- `toast-provider-present` and `toast-provider-mounted` now recognize mounted
+  Base UI toast wrappers backed by `@base-ui/react/toast`, whose installed
+  dependency is declared as `@base-ui/react`. Recognition still requires the
+  exact toast subpath and verifiable runtime provenance, so unrelated Base UI
+  primitives do not satisfy either check.
+
 ## 0.17.0 - 2026-08-16
 
 ### Fixed
