@@ -71,12 +71,12 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@types/node": "26.4.0",
+    "@types/node": "26.3.0",
     "commander": "15.0.0",
     "execa": "10.0.1",
     "tsup": "8.5.1",
     "tsx": "4.23.12",
-    "ultracite": "7.10.7",
+    "ultracite": "7.10.6",
     "vitest": "4.1.11"
   }
 }
