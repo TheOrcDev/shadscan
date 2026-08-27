@@ -366,75 +366,76 @@ describe("discoverAgentClis", () => {
 });
 
 describe("launchAgentCli", () => {
-  it.each(
-    AGENT_IDS
-  )("launches %s with a private neutral prompt file and current interactive arguments", async (agentId) => {
-    const fixture = await createFixture();
+  it.each(AGENT_IDS)(
+    "launches %s with a private neutral prompt file and current interactive arguments",
+    async (agentId) => {
+      const fixture = await createFixture();
 
-    try {
-      await createExecutable(fixture.binDirectory, agentId);
-      const report = createReport(fixture.projectRoot);
-      const requests: Parameters<RunAgentProcess>[0][] = [];
-      const runProcess: RunAgentProcess = async (request) => {
-        requests.push(request);
-        if (request.output === "capture") {
-          return {
-            ...SUCCESSFUL_PROCESS_RESULT,
-            stdout: VERSION_OUTPUTS[agentId],
-          };
-        }
+      try {
+        await createExecutable(fixture.binDirectory, agentId);
+        const report = createReport(fixture.projectRoot);
+        const requests: Parameters<RunAgentProcess>[0][] = [];
+        const runProcess: RunAgentProcess = async (request) => {
+          requests.push(request);
+          if (request.output === "capture") {
+            return {
+              ...SUCCESSFUL_PROCESS_RESULT,
+              stdout: VERSION_OUTPUTS[agentId],
+            };
+          }
 
-        const bootstrapPrompt = request.args.at(-1) ?? "";
-        const promptFilePath = getPromptFilePath(bootstrapPrompt);
-        const [prompt, promptStats] = await Promise.all([
-          readFile(promptFilePath, "utf8"),
-          stat(promptFilePath),
-        ]);
-        expect(prompt).toBe(renderAgentPrompt(stripRoasts(report)));
-        expect(prompt).not.toContain(
-          "Roast copy must never enter the agent prompt."
-        );
-        if (process.platform !== "win32") {
-          expect(promptStats.mode.toString(8).slice(-3)).toBe("600");
-        }
-        expect(request.cwd).toBe(fixture.projectRoot);
-        expect(request.shell).toBe(false);
-        expect(request.output).toBe("inherit");
-        expect(request.args.join(" ")).not.toMatch(
-          UNSAFE_PERMISSION_FLAG_PATTERN
-        );
-        expect(request.args).toEqual(
-          agentId === "grok"
-            ? ["--verbatim", bootstrapPrompt]
-            : [bootstrapPrompt]
-        );
-        return SUCCESSFUL_PROCESS_RESULT;
-      };
+          const bootstrapPrompt = request.args.at(-1) ?? "";
+          const promptFilePath = getPromptFilePath(bootstrapPrompt);
+          const [prompt, promptStats] = await Promise.all([
+            readFile(promptFilePath, "utf8"),
+            stat(promptFilePath),
+          ]);
+          expect(prompt).toBe(renderAgentPrompt(stripRoasts(report)));
+          expect(prompt).not.toContain(
+            "Roast copy must never enter the agent prompt."
+          );
+          if (process.platform !== "win32") {
+            expect(promptStats.mode.toString(8).slice(-3)).toBe("600");
+          }
+          expect(request.cwd).toBe(fixture.projectRoot);
+          expect(request.shell).toBe(false);
+          expect(request.output).toBe("inherit");
+          expect(request.args.join(" ")).not.toMatch(
+            UNSAFE_PERMISSION_FLAG_PATTERN
+          );
+          expect(request.args).toEqual(
+            agentId === "grok"
+              ? ["--verbatim", bootstrapPrompt]
+              : [bootstrapPrompt]
+          );
+          return SUCCESSFUL_PROCESS_RESULT;
+        };
 
-      const result = await launchAgentCli({
-        agentId,
-        cwd: fixture.projectRoot,
-        env: { PATH: fixture.binDirectory },
-        projectRoot: fixture.projectRoot,
-        report,
-        runtime: {
-          runProcess,
-          temporaryRoot: fixture.temporaryRoot,
-        },
-      });
+        const result = await launchAgentCli({
+          agentId,
+          cwd: fixture.projectRoot,
+          env: { PATH: fixture.binDirectory },
+          projectRoot: fixture.projectRoot,
+          report,
+          runtime: {
+            runProcess,
+            temporaryRoot: fixture.temporaryRoot,
+          },
+        });
 
-      expect(result).toMatchObject({
-        agentId,
-        exitCode: 0,
-        signal: null,
-        success: true,
-      });
-      expect(requests).toHaveLength(2);
-      expect(await readdir(fixture.temporaryRoot)).toEqual([]);
-    } finally {
-      await fixture.cleanup();
+        expect(result).toMatchObject({
+          agentId,
+          exitCode: 0,
+          signal: null,
+          success: true,
+        });
+        expect(requests).toHaveLength(2);
+        expect(await readdir(fixture.temporaryRoot)).toEqual([]);
+      } finally {
+        await fixture.cleanup();
+      }
     }
-  });
+  );
 
   it("cleans up the prompt after a launch failure", async () => {
     const fixture = await createFixture();

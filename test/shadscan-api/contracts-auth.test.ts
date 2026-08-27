@@ -96,14 +96,17 @@ describe("hosted scan request contracts", () => {
     "-owner/repository",
     "owner-/repository",
     "owner/repository name",
-  ])("rejects an unsafe or non-canonical GitHub repository: %s", (repository) => {
-    expect(
-      GitHubSourceSchema.safeParse({
-        kind: "github",
-        repository,
-      }).success
-    ).toBe(false);
-  });
+  ])(
+    "rejects an unsafe or non-canonical GitHub repository: %s",
+    (repository) => {
+      expect(
+        GitHubSourceSchema.safeParse({
+          kind: "github",
+          repository,
+        }).success
+      ).toBe(false);
+    }
+  );
 
   it.each([
     "../main",
@@ -124,14 +127,13 @@ describe("hosted scan request contracts", () => {
     expect(revision).not.toMatch(OPENAPI_GITHUB_REVISION_PATTERN);
   });
 
-  it.each([
-    ".",
-    "apps/web",
-    "packages/design-system/src",
-  ])("accepts a portable project subdirectory: %s", (subdirectory) => {
-    expect(PortableSubdirectorySchema.parse(subdirectory)).toBe(subdirectory);
-    expect(subdirectory).toMatch(OPENAPI_SUBDIRECTORY_PATTERN);
-  });
+  it.each([".", "apps/web", "packages/design-system/src"])(
+    "accepts a portable project subdirectory: %s",
+    (subdirectory) => {
+      expect(PortableSubdirectorySchema.parse(subdirectory)).toBe(subdirectory);
+      expect(subdirectory).toMatch(OPENAPI_SUBDIRECTORY_PATTERN);
+    }
+  );
 
   it.each([
     "",
@@ -230,25 +232,24 @@ describe("hosted API Bearer authentication", () => {
     );
   });
 
-  it.each([
-    "constructor",
-    "toString",
-    "valueOf",
-  ])("rejects inherited object key IDs without throwing: %s", (keyId) => {
-    expect(() =>
-      authenticateApiRequest(
-        createAuthenticatedRequest(
-          `Bearer shadscan_${keyId}_abcdefghijklmnopqrstuvwxyz0123456789`
-        ),
-        VALID_API_KEY_HASHES
-      )
-    ).toThrowError(
-      expect.objectContaining({
-        code: "UNAUTHORIZED",
-        status: 401,
-      })
-    );
-  });
+  it.each(["constructor", "toString", "valueOf"])(
+    "rejects inherited object key IDs without throwing: %s",
+    (keyId) => {
+      expect(() =>
+        authenticateApiRequest(
+          createAuthenticatedRequest(
+            `Bearer shadscan_${keyId}_abcdefghijklmnopqrstuvwxyz0123456789`
+          ),
+          VALID_API_KEY_HASHES
+        )
+      ).toThrowError(
+        expect.objectContaining({
+          code: "UNAUTHORIZED",
+          status: 401,
+        })
+      );
+    }
+  );
 
   it.each([
     undefined,

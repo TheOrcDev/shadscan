@@ -185,35 +185,33 @@ describe("pre-commit protection detection", () => {
     });
   });
 
-  it.each([
-    "bun",
-    "npm",
-    "pnpm",
-    "yarn",
-  ])("does not trust forwarded arguments on a %s package script", async (packageManager) => {
-    const fixture = await createFixture();
-    await Promise.all([
-      fixture.write(
-        "package.json",
-        `${JSON.stringify(
-          { scripts: { scan: "shadscan --fail-under 92" } },
-          null,
-          2
-        )}\n`
-      ),
-      fixture.write(
-        ".git/hooks/pre-commit",
-        `#!/bin/sh\n${packageManager} run scan -- --fail-under 0\n`,
-        0o755
-      ),
-    ]);
+  it.each(["bun", "npm", "pnpm", "yarn"])(
+    "does not trust forwarded arguments on a %s package script",
+    async (packageManager) => {
+      const fixture = await createFixture();
+      await Promise.all([
+        fixture.write(
+          "package.json",
+          `${JSON.stringify(
+            { scripts: { scan: "shadscan --fail-under 92" } },
+            null,
+            2
+          )}\n`
+        ),
+        fixture.write(
+          ".git/hooks/pre-commit",
+          `#!/bin/sh\n${packageManager} run scan -- --fail-under 0\n`,
+          0o755
+        ),
+      ]);
 
-    await expect(detectPreCommitProtection(fixture)).resolves.toMatchObject({
-      floor: null,
-      manager: "native",
-      status: "integrable",
-    });
-  });
+      await expect(detectPreCommitProtection(fixture)).resolves.toMatchObject({
+        floor: null,
+        manager: "native",
+        status: "integrable",
+      });
+    }
+  );
 
   it.each([
     "#!/bin/sh\nshadscan --fail-under 92 || true\n",
@@ -402,30 +400,29 @@ describe("pre-commit protection detection", () => {
       manager: "pre-commit",
       wrapper: "#!/bin/sh\n# pre_commit generated\n",
     },
-  ])("conservatively detects $manager for manual integration", async ({
-    config,
-    manager,
-    wrapper,
-  }) => {
-    const fixture = await createFixture();
-    await Promise.all([
-      fixture.write(config[0], config[1]),
-      fixture.write(".git/hooks/pre-commit", wrapper, 0o755),
-    ]);
+  ])(
+    "conservatively detects $manager for manual integration",
+    async ({ config, manager, wrapper }) => {
+      const fixture = await createFixture();
+      await Promise.all([
+        fixture.write(config[0], config[1]),
+        fixture.write(".git/hooks/pre-commit", wrapper, 0o755),
+      ]);
 
-    const detection = await detectPreCommitProtection(fixture);
-    const plan = await createPreCommitInstallPlan({
-      ...fixture,
-      detection,
-      packageManager: "pnpm",
-      score: 92,
-      version: "0.1.0-rc.2",
-    });
+      const detection = await detectPreCommitProtection(fixture);
+      const plan = await createPreCommitInstallPlan({
+        ...fixture,
+        detection,
+        packageManager: "pnpm",
+        score: 92,
+        version: "0.1.0-rc.2",
+      });
 
-    expect(detection).toMatchObject({ manager, status: "integrable" });
-    expect(plan).toMatchObject({ manager, mode: "manual" });
-    expect(plan.changes).toEqual([]);
-  });
+      expect(detection).toMatchObject({ manager, status: "integrable" });
+      expect(plan).toMatchObject({ manager, mode: "manual" });
+      expect(plan.changes).toEqual([]);
+    }
+  );
 });
 
 describe("pre-commit installation plans", () => {

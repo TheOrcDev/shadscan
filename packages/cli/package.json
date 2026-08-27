@@ -22,7 +22,7 @@
     "ui"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   },
   "exports": {
     ".": {
@@ -64,19 +64,19 @@
     "cross-spawn": "7.0.6",
     "jsonc-parser": "3.3.1",
     "picocolors": "1.1.1",
-    "playwright-core": "1.61.1",
-    "tinyglobby": "0.2.15",
+    "playwright-core": "1.62.1",
+    "tinyglobby": "0.2.17",
     "typescript": "5.9.3",
-    "zod": "4.1.13"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@types/node": "18.19.130",
-    "commander": "13.1.0",
-    "execa": "9.6.1",
+    "@types/node": "26.4.0",
+    "commander": "15.0.0",
+    "execa": "10.0.1",
     "tsup": "8.5.1",
-    "tsx": "4.21.0",
-    "ultracite": "7.8.3",
-    "vitest": "3.2.4"
+    "tsx": "4.23.12",
+    "ultracite": "7.10.7",
+    "vitest": "4.1.11"
   }
 }

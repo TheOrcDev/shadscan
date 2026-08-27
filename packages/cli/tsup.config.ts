@@ -40,7 +40,7 @@ export default defineConfig([
     platform: "node",
     sourcemap: true,
     splitting: false,
-    target: "node18",
+    target: "node22",
   },
   {
     banner: hostedRuntimeBanner,
@@ -57,6 +57,6 @@ export default defineConfig([
     platform: "node",
     sourcemap: false,
     splitting: false,
-    target: "node18",
+    target: "node22",
   },
 ]);

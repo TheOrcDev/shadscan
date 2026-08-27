@@ -308,27 +308,27 @@ describe("POST /v1/scans", () => {
     },
     { accept: "text/markdownish", expectedMediaType: null },
     { accept: "*/*;q=0", expectedMediaType: null },
-  ])("negotiates an exact supported response for Accept: $accept", async ({
-    accept,
-    expectedMediaType,
-  }) => {
-    const archive = await createMinimalReactSnapshot();
-    const request = createSnapshotRequest(archive, { accept });
-    const response = await POST(request);
+  ])(
+    "negotiates an exact supported response for Accept: $accept",
+    async ({ accept, expectedMediaType }) => {
+      const archive = await createMinimalReactSnapshot();
+      const request = createSnapshotRequest(archive, { accept });
+      const response = await POST(request);
 
-    if (expectedMediaType === null) {
-      const result = (await response.json()) as HostedScanErrorBody;
-      expect(response.status).toBe(406);
-      expect(request.bodyUsed).toBe(false);
-      expect(result.error.code).toBe("NOT_ACCEPTABLE");
-      return;
+      if (expectedMediaType === null) {
+        const result = (await response.json()) as HostedScanErrorBody;
+        expect(response.status).toBe(406);
+        expect(request.bodyUsed).toBe(false);
+        expect(result.error.code).toBe("NOT_ACCEPTABLE");
+        return;
+      }
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe(
+        `${expectedMediaType}; charset=utf-8`
+      );
     }
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe(
-      `${expectedMediaType}; charset=utf-8`
-    );
-  });
+  );
 
   it("keeps the hosted report in parity with the CLI for the same source", async () => {
     const projectDirectory = await mkdtemp(
@@ -375,38 +375,39 @@ describe("POST /v1/scans", () => {
   it.each([
     { authorization: undefined, label: "missing" },
     { authorization: "Bearer invalid", label: "invalid" },
-  ])("rejects $label authentication before reading the body", async ({
-    authorization,
-  }) => {
-    const headers = new Headers({ "content-type": JSON_MEDIA_TYPE });
-    if (authorization) {
-      headers.set("authorization", authorization);
+  ])(
+    "rejects $label authentication before reading the body",
+    async ({ authorization }) => {
+      const headers = new Headers({ "content-type": JSON_MEDIA_TYPE });
+      if (authorization) {
+        headers.set("authorization", authorization);
+      }
+      const request = new Request(SCAN_URL, {
+        body: "{ definitely not valid JSON",
+        headers,
+        method: "POST",
+      });
+
+      const response = await POST(request);
+      const result = (await response.json()) as HostedScanErrorBody;
+
+      expect(response.status).toBe(401);
+      expect(request.bodyUsed).toBe(false);
+      expect(response.headers.get("www-authenticate")).toBe(
+        'Bearer realm="shadscan"'
+      );
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("vary")).toBe("Accept");
+      expect(result).toEqual({
+        error: {
+          code: "UNAUTHORIZED",
+          message: "A valid Bearer API key is required.",
+          retryable: false,
+        },
+        schemaVersion: 1,
+      });
     }
-    const request = new Request(SCAN_URL, {
-      body: "{ definitely not valid JSON",
-      headers,
-      method: "POST",
-    });
-
-    const response = await POST(request);
-    const result = (await response.json()) as HostedScanErrorBody;
-
-    expect(response.status).toBe(401);
-    expect(request.bodyUsed).toBe(false);
-    expect(response.headers.get("www-authenticate")).toBe(
-      'Bearer realm="shadscan"'
-    );
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(response.headers.get("vary")).toBe("Accept");
-    expect(result).toEqual({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "A valid Bearer API key is required.",
-        retryable: false,
-      },
-      schemaVersion: 1,
-    });
-  });
+  );
 
   it("returns a stable error envelope for an unsupported request media type", async () => {
     const request = new Request(SCAN_URL, {

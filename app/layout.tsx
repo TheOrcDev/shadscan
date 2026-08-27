@@ -92,6 +92,7 @@ export default async function RootLayout({
         outfit.variable,
         nunitoSansHeading.variable
       )}
+      data-scroll-behavior="smooth"
       lang="en"
       suppressHydrationWarning
     >

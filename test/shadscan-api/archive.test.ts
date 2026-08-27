@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { classifyScanInputPath } from "@shadscan/cli";
-import { type Headers, pack } from "tar-stream";
+import { pack } from "tar-stream";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   extractTarGzip,
@@ -13,7 +13,7 @@ import {
 
 interface TestArchiveEntry {
   contents?: Buffer | string;
-  header: Headers;
+  header: Parameters<ReturnType<typeof pack>["entry"]>[0];
 }
 
 interface TestArchive {
@@ -30,8 +30,12 @@ const collectTarStream = async (
   let totalBytes = 0;
 
   for await (const chunk of archive) {
-    chunks.push(chunk);
-    totalBytes += chunk.byteLength;
+    if (!(chunk instanceof Uint8Array)) {
+      throw new Error("tar-stream emitted a non-binary chunk.");
+    }
+    const buffer = Buffer.from(chunk);
+    chunks.push(buffer);
+    totalBytes += buffer.byteLength;
   }
 
   return Buffer.concat(chunks, totalBytes);
@@ -222,19 +226,20 @@ describe("hosted scan archive extraction", () => {
       ],
       order: "descendant file first",
     },
-  ])("rejects conflicting archive paths with the $order", async ({
-    entries,
-  }) => {
-    const destination = await createDestination();
-    const { gzip } = await createTarGzip(entries);
+  ])(
+    "rejects conflicting archive paths with the $order",
+    async ({ entries }) => {
+      const destination = await createDestination();
+      const { gzip } = await createTarGzip(entries);
 
-    await expectArchiveError(
-      extractTarGzip(gzip, destination, {
-        forbiddenPathBehavior: "reject",
-      }),
-      "ARCHIVE_PATH_CONFLICT"
-    );
-  });
+      await expectArchiveError(
+        extractTarGzip(gzip, destination, {
+          forbiddenPathBehavior: "reject",
+        }),
+        "ARCHIVE_PATH_CONFLICT"
+      );
+    }
+  );
 
   it("accepts explicit directory metadata after its descendants", async () => {
     const destination = await createDestination();

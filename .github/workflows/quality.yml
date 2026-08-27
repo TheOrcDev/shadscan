@@ -20,13 +20,13 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           run_install: false
       - name: Install Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -72,18 +72,18 @@ jobs:
           - ubuntu-latest
           - windows-latest
         node:
-          - 18
+          - 22.12
           - 26
     steps:
       - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           run_install: false
           standalone: true
       - name: Install Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
@@ -92,13 +92,13 @@ jobs:
       - name: Build CLI
         run: pnpm cli:build
       - name: Install Chromium for packed overflow smoke
-        if: matrix.os == 'ubuntu-latest' && matrix.node == 18
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22.12
         shell: bash
         run: pnpm --filter @shadscan/cli exec playwright-core install --with-deps chromium
       - name: Smoke test packed CLI
         run: pnpm cli:smoke:built
       - name: Smoke test packed overflow mode
-        if: matrix.os == 'ubuntu-latest' && matrix.node == 18
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22.12
         shell: bash
         run: |
           browser_executable="$(node --input-type=module -e 'import { createRequire } from "node:module"; const require = createRequire(new URL("./packages/cli/package.json", import.meta.url)); const { chromium } = require("playwright-core"); process.stdout.write(chromium.executablePath())')"

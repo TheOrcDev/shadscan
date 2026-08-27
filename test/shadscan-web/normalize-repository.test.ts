@@ -38,20 +38,18 @@ describe("normalizeGitHubRepository", () => {
     });
   });
 
-  it.each([
-    "../apps/web",
-    "/apps/web",
-    "apps\\web",
-    "apps//web",
-  ])("rejects an unsafe project path: %s", (projectPath) => {
-    expect(() =>
-      normalizeGitHubRepository("TheOrcDev/headless-shadcn", projectPath)
-    ).toThrow(
-      expect.objectContaining({
-        code: "INVALID_PROJECT_PATH",
-      })
-    );
-  });
+  it.each(["../apps/web", "/apps/web", "apps\\web", "apps//web"])(
+    "rejects an unsafe project path: %s",
+    (projectPath) => {
+      expect(() =>
+        normalizeGitHubRepository("TheOrcDev/headless-shadcn", projectPath)
+      ).toThrow(
+        expect.objectContaining({
+          code: "INVALID_PROJECT_PATH",
+        })
+      );
+    }
+  );
 
   it.each([
     "",

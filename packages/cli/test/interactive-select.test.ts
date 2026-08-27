@@ -12,16 +12,17 @@ const OPTIONS = [
 ];
 
 const createFakeInput = () => {
+  const setRawMode = vi.fn<(mode: boolean) => unknown>();
   const input = new Readable({
     read() {
       // Bytes are pushed manually by each test.
     },
   }) as Readable & {
     isTTY: boolean;
-    setRawMode: ReturnType<typeof vi.fn>;
+    setRawMode: typeof setRawMode;
   };
   input.isTTY = true;
-  input.setRawMode = vi.fn();
+  input.setRawMode = setRawMode;
   return input;
 };
 

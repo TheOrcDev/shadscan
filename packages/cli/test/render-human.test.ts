@@ -223,20 +223,19 @@ describe("renderHumanReport", () => {
     { bar: "----------------", grade: "F", score: 0 },
     { bar: "########--------", grade: "F", score: 50 },
     { bar: "################", grade: "A", score: 100 },
-  ] as const)("renders the plain score bar at $score", ({
-    bar,
-    grade,
-    score,
-  }) => {
-    const output = renderHumanReport(
-      { ...createReport(), grade, score },
-      { includeRoast: false, terminal: PLAIN_TERMINAL }
-    );
+  ] as const)(
+    "renders the plain score bar at $score",
+    ({ bar, grade, score }) => {
+      const output = renderHumanReport(
+        { ...createReport(), grade, score },
+        { includeRoast: false, terminal: PLAIN_TERMINAL }
+      );
 
-    expect(output).toContain(
-      `Your shadscan score: [${bar}] ${score}/100 (Grade ${grade})`
-    );
-  });
+      expect(output).toContain(
+        `Your shadscan score: [${bar}] ${score}/100 (Grade ${grade})`
+      );
+    }
+  );
 
   it("renders a Unicode score bar clamped to the TTY width", () => {
     const output = renderHumanReport(createReport(), {
@@ -253,22 +252,21 @@ describe("renderHumanReport", () => {
     { colorCode: 32, grade: "A", score: 95 },
     { colorCode: 33, grade: "C", score: 75 },
     { colorCode: 31, grade: "F", score: 50 },
-  ] as const)("colors score band $grade without replacing its text label", ({
-    colorCode,
-    grade,
-    score,
-  }) => {
-    const output = renderHumanReport(
-      { ...createReport(), grade, score },
-      {
-        includeRoast: false,
-        terminal: { ...RICH_TERMINAL, color: true },
-      }
-    );
+  ] as const)(
+    "colors score band $grade without replacing its text label",
+    ({ colorCode, grade, score }) => {
+      const output = renderHumanReport(
+        { ...createReport(), grade, score },
+        {
+          includeRoast: false,
+          terminal: { ...RICH_TERMINAL, color: true },
+        }
+      );
 
-    expect(output).toContain(`\u001b[${colorCode}m${score}/100\u001b[39m`);
-    expect(output).toContain(`Grade \u001b[${colorCode}m${grade}\u001b[39m`);
-  });
+      expect(output).toContain(`\u001b[${colorCode}m${score}/100\u001b[39m`);
+      expect(output).toContain(`Grade \u001b[${colorCode}m${grade}\u001b[39m`);
+    }
+  );
 
   it("ends a wide local TTY report with the block grade banner", () => {
     const output = renderHumanReport(createReport(), {

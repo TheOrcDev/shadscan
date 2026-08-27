@@ -8,7 +8,39 @@
   // components/charts is vendored from the @bklit shadcn registry. It is
   // upstream code we do not author, and re-running `shadcn add` would
   // reintroduce any local edits, so it is excluded rather than reformatted.
+  // Brand SVGs are generated and verified byte-for-byte by docs:check.
   "files": {
-    "includes": ["!**/components/charts"]
+    "includes": ["!**/components/charts", "!public/brand/*.svg"]
+  },
+  // Ultracite 7.10 enables these rules for existing code. Keep this dependency
+  // upgrade behavior-neutral; each rule can be adopted in a focused follow-up.
+  "assist": {
+    "actions": {
+      "source": {
+        "useSortedKeys": "off",
+        "useSortedPackageJson": "off"
+      }
+    }
+  },
+  "linter": {
+    "rules": {
+      "complexity": {
+        "noUselessReturn": "off"
+      },
+      "performance": {
+        "noAwaitInLoops": "off",
+        "noJsxPropsBind": "off"
+      },
+      "style": {
+        "useConsistentMethodSignatures": "off",
+        "useDestructuring": "off",
+        "useErrorCause": "off"
+      },
+      "suspicious": {
+        "noLeakedRender": "off",
+        "noShadow": "off",
+        "noUnnecessaryConditions": "off"
+      }
+    }
   }
 }

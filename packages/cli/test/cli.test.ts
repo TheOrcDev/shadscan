@@ -480,26 +480,24 @@ describe("CLI contract", () => {
     { args: [], ci: "1", label: "CI output" },
     { args: [], label: "non-TTY stderr", stderrIsTTY: false },
     { args: [], label: "dumb terminal", term: "dumb" },
-  ])("suppresses UI-check progress for $label", async ({
-    args,
-    ci,
-    stderrIsTTY,
-    term,
-  }) => {
-    const output = await captureUiCheckStreams({
-      args,
-      ci,
-      stderrIsTTY,
-      term,
-    });
+  ])(
+    "suppresses UI-check progress for $label",
+    async ({ args, ci, stderrIsTTY, term }) => {
+      const output = await captureUiCheckStreams({
+        args,
+        ci,
+        stderrIsTTY,
+        term,
+      });
 
-    expect(output.failure).toBeUndefined();
-    expect(output.stderr).toBe("");
-    expect(output.stdout).not.toBe("");
-    for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
-      expect(output.stderr).not.toContain(label);
+      expect(output.failure).toBeUndefined();
+      expect(output.stderr).toBe("");
+      expect(output.stdout).not.toBe("");
+      for (const label of UI_CHECK_PROGRESS_PHASE_LABELS) {
+        expect(output.stderr).not.toContain(label);
+      }
     }
-  });
+  );
 
   it("keeps UI-check progress on stderr when stdout is redirected", async () => {
     const output = await captureUiCheckStreams({ stdoutIsTTY: false });
@@ -546,78 +544,78 @@ describe("CLI contract", () => {
     ).rejects.toThrow("--check-ui cannot be used with --category.");
   });
 
-  it.each([
-    "--check-ui",
-    "--check-overflow",
-  ])("forwards routes and browser selection through %s", async (uiFlag) => {
-    const runBrowserCheck = vi.fn(async () => ({
-      browser: { name: "chromium", version: "123" },
-      durationMs: 12,
-      measurements: ["/", "/dashboard"].flatMap((page) => [
-        {
-          clientWidth: 320,
-          finalPath: page,
-          forcedScrollbar: false,
-          httpStatus: 200,
-          page,
-          scrollWidth: 320,
-          viewport: { height: 820, name: "mobile", width: 320 } as const,
-        },
-        {
-          clientWidth: 1440,
-          finalPath: page,
-          forcedScrollbar: false,
-          httpStatus: 200,
-          page,
-          scrollWidth: 1440,
-          viewport: {
-            height: 1000,
-            name: "desktop",
-            width: 1440,
-          } as const,
-        },
-      ]),
-      origin: "http://127.0.0.1:3000",
-    }));
-    const program = createProgram({ runBrowserCheck });
-    const write = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation(() => true);
-
-    try {
-      await program.parseAsync([
-        "node",
-        "shadscan",
-        uiFlag,
-        "http://127.0.0.1:3000",
-        "--route",
-        "/dashboard",
-        "--browser-executable",
-        "/tmp/chromium",
-        "--json",
-      ]);
-    } finally {
-      write.mockRestore();
-    }
-
-    expect(runBrowserCheck).toHaveBeenCalledWith(
-      expect.objectContaining({
-        browserExecutable: "/tmp/chromium",
+  it.each(["--check-ui", "--check-overflow"])(
+    "forwards routes and browser selection through %s",
+    async (uiFlag) => {
+      const runBrowserCheck = vi.fn(async () => ({
+        browser: { name: "chromium", version: "123" },
+        durationMs: 12,
+        measurements: ["/", "/dashboard"].flatMap((page) => [
+          {
+            clientWidth: 320,
+            finalPath: page,
+            forcedScrollbar: false,
+            httpStatus: 200,
+            page,
+            scrollWidth: 320,
+            viewport: { height: 820, name: "mobile", width: 320 } as const,
+          },
+          {
+            clientWidth: 1440,
+            finalPath: page,
+            forcedScrollbar: false,
+            httpStatus: 200,
+            page,
+            scrollWidth: 1440,
+            viewport: {
+              height: 1000,
+              name: "desktop",
+              width: 1440,
+            } as const,
+          },
+        ]),
         origin: "http://127.0.0.1:3000",
-        pages: [
-          {
-            displayPath: "/",
-            requestedUrl: "http://127.0.0.1:3000/",
-          },
-          {
-            displayPath: "/dashboard",
-            requestedUrl: "http://127.0.0.1:3000/dashboard",
-          },
-        ],
-        signal: expect.any(AbortSignal),
-      })
-    );
-  });
+      }));
+      const program = createProgram({ runBrowserCheck });
+      const write = vi
+        .spyOn(process.stdout, "write")
+        .mockImplementation(() => true);
+
+      try {
+        await program.parseAsync([
+          "node",
+          "shadscan",
+          uiFlag,
+          "http://127.0.0.1:3000",
+          "--route",
+          "/dashboard",
+          "--browser-executable",
+          "/tmp/chromium",
+          "--json",
+        ]);
+      } finally {
+        write.mockRestore();
+      }
+
+      expect(runBrowserCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          browserExecutable: "/tmp/chromium",
+          origin: "http://127.0.0.1:3000",
+          pages: [
+            {
+              displayPath: "/",
+              requestedUrl: "http://127.0.0.1:3000/",
+            },
+            {
+              displayPath: "/dashboard",
+              requestedUrl: "http://127.0.0.1:3000/dashboard",
+            },
+          ],
+          signal: expect.any(AbortSignal),
+        })
+      );
+    }
+  );
 
   it.each([
     ["--check-ui", "--check-overflow"],

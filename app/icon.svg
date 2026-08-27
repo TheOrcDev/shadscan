@@ -1,10 +1,11 @@
 <svg
-  xmlns="http://www.w3.org/2000/svg"
-  width="64"
   height="64"
   viewBox="0 0 64 64"
+  width="64"
+  xmlns="http://www.w3.org/2000/svg"
 >
-  <rect width="64" height="64" fill="#ffffff" />
+  <title>Shadscan</title>
+  <rect fill="#ffffff" height="64" width="64" />
   <g
     fill="none"
     stroke="#09090b"

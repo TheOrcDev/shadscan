@@ -84,11 +84,16 @@ describe("canonical redirect policy", () => {
   it.each([
     ["https://app.example.com/", "https://www.app.example.com/"],
     ["https://www.app.example.com/", "https://app.example.com/"],
-  ])("does not treat a project subdomain as an apex alias: %s", (initialUrl, nextUrl) => {
-    const policy = createCanonicalRedirectPolicy(initialUrl);
+  ])(
+    "does not treat a project subdomain as an apex alias: %s",
+    (initialUrl, nextUrl) => {
+      const policy = createCanonicalRedirectPolicy(initialUrl);
 
-    expect(policy && followCanonicalServerRedirect(policy, nextUrl)).toBeNull();
-  });
+      expect(
+        policy && followCanonicalServerRedirect(policy, nextUrl)
+      ).toBeNull();
+    }
+  );
 
   it("allows a www host to redirect to its anchored apex alias", () => {
     const policy = createCanonicalRedirectPolicy("https://www.example.com/");
@@ -155,11 +160,16 @@ describe("canonical redirect policy", () => {
       "http://example.com/",
       "https://example.com:8443/",
     ],
-  ])("rejects an HTTP to HTTPS upgrade from %s", (_description, initialUrl, nextUrl) => {
-    const policy = createCanonicalRedirectPolicy(initialUrl);
+  ])(
+    "rejects an HTTP to HTTPS upgrade from %s",
+    (_description, initialUrl, nextUrl) => {
+      const policy = createCanonicalRedirectPolicy(initialUrl);
 
-    expect(policy && followCanonicalServerRedirect(policy, nextUrl)).toBeNull();
-  });
+      expect(
+        policy && followCanonicalServerRedirect(policy, nextUrl)
+      ).toBeNull();
+    }
+  );
 
   it.each([
     "not a URL",
