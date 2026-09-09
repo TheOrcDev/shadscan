@@ -655,3 +655,41 @@ describe("state rules", () => {
     }
   });
 });
+
+it("follows only the selected toast re-export", async () => {
+  const fixture = await createRuleFixture({
+    react: "19.2.4",
+    next: "16.0.0",
+    "@base-ui/react": "1.6.0",
+  });
+  try {
+    await fixture.write(
+      "shared/runtime.tsx",
+      'import { Toast } from "@base-ui/react/toast"; export function RealToast() { return <Toast.Provider><Toast.Viewport /></Toast.Provider>; }'
+    );
+    await fixture.write(
+      "shared/empty.tsx",
+      "export function Empty() { return null; }"
+    );
+    await fixture.write(
+      "shared/index.ts",
+      'export { RealToast } from "./runtime"; export { Empty as Toaster } from "./empty";'
+    );
+    await fixture.write(
+      "app/layout.tsx",
+      'import { Toaster } from "../shared"; export default function Layout() { return <html><body><Toaster /></body></html>; }'
+    );
+    expect(
+      (await runRule(fixture.rootDir, toastProviderMountedRule)).status
+    ).toBe("fail");
+    await fixture.write(
+      "shared/index.ts",
+      'export { RealToast as Toaster } from "./runtime";'
+    );
+    expect(
+      (await runRule(fixture.rootDir, toastProviderMountedRule)).status
+    ).toBe("pass");
+  } finally {
+    await fixture.cleanup();
+  }
+});

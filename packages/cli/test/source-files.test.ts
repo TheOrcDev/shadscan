@@ -143,3 +143,55 @@ describe("project source index", () => {
     expect(matchedFiles).toEqual([]);
   });
 });
+
+describe("reachable local package source", () => {
+  it("follows imports and re-exports outside conventional roots, with cycles", async () => {
+    const fixture = await createRuleFixture();
+    cleanupPaths.push(fixture.rootDir);
+    await fixture.write(
+      "components/consumer.tsx",
+      'import { Control } from "../shared/index"; export const Consumer = () => <Control />;'
+    );
+    await fixture.write(
+      "shared/index.ts",
+      'export { Control } from "./control";'
+    );
+    await fixture.write(
+      "shared/control.tsx",
+      'import "./index"; export const Control = () => <button />;'
+    );
+    await fixture.write(
+      "shared/unreferenced.tsx",
+      "export const Unused = () => <button />;"
+    );
+    const project = await discoverProject(fixture.rootDir);
+    const files = await getProjectSourceFiles(project);
+    expect(
+      files.map((file) => path.relative(fixture.rootDir, file.path))
+    ).toEqual([
+      "components/consumer.tsx",
+      "shared/control.tsx",
+      "shared/index.ts",
+    ]);
+  });
+  it("does not follow an import outside the project", async () => {
+    const fixture = await createRuleFixture();
+    cleanupPaths.push(fixture.rootDir);
+    const outside = await mkdtemp(path.join(tmpdir(), "shadscan-outside-"));
+    cleanupPaths.push(outside);
+    await writeFile(
+      path.join(outside, "secret.tsx"),
+      "export const Secret = () => <button />;"
+    );
+    await fixture.write(
+      "components/consumer.tsx",
+      `import { Secret } from ${JSON.stringify(path.join(outside, "secret"))}; export const Consumer = () => <Secret />;`
+    );
+    const project = await discoverProject(fixture.rootDir);
+    expect(
+      (await getProjectSourceFiles(project)).map((file) =>
+        path.basename(file.path)
+      )
+    ).toEqual(["consumer.tsx"]);
+  });
+});

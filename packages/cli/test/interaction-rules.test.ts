@@ -679,3 +679,41 @@ describe("interaction rules", () => {
     }
   });
 });
+
+it("follows a mounted re-export but does not mount unrelated barrel exports", async () => {
+  const fixture = await createRuleFixture({ react: "19.2.4", next: "16.0.0" });
+  try {
+    await fixture.write(
+      "app/layout.tsx",
+      "export default function Layout({ children }) { return <html><body>{children}</body></html>; }"
+    );
+    await fixture.write(
+      "shared/command-menu.tsx",
+      'import { CommandDialog, CommandInput, CommandEmpty, CommandItem } from "./command"; export function Menu() { return <CommandDialog><CommandInput /><CommandEmpty>Empty</CommandEmpty><CommandItem>Item</CommandItem></CommandDialog>; }'
+    );
+    await fixture.write(
+      "shared/unrelated.tsx",
+      "export const Unrelated = () => <p>Unrelated</p>;"
+    );
+    await fixture.write(
+      "shared/index.ts",
+      'export { Menu } from "./command-menu"; export { Unrelated } from "./unrelated";'
+    );
+    await fixture.write(
+      "app/team/layout.tsx",
+      'import { Unrelated } from "../../shared"; export default function Layout({ children }) { return <><Unrelated/>{children}</>; }'
+    );
+    expect(
+      (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+    ).toBe("fail");
+    await fixture.write(
+      "app/team/layout.tsx",
+      'import { Menu } from "../../shared"; export default function Layout({ children }) { return <><Menu/>{children}</>; }'
+    );
+    expect(
+      (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+    ).toBe("pass");
+  } finally {
+    await fixture.cleanup();
+  }
+});

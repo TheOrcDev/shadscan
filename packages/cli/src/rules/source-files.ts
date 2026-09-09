@@ -1,10 +1,15 @@
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { glob } from "tinyglobby";
+import { preProcessFile } from "typescript";
 import type { AuditContext } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
 import type { ProjectDiscovery } from "../discovery";
 import { SCAN_SOURCE_LIMITS } from "../source-requirements";
+import {
+  getProjectModuleResolver,
+  resolveProjectModulePath,
+} from "./module-resolution";
 
 interface SourceFile {
   content: string;
@@ -23,6 +28,7 @@ interface SafeFileSearch {
   truncated: boolean;
 }
 
+const SCRIPT_FILE_PATTERN = /\.[cm]?[jt]sx?$/;
 const SOURCE_PATTERNS = [
   "*.{js,jsx,ts,tsx}",
   "app/**/*.{js,jsx,ts,tsx}",
@@ -247,6 +253,63 @@ const loadSourceFiles = async (
   return sourceFiles;
 };
 
+// Include repository-local modules reached through imports and re-exports. A
+// component's location must not hide it from rules. Resolution stays confined to
+// the project and uses the same file/byte budgets as conventional source roots.
+const loadImportedSourceFiles = async (
+  project: ProjectDiscovery
+): Promise<SourceFile[]> => {
+  const files = await loadSourceFiles(project, SOURCE_PATTERNS, "source");
+  const seen = new Set(files.map((file) => path.resolve(file.path)));
+  const resolver = getProjectModuleResolver(project, project.rootDir);
+  let totalBytes = files.reduce(
+    (total, file) => total + Buffer.byteLength(file.content),
+    0
+  );
+  for (const file of files) {
+    for (const imported of preProcessFile(file.content, true, true)
+      .importedFiles) {
+      const resolved = resolveProjectModulePath({
+        containingFile: file.path,
+        moduleName: imported.fileName,
+        project,
+        resolver,
+        hasCandidate: (candidate) => resolver.host.fileExists(candidate),
+      });
+      if (
+        !resolved ||
+        seen.has(resolved) ||
+        !SCRIPT_FILE_PATTERN.test(resolved)
+      ) {
+        continue;
+      }
+      seen.add(resolved);
+      const safe = await resolveSafeFile(project.rootDir, resolved);
+      if (!safe) {
+        appendWarning(project, "Skipped an unsafe imported source path.");
+        continue;
+      }
+      if (
+        safe.size > MAX_SOURCE_FILE_BYTES ||
+        files.length >= MAX_PROJECT_FILES ||
+        totalBytes + safe.size > MAX_TOTAL_SOURCE_BYTES
+      ) {
+        appendWarning(
+          project,
+          "Imported source discovery reached the file or byte read limit."
+        );
+        continue;
+      }
+      files.push({
+        path: safe.path,
+        content: await readFile(safe.readPath, "utf8"),
+      });
+      totalBytes += safe.size;
+    }
+  }
+  return files.sort((a, b) => compareCodeUnits(a.path, b.path));
+};
+
 const readProjectSourceFile = async (
   project: ProjectDiscovery,
   filePath: string
@@ -277,7 +340,7 @@ const getProjectSourceFiles = (
     return cachedFiles;
   }
 
-  const files = loadSourceFiles(project, SOURCE_PATTERNS, "source");
+  const files = loadImportedSourceFiles(project);
   sourceFileCache.set(project, files);
   return files;
 };
