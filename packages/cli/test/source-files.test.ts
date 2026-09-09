@@ -195,3 +195,26 @@ describe("reachable local package source", () => {
     ).toEqual(["consumer.tsx"]);
   });
 });
+
+it("does not discover ignored modules through imports", async () => {
+  const fixture = await createRuleFixture();
+  cleanupPaths.push(fixture.rootDir);
+  await fixture.write(
+    "components/consumer.tsx",
+    'import "../shared/control.test"; import "../shared/generated/control"; export const Consumer = () => <button />;'
+  );
+  await fixture.write(
+    "shared/control.test.tsx",
+    "export const Test = () => <button />;"
+  );
+  await fixture.write(
+    "shared/generated/control.tsx",
+    "export const Generated = () => <button />;"
+  );
+  const project = await discoverProject(fixture.rootDir);
+  expect(
+    (await getProjectSourceFiles(project)).map((file) =>
+      path.relative(fixture.rootDir, file.path)
+    )
+  ).toEqual(["components/consumer.tsx"]);
+});

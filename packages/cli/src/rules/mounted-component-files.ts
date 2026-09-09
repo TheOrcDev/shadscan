@@ -235,7 +235,10 @@ const findMountedComponentFiles = async (
   const pendingFiles = shellCandidates
     .map((candidate) => filesByPath.get(path.resolve(candidate)))
     .filter((file): file is ParsedProjectFile => Boolean(file))
-    .map((file) => ({ file, names: new Set(["*"]) }));
+    .map((file) => ({
+      file,
+      names: new Set(project.versions.next ? ["default"] : ["*"]),
+    }));
   const mountedFiles = new Set<string>();
   const visited = new Set<string>();
 

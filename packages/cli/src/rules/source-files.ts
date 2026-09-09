@@ -1,6 +1,6 @@
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { glob } from "tinyglobby";
+import { convertPathToPattern, glob } from "tinyglobby";
 import { preProcessFile } from "typescript";
 import type { AuditContext } from "../audit";
 import { compareCodeUnits } from "../deterministic-order";
@@ -283,8 +283,14 @@ const loadImportedSourceFiles = async (
       ) {
         continue;
       }
+      const search = await findSafeFiles(project.rootDir, [
+        convertPathToPattern(path.relative(project.rootDir, resolved)),
+      ]);
+      const safe = search.files[0];
+      if (!safe && search.skippedUnsafe === 0) {
+        continue;
+      }
       seen.add(resolved);
-      const safe = await resolveSafeFile(project.rootDir, resolved);
       if (!safe) {
         appendWarning(project, "Skipped an unsafe imported source path.");
         continue;

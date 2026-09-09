@@ -717,3 +717,29 @@ it("follows a mounted re-export but does not mount unrelated barrel exports", as
     await fixture.cleanup();
   }
 });
+
+it("does not mount components through a Next metadata re-export", async () => {
+  const fixture = await createRuleFixture({ react: "19.2.4", next: "16.0.0" });
+  try {
+    await fixture.write(
+      "app/layout.tsx",
+      'export { metadata } from "../shared/menu"; export default function Layout({children}) { return <html><body>{children}</body></html>; }'
+    );
+    await fixture.write(
+      "shared/menu.tsx",
+      'import { CommandDialog, CommandInput, CommandEmpty, CommandItem } from "./command"; export const metadata = {title: "Example"}; export function Menu() { return <CommandDialog><CommandInput /><CommandEmpty>Empty</CommandEmpty><CommandItem>Item</CommandItem></CommandDialog>; }'
+    );
+    expect(
+      (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+    ).toBe("fail");
+    await fixture.write(
+      "app/layout.tsx",
+      'export { Menu as default, metadata } from "../shared/menu";'
+    );
+    expect(
+      (await runRule(fixture.rootDir, commandMenuPresentRule)).status
+    ).toBe("pass");
+  } finally {
+    await fixture.cleanup();
+  }
+});
