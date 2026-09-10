@@ -6,6 +6,13 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- `field-errors-rendered` ignores generic server error arrays and HTML strings
+  outside JSX-rendering scopes while retaining custom form and hook validation
+  checks. Bundled ruleset advances to `2026.09.10`; scores may change without
+  changing rule weights or report contracts.
+
 ## 0.17.1 - 2026-08-23
 
 ### Fixed

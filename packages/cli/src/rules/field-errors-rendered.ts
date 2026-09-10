@@ -28,7 +28,8 @@ const fieldErrorsRenderedRule: AuditRule = {
   adapters: ["core"],
   category: "forms",
   confidence: "medium",
-  description: "Checks custom form-validation state for rendered field errors.",
+  description:
+    "Checks custom form-validation state for rendered field errors; generic error data must belong to a JSX-rendering scope.",
   id: "field-errors-rendered",
   maxScore: 3,
   run: async ({ filesystemRoot, project }) => {
