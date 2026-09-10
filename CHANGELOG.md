@@ -6,6 +6,14 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- CLI discovery follows reachable repository-local imports within existing path,
+  file and byte limits. Mounted component and toast checks follow selected value
+  re-exports and nested Next layouts without borrowing unrelated barrel exports.
+  Expanded coverage may expose additional findings. Bundled ruleset advances to
+  `2026.09.10`; rule weights and report contracts are unchanged.
+
 ## 0.17.1 - 2026-08-23
 
 ### Fixed
