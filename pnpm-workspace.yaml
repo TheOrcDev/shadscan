@@ -13,3 +13,11 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   msw: false
+
+# pnpm 11 enforces a 24h supply-chain quarantine by default; state it so local
+# installs verify the same policy CI and Vercel do.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  # @shadcn/lint 0.1.0 is its first and only release (2026-09-14). Remove this
+  # exemption after 2026-09-15; the policy then covers it like everything else.
+  - "@shadcn/lint"

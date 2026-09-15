@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["@shadcn/lint"],
+  "ignorePatterns": [
+    ".next/",
+    "packages/cli/dist/",
+    "playwright-report/",
+    "test-results/",
+    // components/charts is vendored from the @bklit shadcn registry. It is
+    // upstream code we do not author, so it is excluded here exactly as it is
+    // in biome.jsonc.
+    "components/charts/"
+  ]
+}

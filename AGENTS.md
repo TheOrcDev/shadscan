@@ -18,6 +18,7 @@ This project uses **Ultracite**, a zero-config preset that enforces strict code 
 - **Format code**: `pnpm dlx ultracite fix`
 - **Check for issues**: `pnpm dlx ultracite check`
 - **Diagnose setup**: `pnpm dlx ultracite doctor`
+- **Design-system lint**: `pnpm lint` — `@shadcn/lint` on Oxlint. After making UI changes, run it and fix all errors.
 
 Biome (the underlying engine) provides robust linting and formatting. Most issues are automatically fixable.
 

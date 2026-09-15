@@ -363,6 +363,10 @@ const CHILDREN_TRANSPARENT_PROVIDERS: ReadonlyMap<
   // `fallback`, but that is a prop rather than a child, so expanding children
   // describes the resolved render — which is the one every rule reasons about.
   ["react", new Set(["Fragment", "Profiler", "StrictMode", "Suspense"])],
+  // Motion's MotionConfig only supplies context to its subtree.
+  ["framer-motion", new Set(["MotionConfig", "LazyMotion"])],
+  ["motion/react", new Set(["MotionConfig", "LazyMotion"])],
+  ["motion", new Set(["MotionConfig", "LazyMotion"])],
   ["nuqs/adapters/next", new Set(["NuqsAdapter"])],
   ["nuqs/adapters/next/app", new Set(["NuqsAdapter"])],
   ["nuqs/adapters/next/pages", new Set(["NuqsAdapter"])],

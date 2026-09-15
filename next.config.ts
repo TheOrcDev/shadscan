@@ -4,6 +4,7 @@ const SCANNER_TRACE_EXCLUDES = [
   "./.claude/**/*",
   "./.git",
   "./.git/**/*",
+  "./.oxlintrc.json",
   "./app/**/*",
   "./changelog/**/*",
   // Common directory names must not strip matching JavaScript from Next.
@@ -32,7 +33,6 @@ const SCANNER_TRACE_EXCLUDES = [
   "./biome.jsonc",
   "./components.json",
   "./drizzle.config.ts",
-  "./eslint.config.mjs",
   "./next.config.ts",
   "./packages/cli/README.md",
   "./packages/cli/dist/cli.*",
