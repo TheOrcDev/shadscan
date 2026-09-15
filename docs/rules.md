@@ -77,7 +77,7 @@ Rules only run for matching adapters. A rule can also return `not-applicable` wh
 | Rule | What it checks | Confidence | Score behavior | Adapters |
 | --- | --- | --- | --- | --- |
 | `validation-wired-to-form` | Checks detected forms for native, library, or schema validation. | medium | 3 raw points when applicable | `core` |
-| `field-errors-rendered` | Checks custom form-validation state for rendered field errors; generic error data must belong to a JSX-rendering scope. | medium | 3 raw points when applicable | `core` |
+| `field-errors-rendered` | Checks custom form-validation state for rendered field errors; generic error data is counted only inside a function containing JSX. | medium | 3 raw points when applicable | `core` |
 | `invalid-fields-associated-with-errors` | Checks aria-invalid form controls for an associated error description. | high | 2 raw points when applicable | `core` |
 | `grouped-controls-have-legend` | Checks native fieldsets and RadioGroup controls for a legend or accessible group name. | high | 2 raw points when applicable | `core` |
 | `form-buttons-have-explicit-type` | Checks buttons inside forms for an explicit valid type. | high | 2 raw points when applicable | `core` |

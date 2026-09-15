@@ -29,7 +29,7 @@ const fieldErrorsRenderedRule: AuditRule = {
   category: "forms",
   confidence: "medium",
   description:
-    "Checks custom form-validation state for rendered field errors; generic error data must belong to a JSX-rendering scope.",
+    "Checks custom form-validation state for rendered field errors; generic error data is counted only inside a function containing JSX.",
   id: "field-errors-rendered",
   maxScore: 3,
   run: async ({ filesystemRoot, project }) => {
