@@ -30,6 +30,10 @@ behavior, and more.
 The default scan is deterministic and read-only. It does not start the app,
 edit files, call an AI model, upload source, or require application secrets.
 
+Generic server error arrays and generated HTML strings do not establish a form
+validation surface. The field-error rule requires a JSX-rendering scope for
+generic validation evidence and continues to trace supported form hooks.
+
 ## Quick Start
 
 Run Shadscan from the root of a project:

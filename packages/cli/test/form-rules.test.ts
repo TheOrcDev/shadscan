@@ -230,3 +230,42 @@ describe("form rules", () => {
     }
   });
 });
+
+it("does not classify server error collection or HTML strings as form UI", async () => {
+  const fixture = await createRuleFixture();
+  try {
+    await fixture.write(
+      "lib/export.tsx",
+      `export function exportDocument() {
+      const errors = []; errors.push("An image failed");
+      const html = '<form><input name="email" /></form>';
+      return { html, errors };
+    }
+    export function Unrelated() { return <form><input required /></form>; }`
+    );
+    expect(
+      (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+    ).toBe("not-applicable");
+    await fixture.write(
+      "src/contact.tsx",
+      `export function Contact() {
+      const errors = validate(); const invalid = errors.email;
+      return <form><input name="email" aria-invalid={Boolean(invalid)} /></form>;
+    }`
+    );
+    expect(
+      (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+    ).toBe("fail");
+    await fixture.write(
+      "src/contact.tsx",
+      `export function Contact() {
+      const errors = validate(); return <form><input name="email" />{errors.email && <FieldError>{errors.email}</FieldError>}</form>;
+    }`
+    );
+    expect(
+      (await runRule(fixture.rootDir, fieldErrorsRenderedRule)).status
+    ).toBe("pass");
+  } finally {
+    await fixture.cleanup();
+  }
+});

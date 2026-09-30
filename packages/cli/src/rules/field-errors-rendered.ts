@@ -1,4 +1,4 @@
-import { findOwnedSourceScopes } from "../ast";
+import { findOwnedSourceScopes, type SourceScope, visitJsxNodes } from "../ast";
 import type { AuditRule } from "../audit";
 import { analyzeFormHookFlow, getSourceScopeKey } from "./form-hook-flow";
 import { advisory, fail, notApplicable, pass } from "./rule-result";
@@ -8,11 +8,28 @@ const CUSTOM_VALIDATION_PATTERN =
 const RENDERED_ERROR_PATTERN =
   /<(?:FieldError|FormMessage|ErrorMessage)(?:\s|>)|role\s*=\s*["']alert["']|(?:formState\.errors|fieldState\.error|errors\.\w+)\s*(?:&&|\?)/;
 
+// Generic errors.* names also occur in server work such as export pipelines.
+// Only classify those direct matches when their own scope contains real JSX;
+// hook-flow analysis below still handles useForm and custom-hook consumers.
+const hasRenderedSurface = (scope: SourceScope): boolean => {
+  let found = false;
+  visitJsxNodes([scope.file], ({ node }) => {
+    if (
+      node.getStart(scope.file.sourceFile) >= scope.start &&
+      node.getEnd() <= scope.end
+    ) {
+      found = true;
+    }
+  });
+  return found;
+};
+
 const fieldErrorsRenderedRule: AuditRule = {
   adapters: ["core"],
   category: "forms",
   confidence: "medium",
-  description: "Checks custom form-validation state for rendered field errors.",
+  description:
+    "Checks custom form-validation state for rendered field errors; generic error data is counted only inside a function containing JSX.",
   id: "field-errors-rendered",
   maxScore: 3,
   run: async ({ filesystemRoot, project }) => {
@@ -20,6 +37,7 @@ const fieldErrorsRenderedRule: AuditRule = {
     const directValidationScopes = (
       await findOwnedSourceScopes(project, CUSTOM_VALIDATION_PATTERN)
     )
+      .filter(hasRenderedSurface)
       .concat(hookFlow.directUseFormScopes)
       .filter(
         (scope) => !hookFlow.providerScopeKeys.has(getSourceScopeKey(scope))

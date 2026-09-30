@@ -491,7 +491,7 @@
       ],
       "category": "forms",
       "confidence": "medium",
-      "description": "Checks custom form-validation state for rendered field errors.",
+      "description": "Checks custom form-validation state for rendered field errors; generic error data is counted only inside a function containing JSX.",
       "id": "field-errors-rendered",
       "maxScore": 3,
       "severity": "error",
@@ -793,5 +793,5 @@
       "title": "dialogs have accessible names"
     }
   ],
-  "rulesetVersion": "2026.08.46"
+  "rulesetVersion": "2026.09.10"
 }
