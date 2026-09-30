@@ -28,6 +28,11 @@ accessible controls, form feedback, metadata, mobile behavior, and more.
 The default scan is deterministic and read-only. It does not start the app,
 edit files, call an AI model, upload source, or require application secrets.
 
+Source discovery follows reachable repository-local imports and re-exports,
+including shared UI outside conventional source folders. Existing ignored paths,
+path confinement and file/byte limits still apply. Mounted checks follow selected
+exports and nested Next layouts; expanded coverage can expose more findings.
+
 ## Quick Start
 
 Run Shadscan from the root of a project:

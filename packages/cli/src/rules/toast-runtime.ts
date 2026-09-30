@@ -16,6 +16,7 @@ import {
 } from "typescript";
 import type { ProjectDiscovery } from "../discovery";
 import { getAstroMountedBindings } from "./astro-mounts";
+import { getLocalReExports } from "./local-re-exports";
 import {
   getProjectModuleResolver,
   type ProjectModuleResolver,
@@ -272,15 +273,17 @@ const findRuntimeThroughLocalImports = (
   resolver: ProjectModuleResolver,
   filesByPath: Map<string, ParsedProjectFile>,
   visitedFiles: Set<string>,
-  depth: number
+  depth: number,
+  wantedNames: Set<string> = new Set(["*"])
 ): ToastRuntimeEvidence | null => {
   const currentPath = path.resolve(currentFile.file.path);
 
-  if (visitedFiles.has(currentPath)) {
+  const visitKey = `${currentPath}:${[...wantedNames].sort().join(",")}`;
+  if (visitedFiles.has(visitKey)) {
     return null;
   }
 
-  visitedFiles.add(currentPath);
+  visitedFiles.add(visitKey);
   const imports = getImportReferences(currentFile.sourceFile);
   const referencedIdentifiers = getReferencedIdentifiers(
     currentFile.sourceFile
@@ -298,6 +301,34 @@ const findRuntimeThroughLocalImports = (
 
   if (depth >= MAX_LOCAL_IMPORT_DEPTH) {
     return null;
+  }
+
+  for (const { moduleName, names } of getLocalReExports(
+    currentFile.sourceFile,
+    wantedNames
+  )) {
+    const localFile = resolveLocalImport(
+      moduleName,
+      currentPath,
+      project,
+      resolver,
+      filesByPath
+    );
+    if (!localFile) {
+      continue;
+    }
+    const runtime = findRuntimeThroughLocalImports(
+      localFile,
+      project,
+      resolver,
+      filesByPath,
+      visitedFiles,
+      depth + 1,
+      names
+    );
+    if (runtime) {
+      return runtime;
+    }
   }
 
   for (const reference of imports) {
@@ -473,7 +504,8 @@ const analyzeToastShell = (
         resolver,
         filesByPath,
         new Set<string>(),
-        1
+        1,
+        new Set([binding.importedName])
       );
 
       if (runtime) {

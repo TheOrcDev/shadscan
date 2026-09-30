@@ -13,6 +13,7 @@ import {
 } from "typescript";
 import { walkNodes } from "../ast";
 import type { ProjectDiscovery } from "../discovery";
+import { getLocalReExports } from "./local-re-exports";
 import {
   getProjectModuleResolver,
   type ProjectModuleResolver,
@@ -21,6 +22,7 @@ import {
 import { getProjectSourceFiles, type SourceFile } from "./source-files";
 
 interface ImportReference {
+  importedNames: Map<string, string>;
   localNames: string[];
   moduleName: string;
 }
@@ -75,24 +77,32 @@ const getImportReferences = (
     }
 
     const localNames: string[] = [];
+    const importedNames = new Map<string, string>();
     const importClause = statement.importClause;
 
     if (importClause?.name) {
       localNames.push(importClause.name.text);
+      importedNames.set(importClause.name.text, "default");
     }
 
     const namedBindings = importClause?.namedBindings;
 
     if (namedBindings && isNamespaceImport(namedBindings)) {
       localNames.push(namedBindings.name.text);
+      importedNames.set(namedBindings.name.text, "*");
     } else if (namedBindings && isNamedImports(namedBindings)) {
       for (const element of namedBindings.elements) {
         localNames.push(element.name.text);
+        importedNames.set(
+          element.name.text,
+          (element.propertyName ?? element.name).text
+        );
       }
     }
 
     references.push({
       localNames,
+      importedNames,
       moduleName: statement.moduleSpecifier.text,
     });
   }
@@ -192,6 +202,22 @@ const getShellCandidates = (project: ProjectDiscovery): string[] => {
   );
 };
 
+const LAYOUT_FILE_PATTERN = /(?:^|[/\\])layout\.[jt]sx?$/;
+const appendNestedLayouts = (
+  project: ProjectDiscovery,
+  sourceFiles: SourceFile[],
+  candidates: string[]
+): void => {
+  if (project.versions.next && project.paths.appDir) {
+    for (const file of sourceFiles) {
+      const relative = path.relative(project.paths.appDir, file.path);
+      if (!relative.startsWith("..") && LAYOUT_FILE_PATTERN.test(relative)) {
+        candidates.push(file.path);
+      }
+    }
+  }
+};
+
 const findMountedComponentFiles = async (
   project: ProjectDiscovery,
   filesystemRoot: string
@@ -204,25 +230,49 @@ const findMountedComponentFiles = async (
   const filesByPath = new Map(
     parsedFiles.map((file) => [path.resolve(file.file.path), file])
   );
-  const pendingFiles = getShellCandidates(project)
+  const shellCandidates = getShellCandidates(project);
+  appendNestedLayouts(project, sourceFiles, shellCandidates);
+  const pendingFiles = shellCandidates
     .map((candidate) => filesByPath.get(path.resolve(candidate)))
-    .filter((file): file is ParsedProjectFile => Boolean(file));
+    .filter((file): file is ParsedProjectFile => Boolean(file))
+    .map((file) => ({
+      file,
+      names: new Set(project.versions.next ? ["default"] : ["*"]),
+    }));
   const mountedFiles = new Set<string>();
+  const visited = new Set<string>();
 
   while (pendingFiles.length > 0) {
-    const currentFile = pendingFiles.shift();
-
-    if (!currentFile) {
+    const current = pendingFiles.shift();
+    if (!current) {
       continue;
     }
 
+    const currentFile = current.file;
     const currentPath = path.resolve(currentFile.file.path);
 
-    if (mountedFiles.has(currentPath)) {
+    const visitKey = `${currentPath}:${[...current.names].sort().join(",")}`;
+    if (visited.has(visitKey)) {
       continue;
     }
 
+    visited.add(visitKey);
     mountedFiles.add(currentPath);
+    for (const { moduleName, names } of getLocalReExports(
+      currentFile.sourceFile,
+      current.names
+    )) {
+      const file = resolveLocalImport(
+        moduleName,
+        currentPath,
+        project,
+        resolver,
+        filesByPath
+      );
+      if (file) {
+        pendingFiles.push({ file, names });
+      }
+    }
     const renderedBindings = getRenderedBindings(currentFile.sourceFile);
 
     for (const reference of getImportReferences(currentFile.sourceFile)) {
@@ -243,7 +293,17 @@ const findMountedComponentFiles = async (
       );
 
       if (importedFile) {
-        pendingFiles.push(importedFile);
+        pendingFiles.push({
+          file: importedFile,
+          names: new Set(
+            reference.localNames
+              .filter((name) => renderedBindings.has(name))
+              .flatMap((name) => {
+                const imported = reference.importedNames.get(name);
+                return imported ? [imported] : [];
+              })
+          ),
+        });
       }
     }
   }
