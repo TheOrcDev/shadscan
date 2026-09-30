@@ -2,6 +2,7 @@ import {
   createSourceFile,
   forEachChild,
   isJsxAttribute,
+  isJsxElement,
   isJsxExpression,
   isJsxOpeningElement,
   isJsxSelfClosingElement,
@@ -23,6 +24,9 @@ import {
 
 const FOCUS_REPLACEMENT_PATTERN =
   /focus-visible:(?:ring|outline|border|shadow)|focus:(?:ring|outline|border|shadow)/;
+const WRAPPER_FOCUS_REPLACEMENT_PREFIX = "has-[:focus-visible]:";
+const WRAPPER_FOCUS_REPLACEMENT_UTILITY_PATTERN =
+  /^(?:ring|outline|border|shadow)(?:$|-)/;
 const CSS_RULE_PATTERN = /([^{}]+)\{([^{}]*)\}/g;
 const CSS_OUTLINE_REMOVAL_PATTERN = /outline\s*:\s*(?:none|0)\s*;/i;
 const CSS_VISIBLE_PROPERTY_PATTERN =
@@ -145,6 +149,57 @@ const suppressesOwnOutline = (classValue: string): boolean =>
     return !className.includes("[") && className.endsWith(":outline-none");
   });
 
+const getImmediateJsxWrapper = (
+  node: JsxOpeningLikeElement
+): JsxOpeningLikeElement | null => {
+  const element = isJsxOpeningElement(node) ? node.parent : node;
+  const parent = element.parent;
+
+  return isJsxElement(parent) ? parent.openingElement : null;
+};
+
+const isVisibleWrapperFocusReplacement = (className: string): boolean => {
+  if (!className.startsWith(WRAPPER_FOCUS_REPLACEMENT_PREFIX)) {
+    return false;
+  }
+
+  const utility = className.slice(WRAPPER_FOCUS_REPLACEMENT_PREFIX.length);
+
+  if (!WRAPPER_FOCUS_REPLACEMENT_UTILITY_PATTERN.test(utility)) {
+    return false;
+  }
+
+  if (
+    utility === "ring-0" ||
+    utility === "ring-inset" ||
+    utility === "outline-0" ||
+    utility === "outline-none" ||
+    utility === "outline-hidden" ||
+    utility === "border-0" ||
+    utility === "shadow-none" ||
+    utility.endsWith("-transparent") ||
+    utility.startsWith("ring-offset-") ||
+    utility.startsWith("outline-offset-") ||
+    utility.startsWith("border-spacing-")
+  ) {
+    return false;
+  }
+
+  return utility !== "border-collapse" && utility !== "border-separate";
+};
+
+const hasWrapperFocusReplacement = (node: JsxOpeningLikeElement): boolean => {
+  const wrapper = getImmediateJsxWrapper(node);
+
+  if (!wrapper) {
+    return false;
+  }
+
+  return getStaticClassValue(wrapper)
+    .split(CLASS_SEPARATOR_PATTERN)
+    .some(isVisibleWrapperFocusReplacement);
+};
+
 const isPotentialFocusTarget = (node: JsxOpeningLikeElement): boolean => {
   const tagName = getJsxTagName(node);
 
@@ -198,7 +253,8 @@ const findSourceOutlineSuppression = (file: SourceFile): number | null => {
       if (
         isPotentialFocusTarget(node) &&
         suppressesOwnOutline(classValue) &&
-        !FOCUS_REPLACEMENT_PATTERN.test(classValue)
+        !FOCUS_REPLACEMENT_PATTERN.test(classValue) &&
+        !hasWrapperFocusReplacement(node)
       ) {
         suppressionLine =
           sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))

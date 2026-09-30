@@ -6,6 +6,13 @@ stable releases published under `latest`.
 
 ## Unreleased
 
+### Fixed
+
+- `focus-visible-not-suppressed` now recognizes `has-[:focus-visible]:`
+  ring, outline, border, or shadow styles on a focus target's immediate JSX
+  wrapper, avoiding false findings when composite controls hoist their visible
+  focus treatment to the container.
+
 ## 0.17.1 - 2026-08-23
 
 ### Fixed
